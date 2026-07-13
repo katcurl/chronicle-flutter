@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - name: Checkout repository
@@ -27,6 +27,14 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
       - name: Show Flutter version
         run: flutter --version
 
@@ -35,6 +43,74 @@ jobs:
           if [ ! -d android ]; then
             flutter create --platforms=android .
           fi
+
+      - name: Set compileSdk to 36
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          kotlin_file = Path("android/app/build.gradle.kts")
+          groovy_file = Path("android/app/build.gradle")
+
+          if kotlin_file.exists():
+              text = kotlin_file.read_text(encoding="utf-8")
+
+              text, count = re.subn(
+                  r"compileSdk\s*=\s*(?:flutter\.compileSdkVersion|\d+)",
+                  "compileSdk = 36",
+                  text,
+                  count=1,
+              )
+
+              if count == 0:
+                  raise SystemExit(
+                      "Не удалось найти compileSdk в android/app/build.gradle.kts"
+                  )
+
+              kotlin_file.write_text(text, encoding="utf-8")
+              print("Updated:", kotlin_file)
+
+          elif groovy_file.exists():
+              text = groovy_file.read_text(encoding="utf-8")
+
+              patterns = [
+                  r"compileSdkVersion\s+(?:flutter\.compileSdkVersion|\d+)",
+                  r"compileSdk\s+(?:flutter\.compileSdkVersion|\d+)",
+                  r"compileSdkVersion\s*=\s*(?:flutter\.compileSdkVersion|\d+)",
+                  r"compileSdk\s*=\s*(?:flutter\.compileSdkVersion|\d+)",
+              ]
+
+              changed = False
+
+              for pattern in patterns:
+                  new_text, count = re.subn(
+                      pattern,
+                      "compileSdkVersion 36",
+                      text,
+                      count=1,
+                  )
+
+                  if count:
+                      text = new_text
+                      changed = True
+                      break
+
+              if not changed:
+                  raise SystemExit(
+                      "Не удалось найти compileSdk в android/app/build.gradle"
+                  )
+
+              groovy_file.write_text(text, encoding="utf-8")
+              print("Updated:", groovy_file)
+
+          else:
+              raise SystemExit("Файл Android Gradle не найден")
+          PY
+
+      - name: Show Android build configuration
+        run: |
+          grep -R "compileSdk" android/app/build.gradle* || true
 
       - name: Install dependencies
         run: flutter pub get
