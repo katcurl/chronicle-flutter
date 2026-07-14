@@ -218,9 +218,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK='build/app/outputs/flutter-apk/app-release.apk'
-          test -s "$APK"
-          apksigner verify --verbose --print-certs "$APK"
+
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+
+          if [ -z "$SDK_ROOT" ]; then
+            echo "::error::ANDROID_SDK_ROOT and ANDROID_HOME are not set"
+            exit 1
+          fi
+
+          APKSIGNER="$(
+            find "$SDK_ROOT/build-tools" \
+              -mindepth 2 \
+              -maxdepth 2 \
+              -type f \
+              -name apksigner \
+              | sort -V \
+              | tail -n 1
+          )"
+
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner was not found in $SDK_ROOT/build-tools"
+            find "$SDK_ROOT/build-tools" -maxdepth 2 -type f || true
+            exit 1
+          fi
+
+          echo "Using apksigner: $APKSIGNER"
+
+          "$APKSIGNER" verify \
+            --verbose \
+            --print-certs \
+            "$APK"
 
       - name: Prepare release artifact
         shell: bash
