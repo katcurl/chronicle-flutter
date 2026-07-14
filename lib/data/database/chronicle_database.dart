@@ -52,12 +52,74 @@ class NoteRecords extends Table {
   TextColumn get tagsJson =>
       text().named('tags_json').withDefault(const Constant('[]'))();
   TextColumn get status => text().withDefault(const Constant('draft'))();
+  TextColumn get folderPath =>
+      text().named('folder_path').withDefault(const Constant(''))();
+  TextColumn get noteType =>
+      text().named('note_type').withDefault(const Constant('note'))();
+  TextColumn get propertiesJson =>
+      text().named('properties_json').withDefault(const Constant('{}'))();
+  BoolColumn get pinned => boolean().withDefault(const Constant(false))();
+  IntColumn get revision => integer().withDefault(const Constant(1))();
   TextColumn get createdAt => text().named('created_at')();
   TextColumn get updatedAt => text().named('updated_at')();
   TextColumn get deletedAt => text().named('deleted_at').nullable()();
 
   @override
   String get tableName => 'notes';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@TableIndex(
+  name: 'idx_note_links_target',
+  columns: {#targetNoteId, #targetTitle},
+)
+@TableIndex(name: 'idx_note_links_source', columns: {#sourceNoteId})
+class NoteLinkRecords extends Table {
+  TextColumn get id => text()();
+  TextColumn get sourceNoteId =>
+      text()
+          .named('source_note_id')
+          .references(NoteRecords, #id, onDelete: KeyAction.cascade)();
+  TextColumn get targetTitle => text().named('target_title')();
+  TextColumn get targetNoteId =>
+      text()
+          .named('target_note_id')
+          .nullable()
+          .references(NoteRecords, #id, onDelete: KeyAction.setNull)();
+  TextColumn get createdAt => text().named('created_at')();
+
+  @override
+  String get tableName => 'note_links';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@TableIndex(name: 'idx_note_versions_note', columns: {#noteId, #createdAt})
+class NoteVersionRecords extends Table {
+  TextColumn get id => text()();
+  TextColumn get noteId =>
+      text()
+          .named('note_id')
+          .references(NoteRecords, #id, onDelete: KeyAction.cascade)();
+  TextColumn get title => text()();
+  TextColumn get body => text().withDefault(const Constant(''))();
+  TextColumn get tagsJson =>
+      text().named('tags_json').withDefault(const Constant('[]'))();
+  TextColumn get status => text().withDefault(const Constant('draft'))();
+  TextColumn get folderPath =>
+      text().named('folder_path').withDefault(const Constant(''))();
+  TextColumn get noteType =>
+      text().named('note_type').withDefault(const Constant('note'))();
+  TextColumn get propertiesJson =>
+      text().named('properties_json').withDefault(const Constant('{}'))();
+  TextColumn get reason => text().withDefault(const Constant('manual'))();
+  TextColumn get createdAt => text().named('created_at')();
+
+  @override
+  String get tableName => 'note_versions';
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -133,6 +195,8 @@ class TimeEntryRecords extends Table {
     AppStateRecords,
     ProjectRecords,
     NoteRecords,
+    NoteLinkRecords,
+    NoteVersionRecords,
     TaskRecords,
     TimeEntryRecords,
   ],
@@ -143,7 +207,7 @@ final class ChronicleDatabase extends _$ChronicleDatabase {
   factory ChronicleDatabase.defaults() => ChronicleDatabase(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -160,6 +224,15 @@ final class ChronicleDatabase extends _$ChronicleDatabase {
         await migrator.addColumn(taskRecords, taskRecords.description);
         await migrator.addColumn(taskRecords, taskRecords.priority);
         await migrator.addColumn(taskRecords, taskRecords.sortOrder);
+      }
+      if (from < 3) {
+        await migrator.addColumn(noteRecords, noteRecords.folderPath);
+        await migrator.addColumn(noteRecords, noteRecords.noteType);
+        await migrator.addColumn(noteRecords, noteRecords.propertiesJson);
+        await migrator.addColumn(noteRecords, noteRecords.pinned);
+        await migrator.addColumn(noteRecords, noteRecords.revision);
+        await migrator.createTable(noteLinkRecords);
+        await migrator.createTable(noteVersionRecords);
       }
     },
     beforeOpen: (details) async {

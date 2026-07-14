@@ -37,6 +37,8 @@ class DriftAppRepository implements AppRepository {
         'WHERE deleted_at IS NULL ORDER BY updated_at DESC',
       ),
       _readRows('SELECT * FROM time_entries ORDER BY started_at DESC'),
+      _readRows('SELECT * FROM note_links ORDER BY created_at DESC'),
+      _readRows('SELECT * FROM note_versions ORDER BY created_at DESC'),
     ]);
 
     return AppData(
@@ -44,6 +46,8 @@ class DriftAppRepository implements AppRepository {
       tasks: results[1].map(WorkTask.fromDb).toList(),
       notes: results[2].map(Note.fromDb).toList(),
       entries: results[3].map(TimeEntry.fromDb).toList(),
+      noteLinks: results[4].map(NoteLink.fromDb).toList(),
+      noteVersions: results[5].map(NoteVersion.fromDb).toList(),
     );
   }
 
@@ -52,6 +56,8 @@ class DriftAppRepository implements AppRepository {
     await _database.transaction(() async {
       await _database.customStatement('DELETE FROM time_entries');
       await _database.customStatement('DELETE FROM tasks');
+      await _database.customStatement('DELETE FROM note_links');
+      await _database.customStatement('DELETE FROM note_versions');
       await _database.customStatement('DELETE FROM notes');
       await _database.customStatement('DELETE FROM projects');
 
@@ -63,6 +69,12 @@ class DriftAppRepository implements AppRepository {
       }
       for (final task in data.tasks) {
         await _upsert('tasks', task.toDb());
+      }
+      for (final link in data.noteLinks) {
+        await _upsert('note_links', link.toDb());
+      }
+      for (final version in data.noteVersions) {
+        await _upsert('note_versions', version.toDb());
       }
       for (final entry in data.entries) {
         await _upsert('time_entries', entry.toDb());
@@ -88,6 +100,23 @@ class DriftAppRepository implements AppRepository {
 
   @override
   Future<void> saveNote(Note note) => _upsert('notes', note.toDb());
+
+  @override
+  Future<void> saveNoteVersion(NoteVersion version) =>
+      _upsert('note_versions', version.toDb());
+
+  @override
+  Future<void> replaceNoteLinks(String noteId, List<NoteLink> links) async {
+    await _database.transaction(() async {
+      await _database.customStatement(
+        'DELETE FROM note_links WHERE source_note_id = ?',
+        [noteId],
+      );
+      for (final link in links) {
+        await _upsert('note_links', link.toDb());
+      }
+    });
+  }
 
   @override
   Future<void> saveTimeEntry(TimeEntry entry) =>

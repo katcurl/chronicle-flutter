@@ -47,6 +47,17 @@ class InMemoryAppRepository implements AppRepository {
   }
 
   @override
+  Future<void> saveNoteVersion(NoteVersion version) async {
+    _replaceById<NoteVersion>(_data.noteVersions, version, (item) => item.id);
+  }
+
+  @override
+  Future<void> replaceNoteLinks(String noteId, List<NoteLink> links) async {
+    _data.noteLinks.removeWhere((link) => link.sourceNoteId == noteId);
+    _data.noteLinks.addAll(links);
+  }
+
+  @override
   Future<void> saveTimeEntry(TimeEntry entry) async {
     _replaceById<TimeEntry>(_data.entries, entry, (item) => item.id);
   }

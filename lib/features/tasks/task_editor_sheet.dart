@@ -12,6 +12,7 @@ class TaskEditorSheet extends StatefulWidget {
     this.task,
     this.initialProjectId,
     this.initialParentTaskId,
+    this.initialNoteId,
   });
 
   final List<Project> projects;
@@ -19,6 +20,7 @@ class TaskEditorSheet extends StatefulWidget {
   final WorkTask? task;
   final String? initialProjectId;
   final String? initialParentTaskId;
+  final String? initialNoteId;
 
   static Future<WorkTask?> show(
     BuildContext context, {
@@ -27,6 +29,7 @@ class TaskEditorSheet extends StatefulWidget {
     WorkTask? task,
     String? initialProjectId,
     String? initialParentTaskId,
+    String? initialNoteId,
   }) {
     return showModalBottomSheet<WorkTask>(
       context: context,
@@ -40,6 +43,7 @@ class TaskEditorSheet extends StatefulWidget {
             task: task,
             initialProjectId: initialProjectId,
             initialParentTaskId: initialParentTaskId,
+            initialNoteId: initialNoteId,
           ),
     );
   }
@@ -294,7 +298,7 @@ class _TaskEditorSheetState extends State<TaskEditorSheet> {
         projectId: projectId,
         description: descriptionController.text.trim(),
         parentTaskId: parentTaskId,
-        noteId: existing?.noteId,
+        noteId: existing?.noteId ?? widget.initialNoteId,
         status: status,
         priority: priority,
         estimateMinutes: estimate.clamp(1, 100000).toInt(),

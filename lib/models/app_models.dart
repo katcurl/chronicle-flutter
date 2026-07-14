@@ -226,6 +226,11 @@ class Note {
     required this.body,
     this.tags = const [],
     this.status = 'draft',
+    this.folderPath = '',
+    this.noteType = 'note',
+    this.properties = const {},
+    this.pinned = false,
+    this.revision = 1,
     DateTime? createdAt,
     DateTime? updatedAt,
     this.deletedAt,
@@ -238,6 +243,11 @@ class Note {
   String body;
   List<String> tags;
   String status;
+  String folderPath;
+  String noteType;
+  Map<String, String> properties;
+  bool pinned;
+  int revision;
   DateTime createdAt;
   DateTime updatedAt;
   DateTime? deletedAt;
@@ -249,6 +259,11 @@ class Note {
     'body': body,
     'tags': tags,
     'status': status,
+    'folderPath': folderPath,
+    'noteType': noteType,
+    'properties': properties,
+    'pinned': pinned,
+    'revision': revision,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
     'deletedAt': deletedAt?.toIso8601String(),
@@ -261,6 +276,11 @@ class Note {
     'body': body,
     'tags_json': jsonEncode(tags),
     'status': status,
+    'folder_path': folderPath,
+    'note_type': noteType,
+    'properties_json': jsonEncode(properties),
+    'pinned': pinned ? 1 : 0,
+    'revision': revision,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
     'deleted_at': deletedAt?.toIso8601String(),
@@ -273,6 +293,13 @@ class Note {
     body: json['body'] as String? ?? '',
     tags: List<String>.from(json['tags'] as List? ?? const []),
     status: json['status'] as String? ?? 'draft',
+    folderPath: json['folderPath'] as String? ?? '',
+    noteType: json['noteType'] as String? ?? 'note',
+    properties: Map<String, String>.from(
+      json['properties'] as Map? ?? const <String, String>{},
+    ),
+    pinned: _readBool(json['pinned']),
+    revision: _readInt(json['revision'], fallback: 1),
     createdAt: _readDate(json['createdAt']),
     updatedAt: _readDate(json['updatedAt']),
     deletedAt: _readNullableDate(json['deletedAt']),
@@ -281,6 +308,8 @@ class Note {
   factory Note.fromDb(Map<String, Object?> row) {
     final rawTags = row['tags_json'] as String? ?? '[]';
     final parsedTags = jsonDecode(rawTags) as List<dynamic>;
+    final rawProperties = row['properties_json'] as String? ?? '{}';
+    final parsedProperties = jsonDecode(rawProperties) as Map<String, dynamic>;
     return Note(
       id: row['id']! as String,
       title: row['title']! as String,
@@ -288,9 +317,158 @@ class Note {
       body: row['body'] as String? ?? '',
       tags: parsedTags.map((tag) => tag.toString()).toList(),
       status: row['status'] as String? ?? 'draft',
+      folderPath: row['folder_path'] as String? ?? '',
+      noteType: row['note_type'] as String? ?? 'note',
+      properties: parsedProperties.map(
+        (key, value) => MapEntry(key, value.toString()),
+      ),
+      pinned: _readBool(row['pinned']),
+      revision: _readInt(row['revision'], fallback: 1),
       createdAt: _readDate(row['created_at']),
       updatedAt: _readDate(row['updated_at']),
       deletedAt: _readNullableDate(row['deleted_at']),
+    );
+  }
+}
+
+class NoteLink {
+  NoteLink({
+    required this.id,
+    required this.sourceNoteId,
+    required this.targetTitle,
+    this.targetNoteId,
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  final String id;
+  final String sourceNoteId;
+  final String targetTitle;
+  final String? targetNoteId;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'sourceNoteId': sourceNoteId,
+    'targetTitle': targetTitle,
+    'targetNoteId': targetNoteId,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  Map<String, Object?> toDb() => {
+    'id': id,
+    'source_note_id': sourceNoteId,
+    'target_title': targetTitle,
+    'target_note_id': targetNoteId,
+    'created_at': createdAt.toIso8601String(),
+  };
+
+  factory NoteLink.fromJson(Map<String, dynamic> json) => NoteLink(
+    id: json['id'] as String,
+    sourceNoteId: json['sourceNoteId'] as String,
+    targetTitle: json['targetTitle'] as String,
+    targetNoteId: json['targetNoteId'] as String?,
+    createdAt: _readDate(json['createdAt']),
+  );
+
+  factory NoteLink.fromDb(Map<String, Object?> row) => NoteLink(
+    id: row['id']! as String,
+    sourceNoteId: row['source_note_id']! as String,
+    targetTitle: row['target_title']! as String,
+    targetNoteId: row['target_note_id'] as String?,
+    createdAt: _readDate(row['created_at']),
+  );
+}
+
+class NoteVersion {
+  NoteVersion({
+    required this.id,
+    required this.noteId,
+    required this.title,
+    required this.body,
+    this.tags = const [],
+    this.status = 'draft',
+    this.folderPath = '',
+    this.noteType = 'note',
+    this.properties = const {},
+    this.reason = 'manual',
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  final String id;
+  final String noteId;
+  final String title;
+  final String body;
+  final List<String> tags;
+  final String status;
+  final String folderPath;
+  final String noteType;
+  final Map<String, String> properties;
+  final String reason;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'noteId': noteId,
+    'title': title,
+    'body': body,
+    'tags': tags,
+    'status': status,
+    'folderPath': folderPath,
+    'noteType': noteType,
+    'properties': properties,
+    'reason': reason,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  Map<String, Object?> toDb() => {
+    'id': id,
+    'note_id': noteId,
+    'title': title,
+    'body': body,
+    'tags_json': jsonEncode(tags),
+    'status': status,
+    'folder_path': folderPath,
+    'note_type': noteType,
+    'properties_json': jsonEncode(properties),
+    'reason': reason,
+    'created_at': createdAt.toIso8601String(),
+  };
+
+  factory NoteVersion.fromJson(Map<String, dynamic> json) => NoteVersion(
+    id: json['id'] as String,
+    noteId: json['noteId'] as String,
+    title: json['title'] as String,
+    body: json['body'] as String? ?? '',
+    tags: List<String>.from(json['tags'] as List? ?? const []),
+    status: json['status'] as String? ?? 'draft',
+    folderPath: json['folderPath'] as String? ?? '',
+    noteType: json['noteType'] as String? ?? 'note',
+    properties: Map<String, String>.from(
+      json['properties'] as Map? ?? const <String, String>{},
+    ),
+    reason: json['reason'] as String? ?? 'manual',
+    createdAt: _readDate(json['createdAt']),
+  );
+
+  factory NoteVersion.fromDb(Map<String, Object?> row) {
+    final parsedTags = jsonDecode(row['tags_json'] as String? ?? '[]') as List;
+    final parsedProperties =
+        jsonDecode(row['properties_json'] as String? ?? '{}')
+            as Map<String, dynamic>;
+    return NoteVersion(
+      id: row['id']! as String,
+      noteId: row['note_id']! as String,
+      title: row['title']! as String,
+      body: row['body'] as String? ?? '',
+      tags: parsedTags.map((tag) => tag.toString()).toList(),
+      status: row['status'] as String? ?? 'draft',
+      folderPath: row['folder_path'] as String? ?? '',
+      noteType: row['note_type'] as String? ?? 'note',
+      properties: parsedProperties.map(
+        (key, value) => MapEntry(key, value.toString()),
+      ),
+      reason: row['reason'] as String? ?? 'manual',
+      createdAt: _readDate(row['created_at']),
     );
   }
 }
@@ -400,7 +578,10 @@ class AppData {
     required this.tasks,
     required this.notes,
     required this.entries,
-  });
+    List<NoteLink>? noteLinks,
+    List<NoteVersion>? noteVersions,
+  }) : noteLinks = noteLinks ?? [],
+       noteVersions = noteVersions ?? [];
 
   factory AppData.empty() =>
       AppData(projects: [], tasks: [], notes: [], entries: []);
@@ -409,15 +590,19 @@ class AppData {
   List<WorkTask> tasks;
   List<Note> notes;
   List<TimeEntry> entries;
+  List<NoteLink> noteLinks;
+  List<NoteVersion> noteVersions;
 
   String encode() => jsonEncode({
     'format': 'chronicle-backup',
-    'version': 2,
+    'version': 3,
     'exportedAt': DateTime.now().toIso8601String(),
     'projects': projects.map((item) => item.toJson()).toList(),
     'tasks': tasks.map((item) => item.toJson()).toList(),
     'notes': notes.map((item) => item.toJson()).toList(),
     'entries': entries.map((item) => item.toJson()).toList(),
+    'noteLinks': noteLinks.map((item) => item.toJson()).toList(),
+    'noteVersions': noteVersions.map((item) => item.toJson()).toList(),
   });
 
   factory AppData.decode(String raw) {
@@ -438,6 +623,14 @@ class AppData {
       entries:
           (json['entries'] as List<dynamic>? ?? const [])
               .map((item) => TimeEntry.fromJson(item as Map<String, dynamic>))
+              .toList(),
+      noteLinks:
+          (json['noteLinks'] as List<dynamic>? ?? const [])
+              .map((item) => NoteLink.fromJson(item as Map<String, dynamic>))
+              .toList(),
+      noteVersions:
+          (json['noteVersions'] as List<dynamic>? ?? const [])
+              .map((item) => NoteVersion.fromJson(item as Map<String, dynamic>))
               .toList(),
     );
   }

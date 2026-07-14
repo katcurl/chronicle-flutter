@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../data/migration/legacy_preferences_importer.dart';
 import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
+import '../features/notes/note_document.dart';
 import '../models/app_models.dart';
 
 class AppStore extends ChangeNotifier {
@@ -52,6 +53,9 @@ class AppStore extends ChangeNotifier {
       } else {
         data = await _repository.load();
       }
+
+      await _hydrateNoteMetadata();
+      await rebuildAllNoteLinks();
 
       final activeTimer = await _repository.loadActiveTimer();
       if (activeTimer != null &&
@@ -179,6 +183,43 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       if (project.id == id) return project;
     }
     return null;
+  }
+
+  Note? noteById(String id) {
+    for (final note in data.notes) {
+      if (note.id == id) return note;
+    }
+    return null;
+  }
+
+  Note? noteByTitle(String title) {
+    final normalized = title.trim().toLowerCase();
+    for (final note in data.notes) {
+      if (note.title.trim().toLowerCase() == normalized) return note;
+    }
+    return null;
+  }
+
+  List<NoteLink> outgoingLinksFor(String noteId) => data.noteLinks
+      .where((link) => link.sourceNoteId == noteId)
+      .toList(growable: false);
+
+  List<NoteLink> backlinksFor(Note note) {
+    final normalized = note.title.trim().toLowerCase();
+    return data.noteLinks
+        .where(
+          (link) =>
+              link.targetNoteId == note.id ||
+              link.targetTitle.trim().toLowerCase() == normalized,
+        )
+        .toList(growable: false);
+  }
+
+  List<NoteVersion> versionsFor(String noteId) {
+    final versions =
+        data.noteVersions.where((version) => version.noteId == noteId).toList();
+    versions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return versions;
   }
 
   int get activeSeconds =>
@@ -339,13 +380,35 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
   void addNote(Note note) {
     data.notes.insert(0, note);
     unawaited(_repository.saveNote(note));
+    unawaited(_syncNoteLinks(note));
     notifyListeners();
   }
 
   void updateNote(Note note) {
     note.updatedAt = DateTime.now();
+    note.revision += 1;
+    final index = data.notes.indexWhere((item) => item.id == note.id);
+    if (index >= 0) data.notes[index] = note;
     unawaited(_repository.saveNote(note));
+    unawaited(_syncNoteLinks(note));
     notifyListeners();
+  }
+
+  void addNoteVersion(NoteVersion version) {
+    data.noteVersions.insert(0, version);
+    unawaited(_repository.saveNoteVersion(version));
+    notifyListeners();
+  }
+
+  void restoreNoteVersion(Note note, NoteVersion version) {
+    note.title = version.title;
+    note.body = version.body;
+    note.tags = List<String>.from(version.tags);
+    note.status = version.status;
+    note.folderPath = version.folderPath;
+    note.noteType = version.noteType;
+    note.properties = Map<String, String>.from(version.properties);
+    updateNote(note);
   }
 
   void deleteNote(String id) {
@@ -354,13 +417,80 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     if (noteIndex < 0) return;
 
     data.notes.removeAt(noteIndex);
+    data.noteLinks.removeWhere(
+      (link) => link.sourceNoteId == id || link.targetNoteId == id,
+    );
     for (final task in data.tasks.where((task) => task.noteId == id)) {
       task.noteId = null;
       task.updatedAt = deletedAt;
       unawaited(_repository.saveTask(task));
     }
+    unawaited(_repository.replaceNoteLinks(id, const []));
     unawaited(_repository.softDeleteNote(id, deletedAt));
     notifyListeners();
+  }
+
+  Future<void> rebuildAllNoteLinks() async {
+    for (final note in data.notes) {
+      await _syncNoteLinks(note, notify: false);
+    }
+    notifyListeners();
+  }
+
+  Future<void> _syncNoteLinks(Note note, {bool notify = true}) async {
+    final targets = NoteDocument.extractWikiTargets(note.body);
+    final now = DateTime.now();
+    final links =
+        targets.map((title) {
+          final target = noteByTitle(title);
+          return NoteLink(
+            id: _uuid.v4(),
+            sourceNoteId: note.id,
+            targetTitle: title,
+            targetNoteId: target?.id,
+            createdAt: now,
+          );
+        }).toList();
+
+    data.noteLinks.removeWhere((link) => link.sourceNoteId == note.id);
+    data.noteLinks.addAll(links);
+    await _repository.replaceNoteLinks(note.id, links);
+    if (notify) notifyListeners();
+  }
+
+  Future<void> _hydrateNoteMetadata() async {
+    for (final note in data.notes) {
+      final document = NoteDocument.parse(note.body);
+      if (document.frontMatter.isEmpty) continue;
+      var changed = false;
+      final frontMatter = Map<String, String>.from(document.frontMatter);
+
+      final type = frontMatter.remove('type');
+      if (type != null && type.isNotEmpty && note.noteType == 'note') {
+        note.noteType = type;
+        changed = true;
+      }
+      final status = frontMatter.remove('status');
+      if (status != null && status.isNotEmpty && note.status == 'draft') {
+        note.status = status;
+        changed = true;
+      }
+      final folder = frontMatter.remove('folder');
+      if (folder != null && folder.isNotEmpty && note.folderPath.isEmpty) {
+        note.folderPath = folder;
+        changed = true;
+      }
+      final tags = NoteDocument.parseTags(frontMatter.remove('tags'));
+      if (tags.isNotEmpty && note.tags.isEmpty) {
+        note.tags = tags;
+        changed = true;
+      }
+      if (frontMatter.isNotEmpty && note.properties.isEmpty) {
+        note.properties = frontMatter;
+        changed = true;
+      }
+      if (changed) await _repository.saveNote(note);
+    }
   }
 
   Future<String> exportBackupJson() => _repository.exportJson();
