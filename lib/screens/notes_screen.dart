@@ -35,7 +35,7 @@ class _NotesScreenState extends State<NotesScreen> {
         title: const Text('Заметки'),
         actions: [
           IconButton(
-            onPressed: widget.store.data.projects.isEmpty ? null : _add,
+            onPressed: widget.store.activeProjects.isEmpty ? null : _add,
             icon: const Icon(Icons.note_add_outlined),
           ),
         ],
@@ -60,8 +60,8 @@ class _NotesScreenState extends State<NotesScreen> {
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (_, index) {
                         final note = notes[index];
-                        final project = widget.store.data.projects.firstWhere(
-                          (item) => item.id == note.projectId,
+                        final project = widget.store.projectById(
+                          note.projectId,
                         );
                         return Card(
                           child: ListTile(
@@ -76,7 +76,9 @@ class _NotesScreenState extends State<NotesScreen> {
                                         ),
                                   ),
                                 ).then((_) => setState(() {})),
-                            leading: CircleAvatar(child: Text(project.emoji)),
+                            leading: CircleAvatar(
+                              child: Text(project?.emoji ?? '📁'),
+                            ),
                             title: Text(note.title),
                             subtitle: Text(
                               '${note.tags.map((tag) => '#$tag').join(' ')}\n'
@@ -96,7 +98,7 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   void _add() {
-    final project = widget.store.data.projects.first;
+    final project = widget.store.activeProjects.first;
     final note = Note(
       id: const Uuid().v4(),
       title: 'Новая заметка',

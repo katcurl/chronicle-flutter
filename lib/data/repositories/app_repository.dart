@@ -13,6 +13,8 @@ abstract class AppRepository {
 
   Future<void> saveTask(WorkTask task);
 
+  Future<void> softDeleteTask(String taskId, DateTime deletedAt);
+
   Future<void> saveNote(Note note);
 
   Future<void> saveTimeEntry(TimeEntry entry);

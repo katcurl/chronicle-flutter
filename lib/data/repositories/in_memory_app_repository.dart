@@ -36,6 +36,12 @@ class InMemoryAppRepository implements AppRepository {
   }
 
   @override
+  Future<void> softDeleteTask(String taskId, DateTime deletedAt) async {
+    final index = _data.tasks.indexWhere((item) => item.id == taskId);
+    if (index >= 0) _data.tasks[index].deletedAt = deletedAt;
+  }
+
+  @override
   Future<void> saveNote(Note note) async {
     _replaceById<Note>(_data.notes, note, (item) => item.id);
   }

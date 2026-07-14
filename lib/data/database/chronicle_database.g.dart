@@ -259,6 +259,38 @@ class $ProjectRecordsTable extends ProjectRecords
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _colorValueMeta = const VerificationMeta(
+    'colorValue',
+  );
+  @override
+  late final GeneratedColumn<int> colorValue = GeneratedColumn<int>(
+    'color_value',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0xFF6750A4),
+  );
+  static const VerificationMeta _dueAtMeta = const VerificationMeta('dueAt');
+  @override
+  late final GeneratedColumn<String> dueAt = GeneratedColumn<String>(
+    'due_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _budgetMinutesMeta = const VerificationMeta(
+    'budgetMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> budgetMinutes = GeneratedColumn<int>(
+    'budget_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
   );
@@ -302,6 +334,9 @@ class $ProjectRecordsTable extends ProjectRecords
     title,
     emoji,
     description,
+    colorValue,
+    dueAt,
+    budgetMinutes,
     archived,
     createdAt,
     updatedAt,
@@ -343,6 +378,27 @@ class $ProjectRecordsTable extends ProjectRecords
         description.isAcceptableOrUnknown(
           data['description']!,
           _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('color_value')) {
+      context.handle(
+        _colorValueMeta,
+        colorValue.isAcceptableOrUnknown(data['color_value']!, _colorValueMeta),
+      );
+    }
+    if (data.containsKey('due_at')) {
+      context.handle(
+        _dueAtMeta,
+        dueAt.isAcceptableOrUnknown(data['due_at']!, _dueAtMeta),
+      );
+    }
+    if (data.containsKey('budget_minutes')) {
+      context.handle(
+        _budgetMinutesMeta,
+        budgetMinutes.isAcceptableOrUnknown(
+          data['budget_minutes']!,
+          _budgetMinutesMeta,
         ),
       );
     }
@@ -397,6 +453,19 @@ class $ProjectRecordsTable extends ProjectRecords
             DriftSqlType.string,
             data['${effectivePrefix}description'],
           )!,
+      colorValue:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}color_value'],
+          )!,
+      dueAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}due_at'],
+      ),
+      budgetMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}budget_minutes'],
+      ),
       archived:
           attachedDatabase.typeMapping.read(
             DriftSqlType.bool,
@@ -426,6 +495,9 @@ class ProjectRecord extends DataClass implements Insertable<ProjectRecord> {
   final String title;
   final String emoji;
   final String description;
+  final int colorValue;
+  final String? dueAt;
+  final int? budgetMinutes;
   final bool archived;
   final String createdAt;
   final String updatedAt;
@@ -434,6 +506,9 @@ class ProjectRecord extends DataClass implements Insertable<ProjectRecord> {
     required this.title,
     required this.emoji,
     required this.description,
+    required this.colorValue,
+    this.dueAt,
+    this.budgetMinutes,
     required this.archived,
     required this.createdAt,
     required this.updatedAt,
@@ -445,6 +520,13 @@ class ProjectRecord extends DataClass implements Insertable<ProjectRecord> {
     map['title'] = Variable<String>(title);
     map['emoji'] = Variable<String>(emoji);
     map['description'] = Variable<String>(description);
+    map['color_value'] = Variable<int>(colorValue);
+    if (!nullToAbsent || dueAt != null) {
+      map['due_at'] = Variable<String>(dueAt);
+    }
+    if (!nullToAbsent || budgetMinutes != null) {
+      map['budget_minutes'] = Variable<int>(budgetMinutes);
+    }
     map['archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<String>(createdAt);
     map['updated_at'] = Variable<String>(updatedAt);
@@ -457,6 +539,13 @@ class ProjectRecord extends DataClass implements Insertable<ProjectRecord> {
       title: Value(title),
       emoji: Value(emoji),
       description: Value(description),
+      colorValue: Value(colorValue),
+      dueAt:
+          dueAt == null && nullToAbsent ? const Value.absent() : Value(dueAt),
+      budgetMinutes:
+          budgetMinutes == null && nullToAbsent
+              ? const Value.absent()
+              : Value(budgetMinutes),
       archived: Value(archived),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -473,6 +562,9 @@ class ProjectRecord extends DataClass implements Insertable<ProjectRecord> {
       title: serializer.fromJson<String>(json['title']),
       emoji: serializer.fromJson<String>(json['emoji']),
       description: serializer.fromJson<String>(json['description']),
+      colorValue: serializer.fromJson<int>(json['colorValue']),
+      dueAt: serializer.fromJson<String?>(json['dueAt']),
+      budgetMinutes: serializer.fromJson<int?>(json['budgetMinutes']),
       archived: serializer.fromJson<bool>(json['archived']),
       createdAt: serializer.fromJson<String>(json['createdAt']),
       updatedAt: serializer.fromJson<String>(json['updatedAt']),
@@ -486,6 +578,9 @@ class ProjectRecord extends DataClass implements Insertable<ProjectRecord> {
       'title': serializer.toJson<String>(title),
       'emoji': serializer.toJson<String>(emoji),
       'description': serializer.toJson<String>(description),
+      'colorValue': serializer.toJson<int>(colorValue),
+      'dueAt': serializer.toJson<String?>(dueAt),
+      'budgetMinutes': serializer.toJson<int?>(budgetMinutes),
       'archived': serializer.toJson<bool>(archived),
       'createdAt': serializer.toJson<String>(createdAt),
       'updatedAt': serializer.toJson<String>(updatedAt),
@@ -497,6 +592,9 @@ class ProjectRecord extends DataClass implements Insertable<ProjectRecord> {
     String? title,
     String? emoji,
     String? description,
+    int? colorValue,
+    Value<String?> dueAt = const Value.absent(),
+    Value<int?> budgetMinutes = const Value.absent(),
     bool? archived,
     String? createdAt,
     String? updatedAt,
@@ -505,6 +603,10 @@ class ProjectRecord extends DataClass implements Insertable<ProjectRecord> {
     title: title ?? this.title,
     emoji: emoji ?? this.emoji,
     description: description ?? this.description,
+    colorValue: colorValue ?? this.colorValue,
+    dueAt: dueAt.present ? dueAt.value : this.dueAt,
+    budgetMinutes:
+        budgetMinutes.present ? budgetMinutes.value : this.budgetMinutes,
     archived: archived ?? this.archived,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -516,6 +618,13 @@ class ProjectRecord extends DataClass implements Insertable<ProjectRecord> {
       emoji: data.emoji.present ? data.emoji.value : this.emoji,
       description:
           data.description.present ? data.description.value : this.description,
+      colorValue:
+          data.colorValue.present ? data.colorValue.value : this.colorValue,
+      dueAt: data.dueAt.present ? data.dueAt.value : this.dueAt,
+      budgetMinutes:
+          data.budgetMinutes.present
+              ? data.budgetMinutes.value
+              : this.budgetMinutes,
       archived: data.archived.present ? data.archived.value : this.archived,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -529,6 +638,9 @@ class ProjectRecord extends DataClass implements Insertable<ProjectRecord> {
           ..write('title: $title, ')
           ..write('emoji: $emoji, ')
           ..write('description: $description, ')
+          ..write('colorValue: $colorValue, ')
+          ..write('dueAt: $dueAt, ')
+          ..write('budgetMinutes: $budgetMinutes, ')
           ..write('archived: $archived, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -542,6 +654,9 @@ class ProjectRecord extends DataClass implements Insertable<ProjectRecord> {
     title,
     emoji,
     description,
+    colorValue,
+    dueAt,
+    budgetMinutes,
     archived,
     createdAt,
     updatedAt,
@@ -554,6 +669,9 @@ class ProjectRecord extends DataClass implements Insertable<ProjectRecord> {
           other.title == this.title &&
           other.emoji == this.emoji &&
           other.description == this.description &&
+          other.colorValue == this.colorValue &&
+          other.dueAt == this.dueAt &&
+          other.budgetMinutes == this.budgetMinutes &&
           other.archived == this.archived &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -564,6 +682,9 @@ class ProjectRecordsCompanion extends UpdateCompanion<ProjectRecord> {
   final Value<String> title;
   final Value<String> emoji;
   final Value<String> description;
+  final Value<int> colorValue;
+  final Value<String?> dueAt;
+  final Value<int?> budgetMinutes;
   final Value<bool> archived;
   final Value<String> createdAt;
   final Value<String> updatedAt;
@@ -573,6 +694,9 @@ class ProjectRecordsCompanion extends UpdateCompanion<ProjectRecord> {
     this.title = const Value.absent(),
     this.emoji = const Value.absent(),
     this.description = const Value.absent(),
+    this.colorValue = const Value.absent(),
+    this.dueAt = const Value.absent(),
+    this.budgetMinutes = const Value.absent(),
     this.archived = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -583,6 +707,9 @@ class ProjectRecordsCompanion extends UpdateCompanion<ProjectRecord> {
     required String title,
     this.emoji = const Value.absent(),
     this.description = const Value.absent(),
+    this.colorValue = const Value.absent(),
+    this.dueAt = const Value.absent(),
+    this.budgetMinutes = const Value.absent(),
     this.archived = const Value.absent(),
     required String createdAt,
     required String updatedAt,
@@ -596,6 +723,9 @@ class ProjectRecordsCompanion extends UpdateCompanion<ProjectRecord> {
     Expression<String>? title,
     Expression<String>? emoji,
     Expression<String>? description,
+    Expression<int>? colorValue,
+    Expression<String>? dueAt,
+    Expression<int>? budgetMinutes,
     Expression<bool>? archived,
     Expression<String>? createdAt,
     Expression<String>? updatedAt,
@@ -606,6 +736,9 @@ class ProjectRecordsCompanion extends UpdateCompanion<ProjectRecord> {
       if (title != null) 'title': title,
       if (emoji != null) 'emoji': emoji,
       if (description != null) 'description': description,
+      if (colorValue != null) 'color_value': colorValue,
+      if (dueAt != null) 'due_at': dueAt,
+      if (budgetMinutes != null) 'budget_minutes': budgetMinutes,
       if (archived != null) 'archived': archived,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -618,6 +751,9 @@ class ProjectRecordsCompanion extends UpdateCompanion<ProjectRecord> {
     Value<String>? title,
     Value<String>? emoji,
     Value<String>? description,
+    Value<int>? colorValue,
+    Value<String?>? dueAt,
+    Value<int?>? budgetMinutes,
     Value<bool>? archived,
     Value<String>? createdAt,
     Value<String>? updatedAt,
@@ -628,6 +764,9 @@ class ProjectRecordsCompanion extends UpdateCompanion<ProjectRecord> {
       title: title ?? this.title,
       emoji: emoji ?? this.emoji,
       description: description ?? this.description,
+      colorValue: colorValue ?? this.colorValue,
+      dueAt: dueAt ?? this.dueAt,
+      budgetMinutes: budgetMinutes ?? this.budgetMinutes,
       archived: archived ?? this.archived,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -649,6 +788,15 @@ class ProjectRecordsCompanion extends UpdateCompanion<ProjectRecord> {
     }
     if (description.present) {
       map['description'] = Variable<String>(description.value);
+    }
+    if (colorValue.present) {
+      map['color_value'] = Variable<int>(colorValue.value);
+    }
+    if (dueAt.present) {
+      map['due_at'] = Variable<String>(dueAt.value);
+    }
+    if (budgetMinutes.present) {
+      map['budget_minutes'] = Variable<int>(budgetMinutes.value);
     }
     if (archived.present) {
       map['archived'] = Variable<bool>(archived.value);
@@ -672,6 +820,9 @@ class ProjectRecordsCompanion extends UpdateCompanion<ProjectRecord> {
           ..write('title: $title, ')
           ..write('emoji: $emoji, ')
           ..write('description: $description, ')
+          ..write('colorValue: $colorValue, ')
+          ..write('dueAt: $dueAt, ')
+          ..write('budgetMinutes: $budgetMinutes, ')
           ..write('archived: $archived, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -1271,6 +1422,17 @@ class $TaskRecordsTable extends TaskRecords
       'REFERENCES projects (id) ON DELETE RESTRICT',
     ),
   );
+  static const VerificationMeta _parentTaskIdMeta = const VerificationMeta(
+    'parentTaskId',
+  );
+  @override
+  late final GeneratedColumn<String> parentTaskId = GeneratedColumn<String>(
+    'parent_task_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _noteIdMeta = const VerificationMeta('noteId');
   @override
   late final GeneratedColumn<String> noteId = GeneratedColumn<String>(
@@ -1292,6 +1454,18 @@ class $TaskRecordsTable extends TaskRecords
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
@@ -1301,6 +1475,18 @@ class $TaskRecordsTable extends TaskRecords
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultValue: const Constant('next'),
+  );
+  static const VerificationMeta _priorityMeta = const VerificationMeta(
+    'priority',
+  );
+  @override
+  late final GeneratedColumn<int> priority = GeneratedColumn<int>(
+    'priority',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
   );
   static const VerificationMeta _estimateMinutesMeta = const VerificationMeta(
     'estimateMinutes',
@@ -1313,6 +1499,18 @@ class $TaskRecordsTable extends TaskRecords
     type: DriftSqlType.int,
     requiredDuringInsert: false,
     defaultValue: const Constant(30),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
   );
   static const VerificationMeta _dueAtMeta = const VerificationMeta('dueAt');
   @override
@@ -1371,10 +1569,14 @@ class $TaskRecordsTable extends TaskRecords
   List<GeneratedColumn> get $columns => [
     id,
     projectId,
+    parentTaskId,
     noteId,
     title,
+    description,
     status,
+    priority,
     estimateMinutes,
+    sortOrder,
     dueAt,
     createdAt,
     updatedAt,
@@ -1406,6 +1608,15 @@ class $TaskRecordsTable extends TaskRecords
     } else if (isInserting) {
       context.missing(_projectIdMeta);
     }
+    if (data.containsKey('parent_task_id')) {
+      context.handle(
+        _parentTaskIdMeta,
+        parentTaskId.isAcceptableOrUnknown(
+          data['parent_task_id']!,
+          _parentTaskIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('note_id')) {
       context.handle(
         _noteIdMeta,
@@ -1420,10 +1631,25 @@ class $TaskRecordsTable extends TaskRecords
     } else if (isInserting) {
       context.missing(_titleMeta);
     }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
     if (data.containsKey('status')) {
       context.handle(
         _statusMeta,
         status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('priority')) {
+      context.handle(
+        _priorityMeta,
+        priority.isAcceptableOrUnknown(data['priority']!, _priorityMeta),
       );
     }
     if (data.containsKey('estimate_minutes')) {
@@ -1433,6 +1659,12 @@ class $TaskRecordsTable extends TaskRecords
           data['estimate_minutes']!,
           _estimateMinutesMeta,
         ),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
       );
     }
     if (data.containsKey('due_at')) {
@@ -1491,6 +1723,10 @@ class $TaskRecordsTable extends TaskRecords
             DriftSqlType.string,
             data['${effectivePrefix}project_id'],
           )!,
+      parentTaskId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_task_id'],
+      ),
       noteId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}note_id'],
@@ -1500,15 +1736,30 @@ class $TaskRecordsTable extends TaskRecords
             DriftSqlType.string,
             data['${effectivePrefix}title'],
           )!,
+      description:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}description'],
+          )!,
       status:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
             data['${effectivePrefix}status'],
           )!,
+      priority:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}priority'],
+          )!,
       estimateMinutes:
           attachedDatabase.typeMapping.read(
             DriftSqlType.int,
             data['${effectivePrefix}estimate_minutes'],
+          )!,
+      sortOrder:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}sort_order'],
           )!,
       dueAt: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -1544,10 +1795,14 @@ class $TaskRecordsTable extends TaskRecords
 class TaskRecord extends DataClass implements Insertable<TaskRecord> {
   final String id;
   final String projectId;
+  final String? parentTaskId;
   final String? noteId;
   final String title;
+  final String description;
   final String status;
+  final int priority;
   final int estimateMinutes;
+  final int sortOrder;
   final String? dueAt;
   final String createdAt;
   final String updatedAt;
@@ -1556,10 +1811,14 @@ class TaskRecord extends DataClass implements Insertable<TaskRecord> {
   const TaskRecord({
     required this.id,
     required this.projectId,
+    this.parentTaskId,
     this.noteId,
     required this.title,
+    required this.description,
     required this.status,
+    required this.priority,
     required this.estimateMinutes,
+    required this.sortOrder,
     this.dueAt,
     required this.createdAt,
     required this.updatedAt,
@@ -1571,12 +1830,18 @@ class TaskRecord extends DataClass implements Insertable<TaskRecord> {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['project_id'] = Variable<String>(projectId);
+    if (!nullToAbsent || parentTaskId != null) {
+      map['parent_task_id'] = Variable<String>(parentTaskId);
+    }
     if (!nullToAbsent || noteId != null) {
       map['note_id'] = Variable<String>(noteId);
     }
     map['title'] = Variable<String>(title);
+    map['description'] = Variable<String>(description);
     map['status'] = Variable<String>(status);
+    map['priority'] = Variable<int>(priority);
     map['estimate_minutes'] = Variable<int>(estimateMinutes);
+    map['sort_order'] = Variable<int>(sortOrder);
     if (!nullToAbsent || dueAt != null) {
       map['due_at'] = Variable<String>(dueAt);
     }
@@ -1595,11 +1860,18 @@ class TaskRecord extends DataClass implements Insertable<TaskRecord> {
     return TaskRecordsCompanion(
       id: Value(id),
       projectId: Value(projectId),
+      parentTaskId:
+          parentTaskId == null && nullToAbsent
+              ? const Value.absent()
+              : Value(parentTaskId),
       noteId:
           noteId == null && nullToAbsent ? const Value.absent() : Value(noteId),
       title: Value(title),
+      description: Value(description),
       status: Value(status),
+      priority: Value(priority),
       estimateMinutes: Value(estimateMinutes),
+      sortOrder: Value(sortOrder),
       dueAt:
           dueAt == null && nullToAbsent ? const Value.absent() : Value(dueAt),
       createdAt: Value(createdAt),
@@ -1623,10 +1895,14 @@ class TaskRecord extends DataClass implements Insertable<TaskRecord> {
     return TaskRecord(
       id: serializer.fromJson<String>(json['id']),
       projectId: serializer.fromJson<String>(json['projectId']),
+      parentTaskId: serializer.fromJson<String?>(json['parentTaskId']),
       noteId: serializer.fromJson<String?>(json['noteId']),
       title: serializer.fromJson<String>(json['title']),
+      description: serializer.fromJson<String>(json['description']),
       status: serializer.fromJson<String>(json['status']),
+      priority: serializer.fromJson<int>(json['priority']),
       estimateMinutes: serializer.fromJson<int>(json['estimateMinutes']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
       dueAt: serializer.fromJson<String?>(json['dueAt']),
       createdAt: serializer.fromJson<String>(json['createdAt']),
       updatedAt: serializer.fromJson<String>(json['updatedAt']),
@@ -1640,10 +1916,14 @@ class TaskRecord extends DataClass implements Insertable<TaskRecord> {
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'projectId': serializer.toJson<String>(projectId),
+      'parentTaskId': serializer.toJson<String?>(parentTaskId),
       'noteId': serializer.toJson<String?>(noteId),
       'title': serializer.toJson<String>(title),
+      'description': serializer.toJson<String>(description),
       'status': serializer.toJson<String>(status),
+      'priority': serializer.toJson<int>(priority),
       'estimateMinutes': serializer.toJson<int>(estimateMinutes),
+      'sortOrder': serializer.toJson<int>(sortOrder),
       'dueAt': serializer.toJson<String?>(dueAt),
       'createdAt': serializer.toJson<String>(createdAt),
       'updatedAt': serializer.toJson<String>(updatedAt),
@@ -1655,10 +1935,14 @@ class TaskRecord extends DataClass implements Insertable<TaskRecord> {
   TaskRecord copyWith({
     String? id,
     String? projectId,
+    Value<String?> parentTaskId = const Value.absent(),
     Value<String?> noteId = const Value.absent(),
     String? title,
+    String? description,
     String? status,
+    int? priority,
     int? estimateMinutes,
+    int? sortOrder,
     Value<String?> dueAt = const Value.absent(),
     String? createdAt,
     String? updatedAt,
@@ -1667,10 +1951,14 @@ class TaskRecord extends DataClass implements Insertable<TaskRecord> {
   }) => TaskRecord(
     id: id ?? this.id,
     projectId: projectId ?? this.projectId,
+    parentTaskId: parentTaskId.present ? parentTaskId.value : this.parentTaskId,
     noteId: noteId.present ? noteId.value : this.noteId,
     title: title ?? this.title,
+    description: description ?? this.description,
     status: status ?? this.status,
+    priority: priority ?? this.priority,
     estimateMinutes: estimateMinutes ?? this.estimateMinutes,
+    sortOrder: sortOrder ?? this.sortOrder,
     dueAt: dueAt.present ? dueAt.value : this.dueAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -1681,13 +1969,21 @@ class TaskRecord extends DataClass implements Insertable<TaskRecord> {
     return TaskRecord(
       id: data.id.present ? data.id.value : this.id,
       projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      parentTaskId:
+          data.parentTaskId.present
+              ? data.parentTaskId.value
+              : this.parentTaskId,
       noteId: data.noteId.present ? data.noteId.value : this.noteId,
       title: data.title.present ? data.title.value : this.title,
+      description:
+          data.description.present ? data.description.value : this.description,
       status: data.status.present ? data.status.value : this.status,
+      priority: data.priority.present ? data.priority.value : this.priority,
       estimateMinutes:
           data.estimateMinutes.present
               ? data.estimateMinutes.value
               : this.estimateMinutes,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       dueAt: data.dueAt.present ? data.dueAt.value : this.dueAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -1702,10 +1998,14 @@ class TaskRecord extends DataClass implements Insertable<TaskRecord> {
     return (StringBuffer('TaskRecord(')
           ..write('id: $id, ')
           ..write('projectId: $projectId, ')
+          ..write('parentTaskId: $parentTaskId, ')
           ..write('noteId: $noteId, ')
           ..write('title: $title, ')
+          ..write('description: $description, ')
           ..write('status: $status, ')
+          ..write('priority: $priority, ')
           ..write('estimateMinutes: $estimateMinutes, ')
+          ..write('sortOrder: $sortOrder, ')
           ..write('dueAt: $dueAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -1719,10 +2019,14 @@ class TaskRecord extends DataClass implements Insertable<TaskRecord> {
   int get hashCode => Object.hash(
     id,
     projectId,
+    parentTaskId,
     noteId,
     title,
+    description,
     status,
+    priority,
     estimateMinutes,
+    sortOrder,
     dueAt,
     createdAt,
     updatedAt,
@@ -1735,10 +2039,14 @@ class TaskRecord extends DataClass implements Insertable<TaskRecord> {
       (other is TaskRecord &&
           other.id == this.id &&
           other.projectId == this.projectId &&
+          other.parentTaskId == this.parentTaskId &&
           other.noteId == this.noteId &&
           other.title == this.title &&
+          other.description == this.description &&
           other.status == this.status &&
+          other.priority == this.priority &&
           other.estimateMinutes == this.estimateMinutes &&
+          other.sortOrder == this.sortOrder &&
           other.dueAt == this.dueAt &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
@@ -1749,10 +2057,14 @@ class TaskRecord extends DataClass implements Insertable<TaskRecord> {
 class TaskRecordsCompanion extends UpdateCompanion<TaskRecord> {
   final Value<String> id;
   final Value<String> projectId;
+  final Value<String?> parentTaskId;
   final Value<String?> noteId;
   final Value<String> title;
+  final Value<String> description;
   final Value<String> status;
+  final Value<int> priority;
   final Value<int> estimateMinutes;
+  final Value<int> sortOrder;
   final Value<String?> dueAt;
   final Value<String> createdAt;
   final Value<String> updatedAt;
@@ -1762,10 +2074,14 @@ class TaskRecordsCompanion extends UpdateCompanion<TaskRecord> {
   const TaskRecordsCompanion({
     this.id = const Value.absent(),
     this.projectId = const Value.absent(),
+    this.parentTaskId = const Value.absent(),
     this.noteId = const Value.absent(),
     this.title = const Value.absent(),
+    this.description = const Value.absent(),
     this.status = const Value.absent(),
+    this.priority = const Value.absent(),
     this.estimateMinutes = const Value.absent(),
+    this.sortOrder = const Value.absent(),
     this.dueAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1776,10 +2092,14 @@ class TaskRecordsCompanion extends UpdateCompanion<TaskRecord> {
   TaskRecordsCompanion.insert({
     required String id,
     required String projectId,
+    this.parentTaskId = const Value.absent(),
     this.noteId = const Value.absent(),
     required String title,
+    this.description = const Value.absent(),
     this.status = const Value.absent(),
+    this.priority = const Value.absent(),
     this.estimateMinutes = const Value.absent(),
+    this.sortOrder = const Value.absent(),
     this.dueAt = const Value.absent(),
     required String createdAt,
     required String updatedAt,
@@ -1794,10 +2114,14 @@ class TaskRecordsCompanion extends UpdateCompanion<TaskRecord> {
   static Insertable<TaskRecord> custom({
     Expression<String>? id,
     Expression<String>? projectId,
+    Expression<String>? parentTaskId,
     Expression<String>? noteId,
     Expression<String>? title,
+    Expression<String>? description,
     Expression<String>? status,
+    Expression<int>? priority,
     Expression<int>? estimateMinutes,
+    Expression<int>? sortOrder,
     Expression<String>? dueAt,
     Expression<String>? createdAt,
     Expression<String>? updatedAt,
@@ -1808,10 +2132,14 @@ class TaskRecordsCompanion extends UpdateCompanion<TaskRecord> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (projectId != null) 'project_id': projectId,
+      if (parentTaskId != null) 'parent_task_id': parentTaskId,
       if (noteId != null) 'note_id': noteId,
       if (title != null) 'title': title,
+      if (description != null) 'description': description,
       if (status != null) 'status': status,
+      if (priority != null) 'priority': priority,
       if (estimateMinutes != null) 'estimate_minutes': estimateMinutes,
+      if (sortOrder != null) 'sort_order': sortOrder,
       if (dueAt != null) 'due_at': dueAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -1824,10 +2152,14 @@ class TaskRecordsCompanion extends UpdateCompanion<TaskRecord> {
   TaskRecordsCompanion copyWith({
     Value<String>? id,
     Value<String>? projectId,
+    Value<String?>? parentTaskId,
     Value<String?>? noteId,
     Value<String>? title,
+    Value<String>? description,
     Value<String>? status,
+    Value<int>? priority,
     Value<int>? estimateMinutes,
+    Value<int>? sortOrder,
     Value<String?>? dueAt,
     Value<String>? createdAt,
     Value<String>? updatedAt,
@@ -1838,10 +2170,14 @@ class TaskRecordsCompanion extends UpdateCompanion<TaskRecord> {
     return TaskRecordsCompanion(
       id: id ?? this.id,
       projectId: projectId ?? this.projectId,
+      parentTaskId: parentTaskId ?? this.parentTaskId,
       noteId: noteId ?? this.noteId,
       title: title ?? this.title,
+      description: description ?? this.description,
       status: status ?? this.status,
+      priority: priority ?? this.priority,
       estimateMinutes: estimateMinutes ?? this.estimateMinutes,
+      sortOrder: sortOrder ?? this.sortOrder,
       dueAt: dueAt ?? this.dueAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -1860,17 +2196,29 @@ class TaskRecordsCompanion extends UpdateCompanion<TaskRecord> {
     if (projectId.present) {
       map['project_id'] = Variable<String>(projectId.value);
     }
+    if (parentTaskId.present) {
+      map['parent_task_id'] = Variable<String>(parentTaskId.value);
+    }
     if (noteId.present) {
       map['note_id'] = Variable<String>(noteId.value);
     }
     if (title.present) {
       map['title'] = Variable<String>(title.value);
     }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
     }
+    if (priority.present) {
+      map['priority'] = Variable<int>(priority.value);
+    }
     if (estimateMinutes.present) {
       map['estimate_minutes'] = Variable<int>(estimateMinutes.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
     }
     if (dueAt.present) {
       map['due_at'] = Variable<String>(dueAt.value);
@@ -1898,10 +2246,14 @@ class TaskRecordsCompanion extends UpdateCompanion<TaskRecord> {
     return (StringBuffer('TaskRecordsCompanion(')
           ..write('id: $id, ')
           ..write('projectId: $projectId, ')
+          ..write('parentTaskId: $parentTaskId, ')
           ..write('noteId: $noteId, ')
           ..write('title: $title, ')
+          ..write('description: $description, ')
           ..write('status: $status, ')
+          ..write('priority: $priority, ')
           ..write('estimateMinutes: $estimateMinutes, ')
+          ..write('sortOrder: $sortOrder, ')
           ..write('dueAt: $dueAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -2696,6 +3048,9 @@ typedef $$ProjectRecordsTableCreateCompanionBuilder =
       required String title,
       Value<String> emoji,
       Value<String> description,
+      Value<int> colorValue,
+      Value<String?> dueAt,
+      Value<int?> budgetMinutes,
       Value<bool> archived,
       required String createdAt,
       required String updatedAt,
@@ -2707,6 +3062,9 @@ typedef $$ProjectRecordsTableUpdateCompanionBuilder =
       Value<String> title,
       Value<String> emoji,
       Value<String> description,
+      Value<int> colorValue,
+      Value<String?> dueAt,
+      Value<int?> budgetMinutes,
       Value<bool> archived,
       Value<String> createdAt,
       Value<String> updatedAt,
@@ -2812,6 +3170,21 @@ class $$ProjectRecordsTableFilterComposer
 
   ColumnFilters<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get colorValue => $composableBuilder(
+    column: $table.colorValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dueAt => $composableBuilder(
+    column: $table.dueAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get budgetMinutes => $composableBuilder(
+    column: $table.budgetMinutes,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2935,6 +3308,21 @@ class $$ProjectRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get colorValue => $composableBuilder(
+    column: $table.colorValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dueAt => $composableBuilder(
+    column: $table.dueAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get budgetMinutes => $composableBuilder(
+    column: $table.budgetMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get archived => $composableBuilder(
     column: $table.archived,
     builder: (column) => ColumnOrderings(column),
@@ -2971,6 +3359,19 @@ class $$ProjectRecordsTableAnnotationComposer
 
   GeneratedColumn<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get colorValue => $composableBuilder(
+    column: $table.colorValue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get dueAt =>
+      $composableBuilder(column: $table.dueAt, builder: (column) => column);
+
+  GeneratedColumn<int> get budgetMinutes => $composableBuilder(
+    column: $table.budgetMinutes,
     builder: (column) => column,
   );
 
@@ -3101,6 +3502,9 @@ class $$ProjectRecordsTableTableManager
                 Value<String> title = const Value.absent(),
                 Value<String> emoji = const Value.absent(),
                 Value<String> description = const Value.absent(),
+                Value<int> colorValue = const Value.absent(),
+                Value<String?> dueAt = const Value.absent(),
+                Value<int?> budgetMinutes = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<String> createdAt = const Value.absent(),
                 Value<String> updatedAt = const Value.absent(),
@@ -3110,6 +3514,9 @@ class $$ProjectRecordsTableTableManager
                 title: title,
                 emoji: emoji,
                 description: description,
+                colorValue: colorValue,
+                dueAt: dueAt,
+                budgetMinutes: budgetMinutes,
                 archived: archived,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -3121,6 +3528,9 @@ class $$ProjectRecordsTableTableManager
                 required String title,
                 Value<String> emoji = const Value.absent(),
                 Value<String> description = const Value.absent(),
+                Value<int> colorValue = const Value.absent(),
+                Value<String?> dueAt = const Value.absent(),
+                Value<int?> budgetMinutes = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 required String createdAt,
                 required String updatedAt,
@@ -3130,6 +3540,9 @@ class $$ProjectRecordsTableTableManager
                 title: title,
                 emoji: emoji,
                 description: description,
+                colorValue: colorValue,
+                dueAt: dueAt,
+                budgetMinutes: budgetMinutes,
                 archived: archived,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -3852,10 +4265,14 @@ typedef $$TaskRecordsTableCreateCompanionBuilder =
     TaskRecordsCompanion Function({
       required String id,
       required String projectId,
+      Value<String?> parentTaskId,
       Value<String?> noteId,
       required String title,
+      Value<String> description,
       Value<String> status,
+      Value<int> priority,
       Value<int> estimateMinutes,
+      Value<int> sortOrder,
       Value<String?> dueAt,
       required String createdAt,
       required String updatedAt,
@@ -3867,10 +4284,14 @@ typedef $$TaskRecordsTableUpdateCompanionBuilder =
     TaskRecordsCompanion Function({
       Value<String> id,
       Value<String> projectId,
+      Value<String?> parentTaskId,
       Value<String?> noteId,
       Value<String> title,
+      Value<String> description,
       Value<String> status,
+      Value<int> priority,
       Value<int> estimateMinutes,
+      Value<int> sortOrder,
       Value<String?> dueAt,
       Value<String> createdAt,
       Value<String> updatedAt,
@@ -3953,8 +4374,18 @@ class $$TaskRecordsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get parentTaskId => $composableBuilder(
+    column: $table.parentTaskId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get title => $composableBuilder(
     column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3963,8 +4394,18 @@ class $$TaskRecordsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get estimateMinutes => $composableBuilder(
     column: $table.estimateMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4079,8 +4520,18 @@ class $$TaskRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentTaskId => $composableBuilder(
+    column: $table.parentTaskId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get title => $composableBuilder(
     column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -4089,8 +4540,18 @@ class $$TaskRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get estimateMinutes => $composableBuilder(
     column: $table.estimateMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -4178,16 +4639,32 @@ class $$TaskRecordsTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
+  GeneratedColumn<String> get parentTaskId => $composableBuilder(
+    column: $table.parentTaskId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get title =>
       $composableBuilder(column: $table.title, builder: (column) => column);
 
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<int> get priority =>
+      $composableBuilder(column: $table.priority, builder: (column) => column);
 
   GeneratedColumn<int> get estimateMinutes => $composableBuilder(
     column: $table.estimateMinutes,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
 
   GeneratedColumn<String> get dueAt =>
       $composableBuilder(column: $table.dueAt, builder: (column) => column);
@@ -4315,10 +4792,14 @@ class $$TaskRecordsTableTableManager
               ({
                 Value<String> id = const Value.absent(),
                 Value<String> projectId = const Value.absent(),
+                Value<String?> parentTaskId = const Value.absent(),
                 Value<String?> noteId = const Value.absent(),
                 Value<String> title = const Value.absent(),
+                Value<String> description = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<int> priority = const Value.absent(),
                 Value<int> estimateMinutes = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
                 Value<String?> dueAt = const Value.absent(),
                 Value<String> createdAt = const Value.absent(),
                 Value<String> updatedAt = const Value.absent(),
@@ -4328,10 +4809,14 @@ class $$TaskRecordsTableTableManager
               }) => TaskRecordsCompanion(
                 id: id,
                 projectId: projectId,
+                parentTaskId: parentTaskId,
                 noteId: noteId,
                 title: title,
+                description: description,
                 status: status,
+                priority: priority,
                 estimateMinutes: estimateMinutes,
+                sortOrder: sortOrder,
                 dueAt: dueAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -4343,10 +4828,14 @@ class $$TaskRecordsTableTableManager
               ({
                 required String id,
                 required String projectId,
+                Value<String?> parentTaskId = const Value.absent(),
                 Value<String?> noteId = const Value.absent(),
                 required String title,
+                Value<String> description = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<int> priority = const Value.absent(),
                 Value<int> estimateMinutes = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
                 Value<String?> dueAt = const Value.absent(),
                 required String createdAt,
                 required String updatedAt,
@@ -4356,10 +4845,14 @@ class $$TaskRecordsTableTableManager
               }) => TaskRecordsCompanion.insert(
                 id: id,
                 projectId: projectId,
+                parentTaskId: parentTaskId,
                 noteId: noteId,
                 title: title,
+                description: description,
                 status: status,
+                priority: priority,
                 estimateMinutes: estimateMinutes,
+                sortOrder: sortOrder,
                 dueAt: dueAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

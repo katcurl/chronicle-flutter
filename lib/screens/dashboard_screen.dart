@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../services/app_store.dart';
 import '../widgets/common.dart';
 
@@ -9,12 +10,30 @@ class DashboardScreen extends StatelessWidget {
     required this.onOpenTask,
     required this.onStart,
   });
+
   final AppStore store;
   final void Function(String) onOpenTask;
   final VoidCallback onStart;
+
   @override
   Widget build(BuildContext context) {
-    final active = store.data.tasks.where((e) => e.status != 'done').toList();
+    final activeIds = store.activeProjects.map((item) => item.id).toSet();
+    final activeTasks =
+        store.data.tasks
+            .where(
+              (task) =>
+                  task.status != 'done' && activeIds.contains(task.projectId),
+            )
+            .toList()
+          ..sort((a, b) {
+            final priority = b.priority.compareTo(a.priority);
+            if (priority != 0) return priority;
+            if (a.dueAt != null && b.dueAt != null) {
+              return a.dueAt!.compareTo(b.dueAt!);
+            }
+            return b.updatedAt.compareTo(a.updatedAt);
+          });
+
     return CustomScrollView(
       slivers: [
         SliverAppBar.large(
@@ -94,50 +113,62 @@ class DashboardScreen extends StatelessWidget {
                     child: MetricCard(
                       icon: Icons.task_alt_rounded,
                       label: 'Активных',
-                      value: '${active.length}',
+                      value: '${activeTasks.length}',
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 18),
               const SectionTitle('Следующие задачи'),
-              ...active.take(5).map((task) {
-                final project = store.data.projects.firstWhere(
-                  (p) => p.id == task.projectId,
-                );
-                return Card(
-                  child: ListTile(
-                    onTap: () => onOpenTask(task.id),
-                    leading: CircleAvatar(child: Text(project.emoji)),
-                    title: Text(
-                      task.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      '${project.title} · ${task.estimateMinutes} мин',
-                    ),
-                    trailing: Icon(
-                      task.status == 'doing'
-                          ? Icons.timelapse_rounded
-                          : Icons.chevron_right_rounded,
-                    ),
+              if (activeTasks.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text('Активных задач пока нет'),
                   ),
-                );
-              }),
+                )
+              else
+                ...activeTasks.take(5).map((task) {
+                  final project = store.projectById(task.projectId);
+                  return Card(
+                    child: ListTile(
+                      onTap: () => onOpenTask(task.id),
+                      leading: CircleAvatar(
+                        child: Text(project?.emoji ?? '📁'),
+                      ),
+                      title: Text(
+                        task.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        '${project?.title ?? 'Без проекта'} · '
+                        '${task.estimateMinutes} мин',
+                      ),
+                      trailing: Icon(
+                        task.status == 'doing'
+                            ? Icons.timelapse_rounded
+                            : Icons.chevron_right_rounded,
+                      ),
+                    ),
+                  );
+                }),
               const SizedBox(height: 18),
               const SectionTitle('Проекты'),
               SizedBox(
                 height: 126,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: store.data.projects.length,
+                  itemCount: store.activeProjects.length,
                   separatorBuilder: (_, __) => const SizedBox(width: 10),
-                  itemBuilder: (_, i) {
-                    final p = store.data.projects[i];
-                    final sec = store.data.entries
-                        .where((e) => e.projectId == p.id)
-                        .fold(0, (a, b) => a + b.durationSeconds);
+                  itemBuilder: (_, index) {
+                    final project = store.activeProjects[index];
+                    final seconds = store.data.entries
+                        .where((entry) => entry.projectId == project.id)
+                        .fold<int>(
+                          0,
+                          (sum, entry) => sum + entry.durationSeconds,
+                        );
                     return SizedBox(
                       width: 210,
                       child: Card(
@@ -147,12 +178,12 @@ class DashboardScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                p.emoji,
+                                project.emoji,
                                 style: const TextStyle(fontSize: 26),
                               ),
                               const Spacer(),
                               Text(
-                                p.title,
+                                project.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -160,7 +191,7 @@ class DashboardScreen extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                formatDuration(sec),
+                                formatDuration(seconds),
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ],

@@ -25,6 +25,10 @@ class ProjectRecords extends Table {
   TextColumn get title => text()();
   TextColumn get emoji => text().withDefault(const Constant('📁'))();
   TextColumn get description => text().withDefault(const Constant(''))();
+  IntColumn get colorValue =>
+      integer().named('color_value').withDefault(const Constant(0xFF6750A4))();
+  TextColumn get dueAt => text().named('due_at').nullable()();
+  IntColumn get budgetMinutes => integer().named('budget_minutes').nullable()();
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
   TextColumn get createdAt => text().named('created_at')();
   TextColumn get updatedAt => text().named('updated_at')();
@@ -67,15 +71,20 @@ class TaskRecords extends Table {
       text()
           .named('project_id')
           .references(ProjectRecords, #id, onDelete: KeyAction.restrict)();
+  TextColumn get parentTaskId => text().named('parent_task_id').nullable()();
   TextColumn get noteId =>
       text()
           .named('note_id')
           .nullable()
           .references(NoteRecords, #id, onDelete: KeyAction.setNull)();
   TextColumn get title => text()();
+  TextColumn get description => text().withDefault(const Constant(''))();
   TextColumn get status => text().withDefault(const Constant('next'))();
+  IntColumn get priority => integer().withDefault(const Constant(1))();
   IntColumn get estimateMinutes =>
       integer().named('estimate_minutes').withDefault(const Constant(30))();
+  IntColumn get sortOrder =>
+      integer().named('sort_order').withDefault(const Constant(0))();
   TextColumn get dueAt => text().named('due_at').nullable()();
   TextColumn get createdAt => text().named('created_at')();
   TextColumn get updatedAt => text().named('updated_at')();
@@ -134,7 +143,7 @@ final class ChronicleDatabase extends _$ChronicleDatabase {
   factory ChronicleDatabase.defaults() => ChronicleDatabase(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -142,6 +151,15 @@ final class ChronicleDatabase extends _$ChronicleDatabase {
     onUpgrade: (migrator, from, to) async {
       if (from > to) {
         throw StateError('Downgrading Chronicle databases is unsupported.');
+      }
+      if (from < 2) {
+        await migrator.addColumn(projectRecords, projectRecords.colorValue);
+        await migrator.addColumn(projectRecords, projectRecords.dueAt);
+        await migrator.addColumn(projectRecords, projectRecords.budgetMinutes);
+        await migrator.addColumn(taskRecords, taskRecords.parentTaskId);
+        await migrator.addColumn(taskRecords, taskRecords.description);
+        await migrator.addColumn(taskRecords, taskRecords.priority);
+        await migrator.addColumn(taskRecords, taskRecords.sortOrder);
       }
     },
     beforeOpen: (details) async {

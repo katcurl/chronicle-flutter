@@ -27,10 +27,7 @@ class DriftAppRepository implements AppRepository {
   @override
   Future<AppData> load() async {
     final results = await Future.wait([
-      _readRows(
-        'SELECT * FROM projects '
-        'WHERE archived = 0 ORDER BY updated_at DESC',
-      ),
+      _readRows('SELECT * FROM projects ORDER BY updated_at DESC'),
       _readRows(
         'SELECT * FROM tasks '
         'WHERE deleted_at IS NULL ORDER BY updated_at DESC',
@@ -79,6 +76,15 @@ class DriftAppRepository implements AppRepository {
 
   @override
   Future<void> saveTask(WorkTask task) => _upsert('tasks', task.toDb());
+
+  @override
+  Future<void> softDeleteTask(String taskId, DateTime deletedAt) async {
+    final encoded = deletedAt.toIso8601String();
+    await _database.customStatement(
+      'UPDATE tasks SET deleted_at = ?, updated_at = ? WHERE id = ?',
+      [encoded, encoded, taskId],
+    );
+  }
 
   @override
   Future<void> saveNote(Note note) => _upsert('notes', note.toDb());

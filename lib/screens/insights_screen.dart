@@ -50,7 +50,7 @@ class InsightsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 22),
           const SectionTitle('По проектам'),
-          ...store.data.projects.map((project) {
+          ...store.activeProjects.map((project) {
             final seconds = store.data.entries
                 .where((entry) => entry.projectId == project.id)
                 .fold<int>(0, (sum, entry) => sum + entry.durationSeconds);

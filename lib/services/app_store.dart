@@ -168,6 +168,19 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     );
   }
 
+  List<Project> get activeProjects =>
+      data.projects.where((project) => !project.archived).toList();
+
+  List<Project> get archivedProjects =>
+      data.projects.where((project) => project.archived).toList();
+
+  Project? projectById(String id) {
+    for (final project in data.projects) {
+      if (project.id == id) return project;
+    }
+    return null;
+  }
+
   int get activeSeconds =>
       activeStartedAt == null
           ? 0
@@ -274,6 +287,14 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     notifyListeners();
   }
 
+  void updateTask(WorkTask task) {
+    task.updatedAt = DateTime.now();
+    final index = data.tasks.indexWhere((item) => item.id == task.id);
+    if (index >= 0) data.tasks[index] = task;
+    unawaited(_repository.saveTask(task));
+    notifyListeners();
+  }
+
   void updateTaskStatus(WorkTask task, String status) {
     task.status = status;
     task.updatedAt = DateTime.now();
@@ -282,8 +303,35 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     notifyListeners();
   }
 
+  void deleteTask(String id) {
+    final deletedAt = DateTime.now();
+    data.tasks.removeWhere((task) => task.id == id);
+    for (final child in data.tasks.where((task) => task.parentTaskId == id)) {
+      child.parentTaskId = null;
+      child.updatedAt = deletedAt;
+      unawaited(_repository.saveTask(child));
+    }
+    unawaited(_repository.softDeleteTask(id, deletedAt));
+    notifyListeners();
+  }
+
   void addProject(Project project) {
     data.projects.add(project);
+    unawaited(_repository.saveProject(project));
+    notifyListeners();
+  }
+
+  void updateProject(Project project) {
+    project.updatedAt = DateTime.now();
+    final index = data.projects.indexWhere((item) => item.id == project.id);
+    if (index >= 0) data.projects[index] = project;
+    unawaited(_repository.saveProject(project));
+    notifyListeners();
+  }
+
+  void setProjectArchived(Project project, bool archived) {
+    project.archived = archived;
+    project.updatedAt = DateTime.now();
     unawaited(_repository.saveProject(project));
     notifyListeners();
   }

@@ -21,12 +21,22 @@ bool _readBool(dynamic value) {
   return false;
 }
 
+int _readInt(dynamic value, {int fallback = 0}) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? fallback;
+  return fallback;
+}
+
 class Project {
   Project({
     required this.id,
     required this.title,
     required this.emoji,
     this.description = '',
+    this.colorValue = 0xFF6750A4,
+    this.dueAt,
+    this.budgetMinutes,
     this.archived = false,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -37,6 +47,9 @@ class Project {
   String title;
   String emoji;
   String description;
+  int colorValue;
+  DateTime? dueAt;
+  int? budgetMinutes;
   bool archived;
   DateTime createdAt;
   DateTime updatedAt;
@@ -46,6 +59,9 @@ class Project {
     'title': title,
     'emoji': emoji,
     'description': description,
+    'colorValue': colorValue,
+    'dueAt': dueAt?.toIso8601String(),
+    'budgetMinutes': budgetMinutes,
     'archived': archived,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
@@ -56,6 +72,9 @@ class Project {
     'title': title,
     'emoji': emoji,
     'description': description,
+    'color_value': colorValue,
+    'due_at': dueAt?.toIso8601String(),
+    'budget_minutes': budgetMinutes,
     'archived': archived ? 1 : 0,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
@@ -66,6 +85,10 @@ class Project {
     title: json['title'] as String,
     emoji: json['emoji'] as String? ?? '📁',
     description: json['description'] as String? ?? '',
+    colorValue: _readInt(json['colorValue'], fallback: 0xFF6750A4),
+    dueAt: _readNullableDate(json['dueAt']),
+    budgetMinutes:
+        json['budgetMinutes'] == null ? null : _readInt(json['budgetMinutes']),
     archived: _readBool(json['archived']),
     createdAt: _readDate(json['createdAt']),
     updatedAt: _readDate(json['updatedAt']),
@@ -76,6 +99,10 @@ class Project {
     title: row['title']! as String,
     emoji: row['emoji'] as String? ?? '📁',
     description: row['description'] as String? ?? '',
+    colorValue: _readInt(row['color_value'], fallback: 0xFF6750A4),
+    dueAt: _readNullableDate(row['due_at']),
+    budgetMinutes:
+        row['budget_minutes'] == null ? null : _readInt(row['budget_minutes']),
     archived: _readBool(row['archived']),
     createdAt: _readDate(row['created_at']),
     updatedAt: _readDate(row['updated_at']),
@@ -87,9 +114,13 @@ class WorkTask {
     required this.id,
     required this.title,
     required this.projectId,
+    this.description = '',
+    this.parentTaskId,
     this.noteId,
     this.status = 'next',
+    this.priority = 1,
     this.estimateMinutes = 30,
+    this.sortOrder = 0,
     this.dueAt,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -101,9 +132,13 @@ class WorkTask {
   final String id;
   String title;
   String projectId;
+  String description;
+  String? parentTaskId;
   String? noteId;
   String status;
+  int priority;
   int estimateMinutes;
+  int sortOrder;
   DateTime? dueAt;
   DateTime createdAt;
   DateTime updatedAt;
@@ -114,9 +149,13 @@ class WorkTask {
     'id': id,
     'title': title,
     'projectId': projectId,
+    'description': description,
+    'parentTaskId': parentTaskId,
     'noteId': noteId,
     'status': status,
+    'priority': priority,
     'estimateMinutes': estimateMinutes,
+    'sortOrder': sortOrder,
     'dueAt': dueAt?.toIso8601String(),
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
@@ -128,9 +167,13 @@ class WorkTask {
     'id': id,
     'title': title,
     'project_id': projectId,
+    'description': description,
+    'parent_task_id': parentTaskId,
     'note_id': noteId,
     'status': status,
+    'priority': priority,
     'estimate_minutes': estimateMinutes,
+    'sort_order': sortOrder,
     'due_at': dueAt?.toIso8601String(),
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
@@ -142,9 +185,13 @@ class WorkTask {
     id: json['id'] as String,
     title: json['title'] as String,
     projectId: json['projectId'] as String,
+    description: json['description'] as String? ?? '',
+    parentTaskId: json['parentTaskId'] as String?,
     noteId: json['noteId'] as String?,
     status: json['status'] as String? ?? 'next',
-    estimateMinutes: json['estimateMinutes'] as int? ?? 30,
+    priority: _readInt(json['priority'], fallback: 1),
+    estimateMinutes: _readInt(json['estimateMinutes'], fallback: 30),
+    sortOrder: _readInt(json['sortOrder']),
     dueAt: _readNullableDate(json['dueAt']),
     createdAt: _readDate(json['createdAt']),
     updatedAt: _readDate(json['updatedAt']),
@@ -156,9 +203,13 @@ class WorkTask {
     id: row['id']! as String,
     title: row['title']! as String,
     projectId: row['project_id']! as String,
+    description: row['description'] as String? ?? '',
+    parentTaskId: row['parent_task_id'] as String?,
     noteId: row['note_id'] as String?,
     status: row['status'] as String? ?? 'next',
-    estimateMinutes: row['estimate_minutes'] as int? ?? 30,
+    priority: _readInt(row['priority'], fallback: 1),
+    estimateMinutes: _readInt(row['estimate_minutes'], fallback: 30),
+    sortOrder: _readInt(row['sort_order']),
     dueAt: _readNullableDate(row['due_at']),
     createdAt: _readDate(row['created_at']),
     updatedAt: _readDate(row['updated_at']),
@@ -294,7 +345,7 @@ class TimeEntry {
     taskId: json['taskId'] as String?,
     noteId: json['noteId'] as String?,
     startedAt: _readDate(json['startedAt']),
-    durationSeconds: json['durationSeconds'] as int? ?? 0,
+    durationSeconds: _readInt(json['durationSeconds']),
     createdAt: _readDate(json['createdAt']),
   );
 
@@ -305,7 +356,7 @@ class TimeEntry {
     taskId: row['task_id'] as String?,
     noteId: row['note_id'] as String?,
     startedAt: _readDate(row['started_at']),
-    durationSeconds: row['duration_seconds'] as int? ?? 0,
+    durationSeconds: _readInt(row['duration_seconds']),
     createdAt: _readDate(row['created_at']),
   );
 }
@@ -361,7 +412,7 @@ class AppData {
 
   String encode() => jsonEncode({
     'format': 'chronicle-backup',
-    'version': 1,
+    'version': 2,
     'exportedAt': DateTime.now().toIso8601String(),
     'projects': projects.map((item) => item.toJson()).toList(),
     'tasks': tasks.map((item) => item.toJson()).toList(),

@@ -183,10 +183,10 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _start() async {
-    if (widget.store.data.projects.isEmpty) return;
+    if (widget.store.activeProjects.isEmpty) return;
 
     final controller = TextEditingController();
-    var projectId = widget.store.data.projects.first.id;
+    var projectId = widget.store.activeProjects.first.id;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -230,7 +230,7 @@ class _HomeShellState extends State<HomeShell> {
                   initialValue: projectId,
                   decoration: const InputDecoration(labelText: 'Проект'),
                   items:
-                      widget.store.data.projects
+                      widget.store.activeProjects
                           .map(
                             (project) => DropdownMenuItem<String>(
                               value: project.id,
