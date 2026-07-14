@@ -191,12 +191,25 @@ class _TasksScreenState extends State<TasksScreen>
 
     tasks.sort((a, b) {
       final priority = b.priority.compareTo(a.priority);
-      if (priority != 0) return priority;
+      if (priority != 0) {
+        return priority;
+      }
+
       final aDue = a.dueAt;
       final bDue = b.dueAt;
-      if (aDue != null && bDue != null) return aDue.compareTo(bDue);
-      if (aDue != null) return -1;
-      if (bDue != null) return 1;
+
+      if (aDue != null && bDue != null) {
+        return aDue.compareTo(bDue);
+      }
+
+      if (aDue != null) {
+        return -1;
+      }
+
+      if (bDue != null) {
+        return 1;
+      }
+
       return b.updatedAt.compareTo(a.updatedAt);
     });
     return tasks;
