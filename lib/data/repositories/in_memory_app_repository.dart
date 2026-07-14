@@ -3,7 +3,7 @@ import 'app_repository.dart';
 
 class InMemoryAppRepository implements AppRepository {
   InMemoryAppRepository({AppData? initialData})
-      : _data = initialData ?? AppData.empty();
+    : _data = initialData ?? AppData.empty();
 
   AppData _data;
   bool _initialized = false;
@@ -36,8 +36,25 @@ class InMemoryAppRepository implements AppRepository {
   }
 
   @override
+  Future<void> softDeleteTask(String taskId, DateTime deletedAt) async {
+    final index = _data.tasks.indexWhere((item) => item.id == taskId);
+    if (index >= 0) _data.tasks[index].deletedAt = deletedAt;
+  }
+
+  @override
   Future<void> saveNote(Note note) async {
     _replaceById<Note>(_data.notes, note, (item) => item.id);
+  }
+
+  @override
+  Future<void> saveNoteVersion(NoteVersion version) async {
+    _replaceById<NoteVersion>(_data.noteVersions, version, (item) => item.id);
+  }
+
+  @override
+  Future<void> replaceNoteLinks(String noteId, List<NoteLink> links) async {
+    _data.noteLinks.removeWhere((link) => link.sourceNoteId == noteId);
+    _data.noteLinks.addAll(links);
   }
 
   @override
@@ -77,11 +94,7 @@ class InMemoryAppRepository implements AppRepository {
   @override
   Future<void> close() async {}
 
-  void _replaceById<T>(
-    List<T> items,
-    T value,
-    String Function(T item) readId,
-  ) {
+  void _replaceById<T>(List<T> items, T value, String Function(T item) readId) {
     final index = items.indexWhere((item) => readId(item) == readId(value));
     if (index < 0) {
       items.add(value);
