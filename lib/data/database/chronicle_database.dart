@@ -190,6 +190,83 @@ class TimeEntryRecords extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+class DeviceIdentityRecords extends Table {
+  TextColumn get deviceId => text().named('device_id')();
+  TextColumn get displayName => text().named('display_name')();
+  TextColumn get platform => text()();
+  TextColumn get createdAt => text().named('created_at')();
+  TextColumn get lastSeenAt => text().named('last_seen_at')();
+
+  @override
+  String get tableName => 'device_identity';
+
+  @override
+  Set<Column<Object>> get primaryKey => {deviceId};
+}
+
+@TableIndex(
+  name: 'idx_trusted_devices_active',
+  columns: {#revokedAt, #lastSyncAt},
+)
+class TrustedDeviceRecords extends Table {
+  TextColumn get deviceId => text().named('device_id')();
+  TextColumn get displayName => text().named('display_name')();
+  TextColumn get platform => text()();
+  TextColumn get publicKey => text().named('public_key')();
+  TextColumn get pairedAt => text().named('paired_at')();
+  TextColumn get lastSeenAt => text().named('last_seen_at').nullable()();
+  TextColumn get lastSyncAt => text().named('last_sync_at').nullable()();
+  TextColumn get revokedAt => text().named('revoked_at').nullable()();
+  BoolColumn get autoSyncEnabled =>
+      boolean().named('auto_sync_enabled').withDefault(const Constant(true))();
+
+  @override
+  String get tableName => 'trusted_devices';
+
+  @override
+  Set<Column<Object>> get primaryKey => {deviceId};
+}
+
+@TableIndex(
+  name: 'idx_change_records_entity',
+  columns: {#entityType, #entityId, #revision},
+)
+@TableIndex(
+  name: 'idx_change_records_origin',
+  columns: {#originDeviceId, #localSequence},
+)
+class ChangeRecordRecords extends Table {
+  IntColumn get localSequence =>
+      integer().named('local_sequence').autoIncrement()();
+  TextColumn get changeId => text().named('change_id').unique()();
+  TextColumn get entityType => text().named('entity_type')();
+  TextColumn get entityId => text().named('entity_id')();
+  TextColumn get operation => text()();
+  IntColumn get revision => integer()();
+  TextColumn get originDeviceId => text().named('origin_device_id')();
+  TextColumn get changedAt => text().named('changed_at')();
+  TextColumn get payloadJson => text().named('payload_json')();
+  TextColumn get appliedAt => text().named('applied_at').nullable()();
+
+  @override
+  String get tableName => 'change_records';
+}
+
+class SyncCursorRecords extends Table {
+  TextColumn get peerDeviceId => text().named('peer_device_id')();
+  IntColumn get lastSentSequence =>
+      integer().named('last_sent_sequence').withDefault(const Constant(0))();
+  TextColumn get lastReceivedChangeId =>
+      text().named('last_received_change_id').nullable()();
+  TextColumn get lastSuccessAt => text().named('last_success_at').nullable()();
+
+  @override
+  String get tableName => 'sync_cursors';
+
+  @override
+  Set<Column<Object>> get primaryKey => {peerDeviceId};
+}
+
 @DriftDatabase(
   tables: [
     AppStateRecords,
@@ -199,6 +276,10 @@ class TimeEntryRecords extends Table {
     NoteVersionRecords,
     TaskRecords,
     TimeEntryRecords,
+    DeviceIdentityRecords,
+    TrustedDeviceRecords,
+    ChangeRecordRecords,
+    SyncCursorRecords,
   ],
 )
 final class ChronicleDatabase extends _$ChronicleDatabase {
@@ -207,7 +288,7 @@ final class ChronicleDatabase extends _$ChronicleDatabase {
   factory ChronicleDatabase.defaults() => ChronicleDatabase(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -233,6 +314,12 @@ final class ChronicleDatabase extends _$ChronicleDatabase {
         await migrator.addColumn(noteRecords, noteRecords.revision);
         await migrator.createTable(noteLinkRecords);
         await migrator.createTable(noteVersionRecords);
+      }
+      if (from < 4) {
+        await migrator.createTable(deviceIdentityRecords);
+        await migrator.createTable(trustedDeviceRecords);
+        await migrator.createTable(changeRecordRecords);
+        await migrator.createTable(syncCursorRecords);
       }
     },
     beforeOpen: (details) async {

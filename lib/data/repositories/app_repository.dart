@@ -1,4 +1,5 @@
 import '../../models/app_models.dart';
+import '../../sync/sync_models.dart';
 
 abstract class AppRepository {
   Future<bool> isInitialized();
@@ -30,6 +31,39 @@ abstract class AppRepository {
   Future<void> saveActiveTimer(ActiveTimerState? timer);
 
   Future<ActiveTimerState?> loadActiveTimer();
+
+  Future<DeviceIdentity> ensureDeviceIdentity();
+
+  Future<void> saveDeviceIdentity(DeviceIdentity identity);
+
+  Future<List<TrustedDevice>> loadTrustedDevices({bool includeRevoked = false});
+
+  Future<void> saveTrustedDevice(TrustedDevice device);
+
+  Future<void> revokeTrustedDevice(String deviceId, DateTime revokedAt);
+
+  Future<SyncPreferences> loadSyncPreferences();
+
+  Future<void> saveSyncPreferences(SyncPreferences preferences);
+
+  Future<List<ChangeRecord>> loadRecentChanges({int limit = 30});
+
+  Future<int> countJournalEntries();
+
+  Future<bool> isSyncJournalBootstrapped();
+
+  Future<void> markSyncJournalBootstrapped();
+
+  Future<ChangeRecord> recordLocalChange({
+    required String entityType,
+    required String entityId,
+    required String operation,
+    required Map<String, dynamic> payload,
+  });
+
+  Future<List<SyncCursor>> loadSyncCursors();
+
+  Future<void> saveSyncCursor(SyncCursor cursor);
 
   Future<String> exportJson();
 

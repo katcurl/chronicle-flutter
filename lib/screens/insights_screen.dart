@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/app_store.dart';
+import 'devices_screen.dart';
 import '../widgets/common.dart';
 
 class InsightsScreen extends StatelessWidget {
@@ -20,6 +21,17 @@ class InsightsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Статистика'),
         actions: [
+          IconButton(
+            tooltip: 'Связанные устройства',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => DevicesScreen(store: store),
+                ),
+              );
+            },
+            icon: const Icon(Icons.devices_other_rounded),
+          ),
           IconButton(
             tooltip: 'Резервная копия',
             onPressed: () => _openBackupSheet(context),
