@@ -1,0 +1,335 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../navigation/app_section.dart';
+import '../screens/dashboard_screen.dart';
+import '../screens/insights_screen.dart';
+import '../screens/notes_screen.dart';
+import '../screens/projects_screen.dart';
+import '../screens/tasks_screen.dart';
+import '../services/app_store.dart';
+import '../widgets/desktop_context_panel.dart';
+import '../widgets/responsive_breakpoints.dart';
+
+class HomeShell extends StatefulWidget {
+  const HomeShell({super.key, required this.store});
+
+  final AppStore store;
+
+  @override
+  State<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends State<HomeShell> {
+  AppSection section = AppSection.today;
+
+  int get index => section.index;
+
+  @override
+  Widget build(BuildContext context) {
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.digit1, control: true):
+            () => _select(AppSection.today),
+        const SingleActivator(LogicalKeyboardKey.digit2, control: true):
+            () => _select(AppSection.projects),
+        const SingleActivator(LogicalKeyboardKey.digit3, control: true):
+            () => _select(AppSection.tasks),
+        const SingleActivator(LogicalKeyboardKey.digit4, control: true):
+            () => _select(AppSection.notes),
+        const SingleActivator(LogicalKeyboardKey.digit5, control: true):
+            () => _select(AppSection.insights),
+        const SingleActivator(LogicalKeyboardKey.digit1, meta: true):
+            () => _select(AppSection.today),
+        const SingleActivator(LogicalKeyboardKey.digit2, meta: true):
+            () => _select(AppSection.projects),
+        const SingleActivator(LogicalKeyboardKey.digit3, meta: true):
+            () => _select(AppSection.tasks),
+        const SingleActivator(LogicalKeyboardKey.digit4, meta: true):
+            () => _select(AppSection.notes),
+        const SingleActivator(LogicalKeyboardKey.digit5, meta: true):
+            () => _select(AppSection.insights),
+        const SingleActivator(LogicalKeyboardKey.keyT, control: true): _start,
+        const SingleActivator(LogicalKeyboardKey.keyT, meta: true): _start,
+      },
+      child: Focus(
+        autofocus: true,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < ChronicleBreakpoints.navigationRail) {
+              return _buildCompact();
+            }
+            return _buildWide(constraints.maxWidth);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompact() {
+    return Scaffold(
+      body: _pages(),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: index,
+        onDestinationSelected: (value) => _select(AppSection.values[value]),
+        destinations:
+            AppSection.values
+                .map(
+                  (item) => NavigationDestination(
+                    icon: Icon(item.icon),
+                    selectedIcon: Icon(item.selectedIcon),
+                    label: item.label,
+                  ),
+                )
+                .toList(),
+      ),
+    );
+  }
+
+  Widget _buildWide(double width) {
+    final showContextPanel = width >= ChronicleBreakpoints.contextPanel;
+    final extended = width >= ChronicleBreakpoints.extendedNavigationRail;
+    final colors = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      body: Row(
+        children: [
+          SafeArea(
+            right: false,
+            child: NavigationRail(
+              selectedIndex: index,
+              onDestinationSelected:
+                  (value) => _select(AppSection.values[value]),
+              extended: extended,
+              minWidth: 80,
+              minExtendedWidth: 224,
+              groupAlignment: -0.68,
+              backgroundColor: colors.surfaceContainerLowest,
+              leading: Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 20),
+                child:
+                    extended
+                        ? const _ExtendedWordmark()
+                        : const _CompactWordmark(),
+              ),
+              trailing: Padding(
+                padding: const EdgeInsets.only(bottom: 18),
+                child: IconButton.filledTonal(
+                  tooltip:
+                      widget.store.activeStartedAt == null
+                          ? 'Начать таймер (Ctrl+T)'
+                          : 'Остановить таймер',
+                  onPressed:
+                      widget.store.activeStartedAt == null
+                          ? _start
+                          : widget.store.stopTimer,
+                  icon: Icon(
+                    widget.store.activeStartedAt == null
+                        ? Icons.play_arrow_rounded
+                        : Icons.stop_rounded,
+                  ),
+                ),
+              ),
+              destinations:
+                  AppSection.values
+                      .map(
+                        (item) => NavigationRailDestination(
+                          icon: Icon(item.icon),
+                          selectedIcon: Icon(item.selectedIcon),
+                          label: Text(item.label),
+                        ),
+                      )
+                      .toList(),
+            ),
+          ),
+          VerticalDivider(width: 1, thickness: 1, color: colors.outlineVariant),
+          Expanded(child: _pages()),
+          if (showContextPanel) ...[
+            VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: colors.outlineVariant,
+            ),
+            DesktopContextPanel(
+              store: widget.store,
+              section: section,
+              onStartTimer: _start,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _pages() {
+    final pages = <Widget>[
+      DashboardScreen(
+        store: widget.store,
+        onOpenTask: (_) => _select(AppSection.tasks),
+        onStart: _start,
+      ),
+      ProjectsScreen(store: widget.store),
+      TasksScreen(store: widget.store),
+      NotesScreen(store: widget.store),
+      InsightsScreen(store: widget.store),
+    ];
+
+    return IndexedStack(index: index, children: pages);
+  }
+
+  void _select(AppSection value) {
+    if (section == value) return;
+    setState(() => section = value);
+  }
+
+  Future<void> _start() async {
+    if (widget.store.data.projects.isEmpty) return;
+
+    final controller = TextEditingController();
+    var projectId = widget.store.data.projects.first.id;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      constraints: const BoxConstraints(maxWidth: 560),
+      builder:
+          (sheetContext) => Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              6,
+              20,
+              MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Начать работу',
+                  style: Theme.of(sheetContext).textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Над чем работаешь?',
+                  ),
+                  onSubmitted: (_) {
+                    _startSelectedTimer(
+                      sheetContext,
+                      controller.text,
+                      projectId,
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: projectId,
+                  decoration: const InputDecoration(labelText: 'Проект'),
+                  items:
+                      widget.store.data.projects
+                          .map(
+                            (project) => DropdownMenuItem<String>(
+                              value: project.id,
+                              child: Text('${project.emoji} ${project.title}'),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (value) {
+                    if (value != null) projectId = value;
+                  },
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed:
+                        () => _startSelectedTimer(
+                          sheetContext,
+                          controller.text,
+                          projectId,
+                        ),
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Запустить таймер'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+    );
+
+    controller.dispose();
+  }
+
+  void _startSelectedTimer(
+    BuildContext sheetContext,
+    String description,
+    String projectId,
+  ) {
+    widget.store.startTimer(
+      description: description.trim(),
+      projectId: projectId,
+    );
+    Navigator.pop(sheetContext);
+  }
+}
+
+class _CompactWordmark extends StatelessWidget {
+  const _CompactWordmark();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: 'Chronicle',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.primary,
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: SizedBox(
+          width: 46,
+          height: 46,
+          child: Icon(Icons.auto_stories_rounded, color: colors.onPrimary),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExtendedWordmark extends StatelessWidget {
+  const _ExtendedWordmark();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.primary,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: SizedBox(
+              width: 42,
+              height: 42,
+              child: Icon(Icons.auto_stories_rounded, color: colors.onPrimary),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'Chronicle',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
