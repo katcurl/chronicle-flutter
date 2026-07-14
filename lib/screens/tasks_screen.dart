@@ -72,8 +72,10 @@ class _TasksScreenState extends State<TasksScreen>
                   leading: Checkbox(
                     value: task.status == 'done',
                     onChanged: (checked) {
-                      task.status = checked == true ? 'done' : 'next';
-                      widget.store.changed();
+                      widget.store.updateTaskStatus(
+                        task,
+                        checked == true ? 'done' : 'next',
+                      );
                       setState(() {});
                     },
                   ),
@@ -84,8 +86,7 @@ class _TasksScreenState extends State<TasksScreen>
                   ),
                   trailing: PopupMenuButton<String>(
                     onSelected: (value) {
-                      task.status = value;
-                      widget.store.changed();
+                      widget.store.updateTaskStatus(task, value);
                       setState(() {});
                     },
                     itemBuilder: (_) => statuses
