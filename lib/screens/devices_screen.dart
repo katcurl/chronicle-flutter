@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../services/app_store.dart';
 import '../sync/sync_models.dart';
+import '../vault/vault_models.dart';
 
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen({super.key, required this.store});
@@ -31,6 +32,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     setState(() => refreshing = true);
     try {
       await widget.store.refreshSyncFoundation();
+      await widget.store.refreshVaultStatus();
     } finally {
       if (mounted) {
         setState(() => refreshing = false);
@@ -161,29 +163,52 @@ class _DevicesScreenState extends State<DevicesScreen> {
           _JournalCard(changes: widget.store.recentChanges),
           const SizedBox(height: 24),
           const _SectionHeader(
+            title: 'Markdown Vault',
+            subtitle: 'Открытое файловое зеркало заметок без облака.',
+          ),
+          const SizedBox(height: 10),
+          _VaultCard(
+            status: widget.store.vaultStatus,
+            busy: widget.store.vaultBusy,
+            onWrite: _writeVault,
+            onChooseFolder: _chooseVaultFolder,
+          ),
+          const SizedBox(height: 24),
+          const _SectionHeader(
             title: 'Резервная копия',
-            subtitle: 'Ручной экспорт остаётся независимым от синхронизации.',
+            subtitle: 'Один переносимый файл с проверкой контрольных сумм.',
           ),
           const SizedBox(height: 10),
           Card(
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.copy_all_outlined),
-                  title: const Text('Скопировать JSON-копию'),
+                  enabled: !widget.store.vaultBusy,
+                  leading: const Icon(Icons.download_rounded),
+                  title: const Text('Экспортировать Chronicle'),
                   subtitle: const Text(
-                    'Проекты, задачи, заметки и учтённое время.',
+                    'Создать файл .chronicle с проектами, задачами, '
+                    'заметками, временем и Markdown Vault.',
                   ),
-                  onTap: _copyBackup,
+                  onTap: widget.store.vaultBusy ? null : _exportBackup,
                 ),
                 const Divider(height: 1),
                 ListTile(
+                  enabled: !widget.store.vaultBusy,
                   leading: const Icon(Icons.settings_backup_restore_rounded),
-                  title: const Text('Восстановить из JSON'),
+                  title: const Text('Восстановить из файла'),
                   subtitle: const Text(
-                    'Текущие рабочие данные будут заменены.',
+                    'Перед заменой данных Chronicle создаст аварийную копию.',
                   ),
-                  onTap: _showImportDialog,
+                  onTap: widget.store.vaultBusy ? null : _restoreBackup,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  enabled: !widget.store.vaultBusy,
+                  leading: const Icon(Icons.copy_all_outlined),
+                  title: const Text('Скопировать JSON-копию'),
+                  subtitle: const Text('Запасной совместимый экспорт в буфер.'),
+                  onTap: widget.store.vaultBusy ? null : _copyBackup,
                 ),
               ],
             ),
@@ -282,6 +307,157 @@ class _DevicesScreenState extends State<DevicesScreen> {
     await widget.store.revokeTrustedDevice(device.deviceId);
   }
 
+  Future<void> _writeVault() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await widget.store.writeVaultMirror();
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Markdown Vault обновлён')),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось обновить Vault: $error')),
+      );
+    }
+  }
+
+  Future<void> _chooseVaultFolder() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final changed = await widget.store.chooseVaultFolder();
+      if (!mounted || !changed) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Новая папка Vault выбрана')),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось выбрать папку: $error')),
+      );
+    }
+  }
+
+  Future<void> _exportBackup() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final result = await widget.store.exportBackupFile();
+      if (!mounted || result == null) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Копия сохранена: ${result.fileName}')),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось создать копию: $error')),
+      );
+    }
+  }
+
+  Future<void> _restoreBackup() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final payload = await widget.store.pickBackupFile();
+      if (!mounted || payload == null) {
+        return;
+      }
+      final confirmed = await _confirmRestore(payload);
+      if (confirmed != true || !mounted) {
+        return;
+      }
+      await widget.store.restoreBackupFile(payload);
+      if (!mounted) {
+        return;
+      }
+      final emergencyPath = widget.store.lastEmergencyBackupPath;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            emergencyPath == null
+                ? 'Данные восстановлены'
+                : 'Данные восстановлены. Страховочная копия создана.',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось восстановить: $error')),
+      );
+    }
+  }
+
+  Future<bool?> _confirmRestore(BackupImportPayload payload) {
+    final preview = payload.preview;
+    return showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            icon: const Icon(Icons.restore_page_rounded, size: 42),
+            title: const Text('Восстановить резервную копию?'),
+            content: SizedBox(
+              width: 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(payload.sourceName),
+                  const SizedBox(height: 12),
+                  Text('Проекты: ${preview.projectCount}'),
+                  Text('Задачи: ${preview.taskCount}'),
+                  Text('Заметки: ${preview.noteCount}'),
+                  Text('Записи времени: ${preview.entryCount}'),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Icon(Icons.verified_rounded, size: 19),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          preview.checksumsVerified
+                              ? 'Контрольные суммы проверены.'
+                              : 'Контрольные суммы не подтверждены.',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Текущие рабочие данные будут заменены. Перед этим Chronicle '
+                    'автоматически сохранит страховочную копию в папке Vault.',
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Восстановить'),
+              ),
+            ],
+          ),
+    );
+  }
+
   Future<void> _copyBackup() async {
     final messenger = ScaffoldMessenger.of(context);
     final backup = await widget.store.exportBackupJson();
@@ -290,61 +466,120 @@ class _DevicesScreenState extends State<DevicesScreen> {
       return;
     }
     messenger.showSnackBar(
-      const SnackBar(content: Text('Резервная копия скопирована')),
+      const SnackBar(content: Text('JSON-копия скопирована')),
     );
   }
+}
 
-  Future<void> _showImportDialog() async {
-    final controller = TextEditingController();
-    final messenger = ScaffoldMessenger.of(context);
-    await showDialog<void>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: const Text('Восстановить рабочие данные'),
-            content: SizedBox(
-              width: 580,
-              child: TextField(
-                controller: controller,
-                autofocus: true,
-                minLines: 8,
-                maxLines: 15,
-                decoration: const InputDecoration(
-                  hintText: 'Вставь JSON резервной копии',
+class _VaultCard extends StatelessWidget {
+  const _VaultCard({
+    required this.status,
+    required this.busy,
+    required this.onWrite,
+    required this.onChooseFolder,
+  });
+
+  final VaultStatus status;
+  final bool busy;
+  final VoidCallback onWrite;
+  final VoidCallback onChooseFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final lastWritten = status.lastWrittenAt?.toLocal();
+    final lastWrittenText =
+        lastWritten == null
+            ? 'Ещё не создавался'
+            : '${lastWritten.day.toString().padLeft(2, '0')}.'
+                '${lastWritten.month.toString().padLeft(2, '0')}.'
+                '${lastWritten.year} '
+                '${lastWritten.hour.toString().padLeft(2, '0')}:'
+                '${lastWritten.minute.toString().padLeft(2, '0')}';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.folder_copy_outlined),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        status.supported
+                            ? 'Chronicle Vault'
+                            : 'Vault недоступен',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      SelectableText(
+                        status.rootPath.isEmpty
+                            ? status.message ?? 'Путь пока не определён.'
+                            : status.rootPath,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                if (busy)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 12),
+                    child: SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 18,
+              runSpacing: 8,
+              children: [
+                Text('Заметок: ${status.noteCount}'),
+                Text('Файлов: ${status.fileCount}'),
+                Text('Обновлён: $lastWrittenText'),
+              ],
+            ),
+            if (status.message != null && status.rootPath.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                status.message!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Отмена'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  try {
-                    await widget.store.importBackupJson(controller.text.trim());
-                    await widget.store.refreshSyncFoundation();
-                    if (!dialogContext.mounted) {
-                      return;
-                    }
-                    Navigator.pop(dialogContext);
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('Данные восстановлены')),
-                    );
-                  } on Object catch (error) {
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content: Text('Не удалось восстановить: $error'),
-                      ),
-                    );
-                  }
-                },
-                child: const Text('Восстановить'),
-              ),
             ],
-          ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: busy || !status.supported ? null : onWrite,
+                  icon: const Icon(Icons.sync_rounded),
+                  label: const Text('Обновить Vault'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: busy ? null : onChooseFolder,
+                  icon: const Icon(Icons.drive_file_move_outline),
+                  label: const Text('Выбрать папку'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
-    controller.dispose();
   }
 }
 
@@ -601,9 +836,9 @@ class _FoundationNotice extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'v0.12 создаёт безопасный фундамент: device ID, доверенные '
-              'устройства, журнал изменений и sync cursors. Сетевой обмен '
-              'пока намеренно не включён.',
+              'v0.13 добавляет настоящий Markdown Vault и переносимые '
+              'резервные копии с проверкой целостности. Сетевой обмен пока '
+              'намеренно не включён.',
               style: TextStyle(color: colors.onTertiaryContainer),
             ),
           ),
