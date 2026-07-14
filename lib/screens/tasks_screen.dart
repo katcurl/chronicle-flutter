@@ -175,10 +175,12 @@ class _TasksScreenState extends State<TasksScreen>
         widget.store.data.tasks.where((task) {
           if (task.status != status) return false;
           if (!activeIds.contains(task.projectId)) return false;
-          if (projectFilter != null && task.projectId != projectFilter)
+          if (projectFilter != null && task.projectId != projectFilter) {
             return false;
-          if (priorityFilter != null && task.priority != priorityFilter)
+          }
+          if (priorityFilter != null && task.priority != priorityFilter) {
             return false;
+          }
           if (query.isNotEmpty &&
               !task.title.toLowerCase().contains(query) &&
               !task.description.toLowerCase().contains(query)) {
