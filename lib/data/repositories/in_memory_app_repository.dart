@@ -3,7 +3,7 @@ import 'app_repository.dart';
 
 class InMemoryAppRepository implements AppRepository {
   InMemoryAppRepository({AppData? initialData})
-      : _data = initialData ?? AppData.empty();
+    : _data = initialData ?? AppData.empty();
 
   AppData _data;
   bool _initialized = false;
@@ -77,11 +77,7 @@ class InMemoryAppRepository implements AppRepository {
   @override
   Future<void> close() async {}
 
-  void _replaceById<T>(
-    List<T> items,
-    T value,
-    String Function(T item) readId,
-  ) {
+  void _replaceById<T>(List<T> items, T value, String Function(T item) readId) {
     final index = items.indexWhere((item) => readId(item) == readId(value));
     if (index < 0) {
       items.add(value);

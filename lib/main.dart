@@ -41,28 +41,24 @@ class _ChronicleAppState extends State<ChronicleApp> {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: store,
-      builder: (_, __) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Chronicle',
-        themeMode: ThemeMode.system,
-        theme: _theme(Brightness.light),
-        darkTheme: _theme(Brightness.dark),
-        home: _home(),
-      ),
+      builder:
+          (_, __) => MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'Chronicle',
+            themeMode: ThemeMode.system,
+            theme: _theme(Brightness.light),
+            darkTheme: _theme(Brightness.dark),
+            home: _home(),
+          ),
     );
   }
 
   Widget _home() {
     if (!store.ready) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (store.loadError != null) {
-      return _DatabaseErrorScreen(
-        error: store.loadError!,
-        onRetry: store.load,
-      );
+      return _DatabaseErrorScreen(error: store.loadError!, onRetry: store.load);
     }
     return HomeShell(store: store);
   }
@@ -75,25 +71,26 @@ class _ChronicleAppState extends State<ChronicleApp> {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colors,
-      scaffoldBackgroundColor: brightness == Brightness.light
-          ? const Color(0xFFF8F7FC)
-          : const Color(0xFF111116),
+      scaffoldBackgroundColor:
+          brightness == Brightness.light
+              ? const Color(0xFFF8F7FC)
+              : const Color(0xFF111116),
       appBarTheme: const AppBarTheme(centerTitle: false),
       cardTheme: CardThemeData(
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
-        ),
-        color: brightness == Brightness.light
-            ? Colors.white
-            : const Color(0xFF1B1B22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        color:
+            brightness == Brightness.light
+                ? Colors.white
+                : const Color(0xFF1B1B22),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: brightness == Brightness.light
-            ? const Color(0xFFF1EFF7)
-            : const Color(0xFF24242C),
+        fillColor:
+            brightness == Brightness.light
+                ? const Color(0xFFF1EFF7)
+                : const Color(0xFF24242C),
         border: OutlineInputBorder(
           borderSide: BorderSide.none,
           borderRadius: BorderRadius.circular(16),
@@ -174,65 +171,65 @@ class _HomeShellState extends State<HomeShell> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          22,
-          20,
-          MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Начать работу',
-              style: Theme.of(sheetContext)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w700),
+      builder:
+          (sheetContext) => Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              22,
+              20,
+              MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Над чем работаешь?',
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Начать работу',
+                  style: Theme.of(sheetContext).textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Над чем работаешь?',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: projectId,
+                  items:
+                      widget.store.data.projects
+                          .map(
+                            (project) => DropdownMenuItem<String>(
+                              value: project.id,
+                              child: Text('${project.emoji} ${project.title}'),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (value) {
+                    if (value != null) projectId = value;
+                  },
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      widget.store.startTimer(
+                        description: controller.text.trim(),
+                        projectId: projectId,
+                      );
+                      Navigator.pop(sheetContext);
+                    },
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Запустить таймер'),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: projectId,
-              items: widget.store.data.projects
-                  .map(
-                    (project) => DropdownMenuItem<String>(
-                      value: project.id,
-                      child: Text('${project.emoji} ${project.title}'),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) projectId = value;
-              },
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  widget.store.startTimer(
-                    description: controller.text.trim(),
-                    projectId: projectId,
-                  );
-                  Navigator.pop(sheetContext);
-                },
-                icon: const Icon(Icons.play_arrow_rounded),
-                label: const Text('Запустить таймер'),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
     );
 
     controller.dispose();
@@ -264,10 +261,9 @@ class _DatabaseErrorScreen extends StatelessWidget {
                 Text(
                   'Не удалось открыть локальную базу',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Text(

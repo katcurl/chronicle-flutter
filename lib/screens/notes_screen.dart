@@ -21,13 +21,14 @@ class _NotesScreenState extends State<NotesScreen> {
   @override
   Widget build(BuildContext context) {
     final normalizedQuery = query.toLowerCase();
-    final notes = widget.store.data.notes
-        .where(
-          (note) =>
-              note.title.toLowerCase().contains(normalizedQuery) ||
-              note.body.toLowerCase().contains(normalizedQuery),
-        )
-        .toList();
+    final notes =
+        widget.store.data.notes
+            .where(
+              (note) =>
+                  note.title.toLowerCase().contains(normalizedQuery) ||
+                  note.body.toLowerCase().contains(normalizedQuery),
+            )
+            .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -50,41 +51,44 @@ class _NotesScreenState extends State<NotesScreen> {
             ),
           ),
           Expanded(
-            child: notes.isEmpty
-                ? const Center(child: Text('Заметок пока нет'))
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                    itemCount: notes.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, index) {
-                      final note = notes[index];
-                      final project = widget.store.data.projects.firstWhere(
-                        (item) => item.id == note.projectId,
-                      );
-                      return Card(
-                        child: ListTile(
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) => NoteEditor(
-                                store: widget.store,
-                                note: note,
-                              ),
+            child:
+                notes.isEmpty
+                    ? const Center(child: Text('Заметок пока нет'))
+                    : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                      itemCount: notes.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (_, index) {
+                        final note = notes[index];
+                        final project = widget.store.data.projects.firstWhere(
+                          (item) => item.id == note.projectId,
+                        );
+                        return Card(
+                          child: ListTile(
+                            onTap:
+                                () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute<void>(
+                                    builder:
+                                        (_) => NoteEditor(
+                                          store: widget.store,
+                                          note: note,
+                                        ),
+                                  ),
+                                ).then((_) => setState(() {})),
+                            leading: CircleAvatar(child: Text(project.emoji)),
+                            title: Text(note.title),
+                            subtitle: Text(
+                              '${note.tags.map((tag) => '#$tag').join(' ')}\n'
+                              'Обновлено ${note.updatedAt.day}.${note.updatedAt.month}',
+                              maxLines: 2,
                             ),
-                          ).then((_) => setState(() {})),
-                          leading: CircleAvatar(child: Text(project.emoji)),
-                          title: Text(note.title),
-                          subtitle: Text(
-                            '${note.tags.map((tag) => '#$tag').join(' ')}\n'
-                            'Обновлено ${note.updatedAt.day}.${note.updatedAt.month}',
-                            maxLines: 2,
+                            isThreeLine: true,
+                            trailing: const Icon(Icons.chevron_right_rounded),
                           ),
-                          isThreeLine: true,
-                          trailing: const Icon(Icons.chevron_right_rounded),
-                        ),
-                      );
-                    },
-                  ),
+                        );
+                      },
+                    ),
           ),
         ],
       ),
@@ -110,11 +114,7 @@ class _NotesScreenState extends State<NotesScreen> {
 }
 
 class NoteEditor extends StatefulWidget {
-  const NoteEditor({
-    super.key,
-    required this.store,
-    required this.note,
-  });
+  const NoteEditor({super.key, required this.store, required this.note});
 
   final AppStore store;
   final Note note;
@@ -166,12 +166,13 @@ class _NoteEditorState extends State<NoteEditor> {
               ),
             ),
             PopupMenuButton<String>(
-              itemBuilder: (_) => const [
-                PopupMenuItem<String>(
-                  value: 'delete',
-                  child: Text('Удалить'),
-                ),
-              ],
+              itemBuilder:
+                  (_) => const [
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Text('Удалить'),
+                    ),
+                  ],
               onSelected: (value) {
                 if (value != 'delete') return;
                 widget.store.deleteNote(widget.note.id);
@@ -188,9 +189,9 @@ class _NoteEditorState extends State<NoteEditor> {
               projectId: widget.note.projectId,
               noteId: widget.note.id,
             );
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Таймер запущен')),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Таймер запущен')));
           },
           icon: const Icon(Icons.play_arrow_rounded),
           label: const Text('Работать'),
@@ -202,10 +203,9 @@ class _NoteEditorState extends State<NoteEditor> {
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: TextField(
                   controller: title,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                   decoration: const InputDecoration(
                     border: InputBorder.none,
                     hintText: 'Название',
@@ -214,25 +214,26 @@ class _NoteEditorState extends State<NoteEditor> {
               ),
               const Divider(height: 1),
               Expanded(
-                child: preview
-                    ? _Preview(data: body.text)
-                    : TextField(
-                        controller: body,
-                        expands: true,
-                        maxLines: null,
-                        minLines: null,
-                        textAlignVertical: TextAlignVertical.top,
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 15,
-                          height: 1.55,
+                child:
+                    preview
+                        ? _Preview(data: body.text)
+                        : TextField(
+                          controller: body,
+                          expands: true,
+                          maxLines: null,
+                          minLines: null,
+                          textAlignVertical: TextAlignVertical.top,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 15,
+                            height: 1.55,
+                          ),
+                          decoration: const InputDecoration(
+                            contentPadding: EdgeInsets.all(18),
+                            border: InputBorder.none,
+                            hintText: 'Markdown, LaTeX, [[ссылки]]…',
+                          ),
                         ),
-                        decoration: const InputDecoration(
-                          contentPadding: EdgeInsets.all(18),
-                          border: InputBorder.none,
-                          hintText: 'Markdown, LaTeX, [[ссылки]]…',
-                        ),
-                      ),
               ),
             ],
           ),
@@ -249,31 +250,30 @@ class _Preview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final parts = data.split(
-      RegExp(r'(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$)'),
-    );
+    final parts = data.split(RegExp(r'(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$)'));
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 120),
-      children: parts.where((part) => part.isNotEmpty).map((part) {
-        final trimmed = part.trim();
-        final isDisplayMath =
-            (trimmed.startsWith(r'\[') && trimmed.endsWith(r'\]')) ||
+      children:
+          parts.where((part) => part.isNotEmpty).map((part) {
+            final trimmed = part.trim();
+            final isDisplayMath =
+                (trimmed.startsWith(r'\[') && trimmed.endsWith(r'\]')) ||
                 (trimmed.startsWith(r'$$') && trimmed.endsWith(r'$$'));
-        if (isDisplayMath) {
-          final tex = trimmed.substring(2, trimmed.length - 2);
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Math.tex(
-                tex,
-                textStyle: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-          );
-        }
-        return MarkdownBody(data: part, selectable: true);
-      }).toList(),
+            if (isDisplayMath) {
+              final tex = trimmed.substring(2, trimmed.length - 2);
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Math.tex(
+                    tex,
+                    textStyle: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              );
+            }
+            return MarkdownBody(data: part, selectable: true);
+          }).toList(),
     );
   }
 }

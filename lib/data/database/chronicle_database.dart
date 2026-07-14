@@ -1,136 +1,194 @@
+import 'dart:io';
+
+import 'package:drift/drift.dart';
+import 'package:drift_flutter/drift_flutter.dart';
 import 'package:path/path.dart' as path;
-import 'package:sqflite/sqflite.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 
-class ChronicleDatabase {
-  ChronicleDatabase._();
+part 'chronicle_database.g.dart';
 
-  static final ChronicleDatabase instance = ChronicleDatabase._();
-  static const databaseName = 'chronicle.db';
-  static const databaseVersion = 1;
+class AppStateRecords extends Table {
+  TextColumn get key => text()();
+  TextColumn get value => text()();
 
-  Database? _database;
+  @override
+  String get tableName => 'app_state';
 
-  Future<Database> get database async {
-    final existing = _database;
-    if (existing != null) return existing;
+  @override
+  Set<Column<Object>> get primaryKey => {key};
+}
 
-    final databasesPath = await getDatabasesPath();
-    final databasePath = path.join(databasesPath, databaseName);
-    final opened = await openDatabase(
-      databasePath,
-      version: databaseVersion,
-      onConfigure: (database) async {
-        await database.execute('PRAGMA foreign_keys = ON');
-      },
-      onCreate: _createVersion1,
-      onUpgrade: _upgrade,
-    );
-    _database = opened;
-    return opened;
+@TableIndex(name: 'idx_projects_archived', columns: {#archived, #updatedAt})
+class ProjectRecords extends Table {
+  TextColumn get id => text()();
+  TextColumn get title => text()();
+  TextColumn get emoji => text().withDefault(const Constant('📁'))();
+  TextColumn get description => text().withDefault(const Constant(''))();
+  BoolColumn get archived => boolean().withDefault(const Constant(false))();
+  TextColumn get createdAt => text().named('created_at')();
+  TextColumn get updatedAt => text().named('updated_at')();
+
+  @override
+  String get tableName => 'projects';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@TableIndex(name: 'idx_notes_project', columns: {#projectId, #updatedAt})
+class NoteRecords extends Table {
+  TextColumn get id => text()();
+  TextColumn get projectId =>
+      text()
+          .named('project_id')
+          .references(ProjectRecords, #id, onDelete: KeyAction.restrict)();
+  TextColumn get title => text()();
+  TextColumn get body => text().withDefault(const Constant(''))();
+  TextColumn get tagsJson =>
+      text().named('tags_json').withDefault(const Constant('[]'))();
+  TextColumn get status => text().withDefault(const Constant('draft'))();
+  TextColumn get createdAt => text().named('created_at')();
+  TextColumn get updatedAt => text().named('updated_at')();
+  TextColumn get deletedAt => text().named('deleted_at').nullable()();
+
+  @override
+  String get tableName => 'notes';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@TableIndex(name: 'idx_tasks_status_due', columns: {#status, #dueAt})
+@TableIndex(name: 'idx_tasks_project', columns: {#projectId, #status})
+class TaskRecords extends Table {
+  TextColumn get id => text()();
+  TextColumn get projectId =>
+      text()
+          .named('project_id')
+          .references(ProjectRecords, #id, onDelete: KeyAction.restrict)();
+  TextColumn get noteId =>
+      text()
+          .named('note_id')
+          .nullable()
+          .references(NoteRecords, #id, onDelete: KeyAction.setNull)();
+  TextColumn get title => text()();
+  TextColumn get status => text().withDefault(const Constant('next'))();
+  IntColumn get estimateMinutes =>
+      integer().named('estimate_minutes').withDefault(const Constant(30))();
+  TextColumn get dueAt => text().named('due_at').nullable()();
+  TextColumn get createdAt => text().named('created_at')();
+  TextColumn get updatedAt => text().named('updated_at')();
+  TextColumn get completedAt => text().named('completed_at').nullable()();
+  TextColumn get deletedAt => text().named('deleted_at').nullable()();
+
+  @override
+  String get tableName => 'tasks';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@TableIndex(name: 'idx_time_entries_started', columns: {#startedAt})
+@TableIndex(name: 'idx_time_entries_project', columns: {#projectId, #startedAt})
+class TimeEntryRecords extends Table {
+  TextColumn get id => text()();
+  TextColumn get projectId =>
+      text()
+          .named('project_id')
+          .references(ProjectRecords, #id, onDelete: KeyAction.restrict)();
+  TextColumn get taskId =>
+      text()
+          .named('task_id')
+          .nullable()
+          .references(TaskRecords, #id, onDelete: KeyAction.setNull)();
+  TextColumn get noteId =>
+      text()
+          .named('note_id')
+          .nullable()
+          .references(NoteRecords, #id, onDelete: KeyAction.setNull)();
+  TextColumn get description => text().withDefault(const Constant(''))();
+  TextColumn get startedAt => text().named('started_at')();
+  IntColumn get durationSeconds => integer().named('duration_seconds')();
+  TextColumn get createdAt => text().named('created_at')();
+
+  @override
+  String get tableName => 'time_entries';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@DriftDatabase(
+  tables: [
+    AppStateRecords,
+    ProjectRecords,
+    NoteRecords,
+    TaskRecords,
+    TimeEntryRecords,
+  ],
+)
+final class ChronicleDatabase extends _$ChronicleDatabase {
+  ChronicleDatabase(super.executor);
+
+  factory ChronicleDatabase.defaults() => ChronicleDatabase(_openConnection());
+
+  @override
+  int get schemaVersion => 1;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (migrator) => migrator.createAll(),
+    onUpgrade: (migrator, from, to) async {
+      if (from > to) {
+        throw StateError('Downgrading Chronicle databases is unsupported.');
+      }
+    },
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
+    },
+  );
+}
+
+QueryExecutor _openConnection() {
+  return driftDatabase(
+    name: 'chronicle',
+    native: DriftNativeOptions(databasePath: _resolveDatabasePath),
+  );
+}
+
+Future<String> _resolveDatabasePath() async {
+  final supportDirectory = await getApplicationSupportDirectory();
+  final databaseDirectory = Directory(
+    path.join(supportDirectory.path, 'Chronicle'),
+  );
+  await databaseDirectory.create(recursive: true);
+
+  final target = File(path.join(databaseDirectory.path, 'chronicle.sqlite'));
+  if (!await target.exists() && (Platform.isAndroid || Platform.isIOS)) {
+    await _copyLegacyMobileDatabase(target);
   }
 
-  Future<void> close() async {
-    final database = _database;
-    _database = null;
-    if (database != null) {
-      await database.close();
+  return target.path;
+}
+
+Future<void> _copyLegacyMobileDatabase(File target) async {
+  final legacyDirectory = await getDatabasesPath();
+  final legacy = File(path.join(legacyDirectory, 'chronicle.db'));
+  if (!await legacy.exists()) return;
+
+  final temporary = File('${target.path}.migrating');
+  if (await temporary.exists()) {
+    await temporary.delete();
+  }
+
+  await legacy.copy(temporary.path);
+  await temporary.rename(target.path);
+
+  for (final suffix in const ['-wal', '-shm', '-journal']) {
+    final legacySidecar = File('${legacy.path}$suffix');
+    if (await legacySidecar.exists()) {
+      await legacySidecar.copy('${target.path}$suffix');
     }
-  }
-
-  Future<void> _upgrade(
-    Database database,
-    int oldVersion,
-    int newVersion,
-  ) async {
-    if (oldVersion < 1) {
-      await _createVersion1(database, newVersion);
-    }
-  }
-
-  Future<void> _createVersion1(Database database, int version) async {
-    final batch = database.batch();
-
-    batch.execute('''
-      CREATE TABLE app_state (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      )
-    ''');
-
-    batch.execute('''
-      CREATE TABLE projects (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        emoji TEXT NOT NULL DEFAULT '📁',
-        description TEXT NOT NULL DEFAULT '',
-        archived INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0, 1)),
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    ''');
-
-    batch.execute('''
-      CREATE TABLE notes (
-        id TEXT PRIMARY KEY,
-        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
-        title TEXT NOT NULL,
-        body TEXT NOT NULL DEFAULT '',
-        tags_json TEXT NOT NULL DEFAULT '[]',
-        status TEXT NOT NULL DEFAULT 'draft',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        deleted_at TEXT
-      )
-    ''');
-
-    batch.execute('''
-      CREATE TABLE tasks (
-        id TEXT PRIMARY KEY,
-        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
-        note_id TEXT REFERENCES notes(id) ON DELETE SET NULL,
-        title TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'next',
-        estimate_minutes INTEGER NOT NULL DEFAULT 30,
-        due_at TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        completed_at TEXT,
-        deleted_at TEXT
-      )
-    ''');
-
-    batch.execute('''
-      CREATE TABLE time_entries (
-        id TEXT PRIMARY KEY,
-        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
-        task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
-        note_id TEXT REFERENCES notes(id) ON DELETE SET NULL,
-        description TEXT NOT NULL DEFAULT '',
-        started_at TEXT NOT NULL,
-        duration_seconds INTEGER NOT NULL CHECK (duration_seconds >= 0),
-        created_at TEXT NOT NULL
-      )
-    ''');
-
-    batch.execute(
-      'CREATE INDEX idx_projects_archived ON projects(archived, updated_at)',
-    );
-    batch.execute(
-      'CREATE INDEX idx_tasks_status_due ON tasks(status, due_at)',
-    );
-    batch.execute(
-      'CREATE INDEX idx_tasks_project ON tasks(project_id, status)',
-    );
-    batch.execute(
-      'CREATE INDEX idx_notes_project ON notes(project_id, updated_at)',
-    );
-    batch.execute(
-      'CREATE INDEX idx_time_entries_started ON time_entries(started_at)',
-    );
-    batch.execute(
-      'CREATE INDEX idx_time_entries_project ON time_entries(project_id, started_at)',
-    );
-
-    await batch.commit(noResult: true);
   }
 }

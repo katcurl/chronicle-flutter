@@ -5,20 +5,20 @@ import 'package:uuid/uuid.dart';
 
 import '../data/migration/legacy_preferences_importer.dart';
 import '../data/repositories/app_repository.dart';
-import '../data/repositories/sqlite_app_repository.dart';
+import '../data/repositories/drift_app_repository.dart';
 import '../models/app_models.dart';
 
 class AppStore extends ChangeNotifier {
   AppStore({
     required AppRepository repository,
     LegacyPreferencesImporter? legacyImporter,
-  })  : _repository = repository,
-        _legacyImporter = legacyImporter;
+  }) : _repository = repository,
+       _legacyImporter = legacyImporter;
 
   factory AppStore.production() => AppStore(
-        repository: SqliteAppRepository(),
-        legacyImporter: LegacyPreferencesImporter(),
-      );
+    repository: DriftAppRepository(),
+    legacyImporter: LegacyPreferencesImporter(),
+  );
 
   final AppRepository _repository;
   final LegacyPreferencesImporter? _legacyImporter;
@@ -129,7 +129,8 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       title: 'Журнал исследования Orf9b',
       projectId: p2.id,
       tags: const ['orf9b', 'md'],
-      body: '# Журнал исследования Orf9b\n\n'
+      body:
+          '# Журнал исследования Orf9b\n\n'
           'Связано с [[Анализ TM-score]].\n\n'
           '## Следующий шаг\n\n'
           'Проверить метастабильные состояния по последней тысяче кадров.',
@@ -167,9 +168,10 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     );
   }
 
-  int get activeSeconds => activeStartedAt == null
-      ? 0
-      : DateTime.now().difference(activeStartedAt!).inSeconds;
+  int get activeSeconds =>
+      activeStartedAt == null
+          ? 0
+          : DateTime.now().difference(activeStartedAt!).inSeconds;
 
   int get todaySeconds {
     final now = DateTime.now();
@@ -242,9 +244,10 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     final duration = DateTime.now().difference(startedAt).inSeconds;
     final entry = TimeEntry(
       id: _uuid.v4(),
-      description: activeDescription.trim().isEmpty
-          ? 'Рабочая сессия'
-          : activeDescription.trim(),
+      description:
+          activeDescription.trim().isEmpty
+              ? 'Рабочая сессия'
+              : activeDescription.trim(),
       projectId: projectId,
       taskId: activeTaskId,
       noteId: activeNoteId,

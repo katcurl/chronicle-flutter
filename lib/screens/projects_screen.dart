@@ -3,6 +3,116 @@ import 'package:uuid/uuid.dart';
 import '../models/app_models.dart';
 import '../services/app_store.dart';
 import '../widgets/common.dart';
-class ProjectsScreen extends StatefulWidget{const ProjectsScreen({super.key,required this.store});final AppStore store;@override State<ProjectsScreen> createState()=>_ProjectsScreenState();}
-class _ProjectsScreenState extends State<ProjectsScreen>{@override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Проекты')),floatingActionButton:FloatingActionButton.extended(onPressed:_add,icon:const Icon(Icons.add_rounded),label:const Text('Проект')),body:ListView.separated(padding:const EdgeInsets.fromLTRB(16,12,16,100),itemCount:widget.store.data.projects.length,separatorBuilder:(_,__)=>const SizedBox(height:10),itemBuilder:(_,i){final p=widget.store.data.projects[i];final tasks=widget.store.data.tasks.where((t)=>t.projectId==p.id).toList();final done=tasks.where((t)=>t.status=='done').length;final sec=widget.store.data.entries.where((e)=>e.projectId==p.id).fold(0,(a,b)=>a+b.durationSeconds);return Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[Text(p.emoji,style:const TextStyle(fontSize:34)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(p.title,style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.w700)),Text(p.description,style:Theme.of(context).textTheme.bodySmall)])),Text(formatDuration(sec))]),const SizedBox(height:16),LinearProgressIndicator(value:tasks.isEmpty?0:done/tasks.length,borderRadius:BorderRadius.circular(99)),const SizedBox(height:7),Text('$done из ${tasks.length} задач завершено',style:Theme.of(context).textTheme.bodySmall)])));}));
-Future<void> _add()async{final c=TextEditingController();await showDialog(context:context,builder:(ctx)=>AlertDialog(title:const Text('Новый проект'),content:TextField(controller:c,autofocus:true,decoration:const InputDecoration(labelText:'Название')),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Отмена')),FilledButton(onPressed:(){if(c.text.trim().isNotEmpty){widget.store.addProject(Project(id:const Uuid().v4(),title:c.text.trim(),emoji:'📁'));Navigator.pop(ctx);setState((){});}},child:const Text('Создать'))]));}}
+
+class ProjectsScreen extends StatefulWidget {
+  const ProjectsScreen({super.key, required this.store});
+  final AppStore store;
+  @override
+  State<ProjectsScreen> createState() => _ProjectsScreenState();
+}
+
+class _ProjectsScreenState extends State<ProjectsScreen> {
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Проекты')),
+    floatingActionButton: FloatingActionButton.extended(
+      onPressed: _add,
+      icon: const Icon(Icons.add_rounded),
+      label: const Text('Проект'),
+    ),
+    body: ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+      itemCount: widget.store.data.projects.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, i) {
+        final p = widget.store.data.projects[i];
+        final tasks =
+            widget.store.data.tasks.where((t) => t.projectId == p.id).toList();
+        final done = tasks.where((t) => t.status == 'done').length;
+        final sec = widget.store.data.entries
+            .where((e) => e.projectId == p.id)
+            .fold(0, (a, b) => a + b.durationSeconds);
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(p.emoji, style: const TextStyle(fontSize: 34)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p.title,
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            p.description,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(formatDuration(sec)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                LinearProgressIndicator(
+                  value: tasks.isEmpty ? 0 : done / tasks.length,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  '$done из ${tasks.length} задач завершено',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ),
+  );
+  Future<void> _add() async {
+    final c = TextEditingController();
+    await showDialog(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Новый проект'),
+            content: TextField(
+              controller: c,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Название'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (c.text.trim().isNotEmpty) {
+                    widget.store.addProject(
+                      Project(
+                        id: const Uuid().v4(),
+                        title: c.text.trim(),
+                        emoji: '📁',
+                      ),
+                    );
+                    Navigator.pop(ctx);
+                    setState(() {});
+                  }
+                },
+                child: const Text('Создать'),
+              ),
+            ],
+          ),
+    );
+  }
+}
