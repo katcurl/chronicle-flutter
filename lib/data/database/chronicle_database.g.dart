@@ -4084,6 +4084,1983 @@ class TimeEntryRecordsCompanion extends UpdateCompanion<TimeEntryRecord> {
   }
 }
 
+class $DeviceIdentityRecordsTable extends DeviceIdentityRecords
+    with TableInfo<$DeviceIdentityRecordsTable, DeviceIdentityRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DeviceIdentityRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _displayNameMeta = const VerificationMeta(
+    'displayName',
+  );
+  @override
+  late final GeneratedColumn<String> displayName = GeneratedColumn<String>(
+    'display_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _platformMeta = const VerificationMeta(
+    'platform',
+  );
+  @override
+  late final GeneratedColumn<String> platform = GeneratedColumn<String>(
+    'platform',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<String> createdAt = GeneratedColumn<String>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastSeenAtMeta = const VerificationMeta(
+    'lastSeenAt',
+  );
+  @override
+  late final GeneratedColumn<String> lastSeenAt = GeneratedColumn<String>(
+    'last_seen_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    deviceId,
+    displayName,
+    platform,
+    createdAt,
+    lastSeenAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'device_identity';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DeviceIdentityRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('display_name')) {
+      context.handle(
+        _displayNameMeta,
+        displayName.isAcceptableOrUnknown(
+          data['display_name']!,
+          _displayNameMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_displayNameMeta);
+    }
+    if (data.containsKey('platform')) {
+      context.handle(
+        _platformMeta,
+        platform.isAcceptableOrUnknown(data['platform']!, _platformMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_platformMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('last_seen_at')) {
+      context.handle(
+        _lastSeenAtMeta,
+        lastSeenAt.isAcceptableOrUnknown(
+          data['last_seen_at']!,
+          _lastSeenAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastSeenAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {deviceId};
+  @override
+  DeviceIdentityRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DeviceIdentityRecord(
+      deviceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}device_id'],
+          )!,
+      displayName:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}display_name'],
+          )!,
+      platform:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}platform'],
+          )!,
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}created_at'],
+          )!,
+      lastSeenAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}last_seen_at'],
+          )!,
+    );
+  }
+
+  @override
+  $DeviceIdentityRecordsTable createAlias(String alias) {
+    return $DeviceIdentityRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class DeviceIdentityRecord extends DataClass
+    implements Insertable<DeviceIdentityRecord> {
+  final String deviceId;
+  final String displayName;
+  final String platform;
+  final String createdAt;
+  final String lastSeenAt;
+  const DeviceIdentityRecord({
+    required this.deviceId,
+    required this.displayName,
+    required this.platform,
+    required this.createdAt,
+    required this.lastSeenAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['device_id'] = Variable<String>(deviceId);
+    map['display_name'] = Variable<String>(displayName);
+    map['platform'] = Variable<String>(platform);
+    map['created_at'] = Variable<String>(createdAt);
+    map['last_seen_at'] = Variable<String>(lastSeenAt);
+    return map;
+  }
+
+  DeviceIdentityRecordsCompanion toCompanion(bool nullToAbsent) {
+    return DeviceIdentityRecordsCompanion(
+      deviceId: Value(deviceId),
+      displayName: Value(displayName),
+      platform: Value(platform),
+      createdAt: Value(createdAt),
+      lastSeenAt: Value(lastSeenAt),
+    );
+  }
+
+  factory DeviceIdentityRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DeviceIdentityRecord(
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      displayName: serializer.fromJson<String>(json['displayName']),
+      platform: serializer.fromJson<String>(json['platform']),
+      createdAt: serializer.fromJson<String>(json['createdAt']),
+      lastSeenAt: serializer.fromJson<String>(json['lastSeenAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'deviceId': serializer.toJson<String>(deviceId),
+      'displayName': serializer.toJson<String>(displayName),
+      'platform': serializer.toJson<String>(platform),
+      'createdAt': serializer.toJson<String>(createdAt),
+      'lastSeenAt': serializer.toJson<String>(lastSeenAt),
+    };
+  }
+
+  DeviceIdentityRecord copyWith({
+    String? deviceId,
+    String? displayName,
+    String? platform,
+    String? createdAt,
+    String? lastSeenAt,
+  }) => DeviceIdentityRecord(
+    deviceId: deviceId ?? this.deviceId,
+    displayName: displayName ?? this.displayName,
+    platform: platform ?? this.platform,
+    createdAt: createdAt ?? this.createdAt,
+    lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+  );
+  DeviceIdentityRecord copyWithCompanion(DeviceIdentityRecordsCompanion data) {
+    return DeviceIdentityRecord(
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      displayName:
+          data.displayName.present ? data.displayName.value : this.displayName,
+      platform: data.platform.present ? data.platform.value : this.platform,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      lastSeenAt:
+          data.lastSeenAt.present ? data.lastSeenAt.value : this.lastSeenAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeviceIdentityRecord(')
+          ..write('deviceId: $deviceId, ')
+          ..write('displayName: $displayName, ')
+          ..write('platform: $platform, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('lastSeenAt: $lastSeenAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(deviceId, displayName, platform, createdAt, lastSeenAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DeviceIdentityRecord &&
+          other.deviceId == this.deviceId &&
+          other.displayName == this.displayName &&
+          other.platform == this.platform &&
+          other.createdAt == this.createdAt &&
+          other.lastSeenAt == this.lastSeenAt);
+}
+
+class DeviceIdentityRecordsCompanion
+    extends UpdateCompanion<DeviceIdentityRecord> {
+  final Value<String> deviceId;
+  final Value<String> displayName;
+  final Value<String> platform;
+  final Value<String> createdAt;
+  final Value<String> lastSeenAt;
+  final Value<int> rowid;
+  const DeviceIdentityRecordsCompanion({
+    this.deviceId = const Value.absent(),
+    this.displayName = const Value.absent(),
+    this.platform = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.lastSeenAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DeviceIdentityRecordsCompanion.insert({
+    required String deviceId,
+    required String displayName,
+    required String platform,
+    required String createdAt,
+    required String lastSeenAt,
+    this.rowid = const Value.absent(),
+  }) : deviceId = Value(deviceId),
+       displayName = Value(displayName),
+       platform = Value(platform),
+       createdAt = Value(createdAt),
+       lastSeenAt = Value(lastSeenAt);
+  static Insertable<DeviceIdentityRecord> custom({
+    Expression<String>? deviceId,
+    Expression<String>? displayName,
+    Expression<String>? platform,
+    Expression<String>? createdAt,
+    Expression<String>? lastSeenAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (deviceId != null) 'device_id': deviceId,
+      if (displayName != null) 'display_name': displayName,
+      if (platform != null) 'platform': platform,
+      if (createdAt != null) 'created_at': createdAt,
+      if (lastSeenAt != null) 'last_seen_at': lastSeenAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DeviceIdentityRecordsCompanion copyWith({
+    Value<String>? deviceId,
+    Value<String>? displayName,
+    Value<String>? platform,
+    Value<String>? createdAt,
+    Value<String>? lastSeenAt,
+    Value<int>? rowid,
+  }) {
+    return DeviceIdentityRecordsCompanion(
+      deviceId: deviceId ?? this.deviceId,
+      displayName: displayName ?? this.displayName,
+      platform: platform ?? this.platform,
+      createdAt: createdAt ?? this.createdAt,
+      lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (displayName.present) {
+      map['display_name'] = Variable<String>(displayName.value);
+    }
+    if (platform.present) {
+      map['platform'] = Variable<String>(platform.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<String>(createdAt.value);
+    }
+    if (lastSeenAt.present) {
+      map['last_seen_at'] = Variable<String>(lastSeenAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DeviceIdentityRecordsCompanion(')
+          ..write('deviceId: $deviceId, ')
+          ..write('displayName: $displayName, ')
+          ..write('platform: $platform, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('lastSeenAt: $lastSeenAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $TrustedDeviceRecordsTable extends TrustedDeviceRecords
+    with TableInfo<$TrustedDeviceRecordsTable, TrustedDeviceRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TrustedDeviceRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _displayNameMeta = const VerificationMeta(
+    'displayName',
+  );
+  @override
+  late final GeneratedColumn<String> displayName = GeneratedColumn<String>(
+    'display_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _platformMeta = const VerificationMeta(
+    'platform',
+  );
+  @override
+  late final GeneratedColumn<String> platform = GeneratedColumn<String>(
+    'platform',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _publicKeyMeta = const VerificationMeta(
+    'publicKey',
+  );
+  @override
+  late final GeneratedColumn<String> publicKey = GeneratedColumn<String>(
+    'public_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pairedAtMeta = const VerificationMeta(
+    'pairedAt',
+  );
+  @override
+  late final GeneratedColumn<String> pairedAt = GeneratedColumn<String>(
+    'paired_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastSeenAtMeta = const VerificationMeta(
+    'lastSeenAt',
+  );
+  @override
+  late final GeneratedColumn<String> lastSeenAt = GeneratedColumn<String>(
+    'last_seen_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastSyncAtMeta = const VerificationMeta(
+    'lastSyncAt',
+  );
+  @override
+  late final GeneratedColumn<String> lastSyncAt = GeneratedColumn<String>(
+    'last_sync_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _revokedAtMeta = const VerificationMeta(
+    'revokedAt',
+  );
+  @override
+  late final GeneratedColumn<String> revokedAt = GeneratedColumn<String>(
+    'revoked_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _autoSyncEnabledMeta = const VerificationMeta(
+    'autoSyncEnabled',
+  );
+  @override
+  late final GeneratedColumn<bool> autoSyncEnabled = GeneratedColumn<bool>(
+    'auto_sync_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("auto_sync_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    deviceId,
+    displayName,
+    platform,
+    publicKey,
+    pairedAt,
+    lastSeenAt,
+    lastSyncAt,
+    revokedAt,
+    autoSyncEnabled,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'trusted_devices';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TrustedDeviceRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('display_name')) {
+      context.handle(
+        _displayNameMeta,
+        displayName.isAcceptableOrUnknown(
+          data['display_name']!,
+          _displayNameMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_displayNameMeta);
+    }
+    if (data.containsKey('platform')) {
+      context.handle(
+        _platformMeta,
+        platform.isAcceptableOrUnknown(data['platform']!, _platformMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_platformMeta);
+    }
+    if (data.containsKey('public_key')) {
+      context.handle(
+        _publicKeyMeta,
+        publicKey.isAcceptableOrUnknown(data['public_key']!, _publicKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_publicKeyMeta);
+    }
+    if (data.containsKey('paired_at')) {
+      context.handle(
+        _pairedAtMeta,
+        pairedAt.isAcceptableOrUnknown(data['paired_at']!, _pairedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pairedAtMeta);
+    }
+    if (data.containsKey('last_seen_at')) {
+      context.handle(
+        _lastSeenAtMeta,
+        lastSeenAt.isAcceptableOrUnknown(
+          data['last_seen_at']!,
+          _lastSeenAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_sync_at')) {
+      context.handle(
+        _lastSyncAtMeta,
+        lastSyncAt.isAcceptableOrUnknown(
+          data['last_sync_at']!,
+          _lastSyncAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('revoked_at')) {
+      context.handle(
+        _revokedAtMeta,
+        revokedAt.isAcceptableOrUnknown(data['revoked_at']!, _revokedAtMeta),
+      );
+    }
+    if (data.containsKey('auto_sync_enabled')) {
+      context.handle(
+        _autoSyncEnabledMeta,
+        autoSyncEnabled.isAcceptableOrUnknown(
+          data['auto_sync_enabled']!,
+          _autoSyncEnabledMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {deviceId};
+  @override
+  TrustedDeviceRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TrustedDeviceRecord(
+      deviceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}device_id'],
+          )!,
+      displayName:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}display_name'],
+          )!,
+      platform:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}platform'],
+          )!,
+      publicKey:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}public_key'],
+          )!,
+      pairedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}paired_at'],
+          )!,
+      lastSeenAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_seen_at'],
+      ),
+      lastSyncAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_sync_at'],
+      ),
+      revokedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}revoked_at'],
+      ),
+      autoSyncEnabled:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}auto_sync_enabled'],
+          )!,
+    );
+  }
+
+  @override
+  $TrustedDeviceRecordsTable createAlias(String alias) {
+    return $TrustedDeviceRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class TrustedDeviceRecord extends DataClass
+    implements Insertable<TrustedDeviceRecord> {
+  final String deviceId;
+  final String displayName;
+  final String platform;
+  final String publicKey;
+  final String pairedAt;
+  final String? lastSeenAt;
+  final String? lastSyncAt;
+  final String? revokedAt;
+  final bool autoSyncEnabled;
+  const TrustedDeviceRecord({
+    required this.deviceId,
+    required this.displayName,
+    required this.platform,
+    required this.publicKey,
+    required this.pairedAt,
+    this.lastSeenAt,
+    this.lastSyncAt,
+    this.revokedAt,
+    required this.autoSyncEnabled,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['device_id'] = Variable<String>(deviceId);
+    map['display_name'] = Variable<String>(displayName);
+    map['platform'] = Variable<String>(platform);
+    map['public_key'] = Variable<String>(publicKey);
+    map['paired_at'] = Variable<String>(pairedAt);
+    if (!nullToAbsent || lastSeenAt != null) {
+      map['last_seen_at'] = Variable<String>(lastSeenAt);
+    }
+    if (!nullToAbsent || lastSyncAt != null) {
+      map['last_sync_at'] = Variable<String>(lastSyncAt);
+    }
+    if (!nullToAbsent || revokedAt != null) {
+      map['revoked_at'] = Variable<String>(revokedAt);
+    }
+    map['auto_sync_enabled'] = Variable<bool>(autoSyncEnabled);
+    return map;
+  }
+
+  TrustedDeviceRecordsCompanion toCompanion(bool nullToAbsent) {
+    return TrustedDeviceRecordsCompanion(
+      deviceId: Value(deviceId),
+      displayName: Value(displayName),
+      platform: Value(platform),
+      publicKey: Value(publicKey),
+      pairedAt: Value(pairedAt),
+      lastSeenAt:
+          lastSeenAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastSeenAt),
+      lastSyncAt:
+          lastSyncAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastSyncAt),
+      revokedAt:
+          revokedAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(revokedAt),
+      autoSyncEnabled: Value(autoSyncEnabled),
+    );
+  }
+
+  factory TrustedDeviceRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TrustedDeviceRecord(
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      displayName: serializer.fromJson<String>(json['displayName']),
+      platform: serializer.fromJson<String>(json['platform']),
+      publicKey: serializer.fromJson<String>(json['publicKey']),
+      pairedAt: serializer.fromJson<String>(json['pairedAt']),
+      lastSeenAt: serializer.fromJson<String?>(json['lastSeenAt']),
+      lastSyncAt: serializer.fromJson<String?>(json['lastSyncAt']),
+      revokedAt: serializer.fromJson<String?>(json['revokedAt']),
+      autoSyncEnabled: serializer.fromJson<bool>(json['autoSyncEnabled']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'deviceId': serializer.toJson<String>(deviceId),
+      'displayName': serializer.toJson<String>(displayName),
+      'platform': serializer.toJson<String>(platform),
+      'publicKey': serializer.toJson<String>(publicKey),
+      'pairedAt': serializer.toJson<String>(pairedAt),
+      'lastSeenAt': serializer.toJson<String?>(lastSeenAt),
+      'lastSyncAt': serializer.toJson<String?>(lastSyncAt),
+      'revokedAt': serializer.toJson<String?>(revokedAt),
+      'autoSyncEnabled': serializer.toJson<bool>(autoSyncEnabled),
+    };
+  }
+
+  TrustedDeviceRecord copyWith({
+    String? deviceId,
+    String? displayName,
+    String? platform,
+    String? publicKey,
+    String? pairedAt,
+    Value<String?> lastSeenAt = const Value.absent(),
+    Value<String?> lastSyncAt = const Value.absent(),
+    Value<String?> revokedAt = const Value.absent(),
+    bool? autoSyncEnabled,
+  }) => TrustedDeviceRecord(
+    deviceId: deviceId ?? this.deviceId,
+    displayName: displayName ?? this.displayName,
+    platform: platform ?? this.platform,
+    publicKey: publicKey ?? this.publicKey,
+    pairedAt: pairedAt ?? this.pairedAt,
+    lastSeenAt: lastSeenAt.present ? lastSeenAt.value : this.lastSeenAt,
+    lastSyncAt: lastSyncAt.present ? lastSyncAt.value : this.lastSyncAt,
+    revokedAt: revokedAt.present ? revokedAt.value : this.revokedAt,
+    autoSyncEnabled: autoSyncEnabled ?? this.autoSyncEnabled,
+  );
+  TrustedDeviceRecord copyWithCompanion(TrustedDeviceRecordsCompanion data) {
+    return TrustedDeviceRecord(
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      displayName:
+          data.displayName.present ? data.displayName.value : this.displayName,
+      platform: data.platform.present ? data.platform.value : this.platform,
+      publicKey: data.publicKey.present ? data.publicKey.value : this.publicKey,
+      pairedAt: data.pairedAt.present ? data.pairedAt.value : this.pairedAt,
+      lastSeenAt:
+          data.lastSeenAt.present ? data.lastSeenAt.value : this.lastSeenAt,
+      lastSyncAt:
+          data.lastSyncAt.present ? data.lastSyncAt.value : this.lastSyncAt,
+      revokedAt: data.revokedAt.present ? data.revokedAt.value : this.revokedAt,
+      autoSyncEnabled:
+          data.autoSyncEnabled.present
+              ? data.autoSyncEnabled.value
+              : this.autoSyncEnabled,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TrustedDeviceRecord(')
+          ..write('deviceId: $deviceId, ')
+          ..write('displayName: $displayName, ')
+          ..write('platform: $platform, ')
+          ..write('publicKey: $publicKey, ')
+          ..write('pairedAt: $pairedAt, ')
+          ..write('lastSeenAt: $lastSeenAt, ')
+          ..write('lastSyncAt: $lastSyncAt, ')
+          ..write('revokedAt: $revokedAt, ')
+          ..write('autoSyncEnabled: $autoSyncEnabled')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    deviceId,
+    displayName,
+    platform,
+    publicKey,
+    pairedAt,
+    lastSeenAt,
+    lastSyncAt,
+    revokedAt,
+    autoSyncEnabled,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TrustedDeviceRecord &&
+          other.deviceId == this.deviceId &&
+          other.displayName == this.displayName &&
+          other.platform == this.platform &&
+          other.publicKey == this.publicKey &&
+          other.pairedAt == this.pairedAt &&
+          other.lastSeenAt == this.lastSeenAt &&
+          other.lastSyncAt == this.lastSyncAt &&
+          other.revokedAt == this.revokedAt &&
+          other.autoSyncEnabled == this.autoSyncEnabled);
+}
+
+class TrustedDeviceRecordsCompanion
+    extends UpdateCompanion<TrustedDeviceRecord> {
+  final Value<String> deviceId;
+  final Value<String> displayName;
+  final Value<String> platform;
+  final Value<String> publicKey;
+  final Value<String> pairedAt;
+  final Value<String?> lastSeenAt;
+  final Value<String?> lastSyncAt;
+  final Value<String?> revokedAt;
+  final Value<bool> autoSyncEnabled;
+  final Value<int> rowid;
+  const TrustedDeviceRecordsCompanion({
+    this.deviceId = const Value.absent(),
+    this.displayName = const Value.absent(),
+    this.platform = const Value.absent(),
+    this.publicKey = const Value.absent(),
+    this.pairedAt = const Value.absent(),
+    this.lastSeenAt = const Value.absent(),
+    this.lastSyncAt = const Value.absent(),
+    this.revokedAt = const Value.absent(),
+    this.autoSyncEnabled = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TrustedDeviceRecordsCompanion.insert({
+    required String deviceId,
+    required String displayName,
+    required String platform,
+    required String publicKey,
+    required String pairedAt,
+    this.lastSeenAt = const Value.absent(),
+    this.lastSyncAt = const Value.absent(),
+    this.revokedAt = const Value.absent(),
+    this.autoSyncEnabled = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : deviceId = Value(deviceId),
+       displayName = Value(displayName),
+       platform = Value(platform),
+       publicKey = Value(publicKey),
+       pairedAt = Value(pairedAt);
+  static Insertable<TrustedDeviceRecord> custom({
+    Expression<String>? deviceId,
+    Expression<String>? displayName,
+    Expression<String>? platform,
+    Expression<String>? publicKey,
+    Expression<String>? pairedAt,
+    Expression<String>? lastSeenAt,
+    Expression<String>? lastSyncAt,
+    Expression<String>? revokedAt,
+    Expression<bool>? autoSyncEnabled,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (deviceId != null) 'device_id': deviceId,
+      if (displayName != null) 'display_name': displayName,
+      if (platform != null) 'platform': platform,
+      if (publicKey != null) 'public_key': publicKey,
+      if (pairedAt != null) 'paired_at': pairedAt,
+      if (lastSeenAt != null) 'last_seen_at': lastSeenAt,
+      if (lastSyncAt != null) 'last_sync_at': lastSyncAt,
+      if (revokedAt != null) 'revoked_at': revokedAt,
+      if (autoSyncEnabled != null) 'auto_sync_enabled': autoSyncEnabled,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TrustedDeviceRecordsCompanion copyWith({
+    Value<String>? deviceId,
+    Value<String>? displayName,
+    Value<String>? platform,
+    Value<String>? publicKey,
+    Value<String>? pairedAt,
+    Value<String?>? lastSeenAt,
+    Value<String?>? lastSyncAt,
+    Value<String?>? revokedAt,
+    Value<bool>? autoSyncEnabled,
+    Value<int>? rowid,
+  }) {
+    return TrustedDeviceRecordsCompanion(
+      deviceId: deviceId ?? this.deviceId,
+      displayName: displayName ?? this.displayName,
+      platform: platform ?? this.platform,
+      publicKey: publicKey ?? this.publicKey,
+      pairedAt: pairedAt ?? this.pairedAt,
+      lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+      lastSyncAt: lastSyncAt ?? this.lastSyncAt,
+      revokedAt: revokedAt ?? this.revokedAt,
+      autoSyncEnabled: autoSyncEnabled ?? this.autoSyncEnabled,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (displayName.present) {
+      map['display_name'] = Variable<String>(displayName.value);
+    }
+    if (platform.present) {
+      map['platform'] = Variable<String>(platform.value);
+    }
+    if (publicKey.present) {
+      map['public_key'] = Variable<String>(publicKey.value);
+    }
+    if (pairedAt.present) {
+      map['paired_at'] = Variable<String>(pairedAt.value);
+    }
+    if (lastSeenAt.present) {
+      map['last_seen_at'] = Variable<String>(lastSeenAt.value);
+    }
+    if (lastSyncAt.present) {
+      map['last_sync_at'] = Variable<String>(lastSyncAt.value);
+    }
+    if (revokedAt.present) {
+      map['revoked_at'] = Variable<String>(revokedAt.value);
+    }
+    if (autoSyncEnabled.present) {
+      map['auto_sync_enabled'] = Variable<bool>(autoSyncEnabled.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TrustedDeviceRecordsCompanion(')
+          ..write('deviceId: $deviceId, ')
+          ..write('displayName: $displayName, ')
+          ..write('platform: $platform, ')
+          ..write('publicKey: $publicKey, ')
+          ..write('pairedAt: $pairedAt, ')
+          ..write('lastSeenAt: $lastSeenAt, ')
+          ..write('lastSyncAt: $lastSyncAt, ')
+          ..write('revokedAt: $revokedAt, ')
+          ..write('autoSyncEnabled: $autoSyncEnabled, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ChangeRecordRecordsTable extends ChangeRecordRecords
+    with TableInfo<$ChangeRecordRecordsTable, ChangeRecordRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ChangeRecordRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _localSequenceMeta = const VerificationMeta(
+    'localSequence',
+  );
+  @override
+  late final GeneratedColumn<int> localSequence = GeneratedColumn<int>(
+    'local_sequence',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _changeIdMeta = const VerificationMeta(
+    'changeId',
+  );
+  @override
+  late final GeneratedColumn<String> changeId = GeneratedColumn<String>(
+    'change_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _entityTypeMeta = const VerificationMeta(
+    'entityType',
+  );
+  @override
+  late final GeneratedColumn<String> entityType = GeneratedColumn<String>(
+    'entity_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityIdMeta = const VerificationMeta(
+    'entityId',
+  );
+  @override
+  late final GeneratedColumn<String> entityId = GeneratedColumn<String>(
+    'entity_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operationMeta = const VerificationMeta(
+    'operation',
+  );
+  @override
+  late final GeneratedColumn<String> operation = GeneratedColumn<String>(
+    'operation',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _originDeviceIdMeta = const VerificationMeta(
+    'originDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> originDeviceId = GeneratedColumn<String>(
+    'origin_device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _changedAtMeta = const VerificationMeta(
+    'changedAt',
+  );
+  @override
+  late final GeneratedColumn<String> changedAt = GeneratedColumn<String>(
+    'changed_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _appliedAtMeta = const VerificationMeta(
+    'appliedAt',
+  );
+  @override
+  late final GeneratedColumn<String> appliedAt = GeneratedColumn<String>(
+    'applied_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    localSequence,
+    changeId,
+    entityType,
+    entityId,
+    operation,
+    revision,
+    originDeviceId,
+    changedAt,
+    payloadJson,
+    appliedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'change_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ChangeRecordRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('local_sequence')) {
+      context.handle(
+        _localSequenceMeta,
+        localSequence.isAcceptableOrUnknown(
+          data['local_sequence']!,
+          _localSequenceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('change_id')) {
+      context.handle(
+        _changeIdMeta,
+        changeId.isAcceptableOrUnknown(data['change_id']!, _changeIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_changeIdMeta);
+    }
+    if (data.containsKey('entity_type')) {
+      context.handle(
+        _entityTypeMeta,
+        entityType.isAcceptableOrUnknown(data['entity_type']!, _entityTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityTypeMeta);
+    }
+    if (data.containsKey('entity_id')) {
+      context.handle(
+        _entityIdMeta,
+        entityId.isAcceptableOrUnknown(data['entity_id']!, _entityIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityIdMeta);
+    }
+    if (data.containsKey('operation')) {
+      context.handle(
+        _operationMeta,
+        operation.isAcceptableOrUnknown(data['operation']!, _operationMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_operationMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_revisionMeta);
+    }
+    if (data.containsKey('origin_device_id')) {
+      context.handle(
+        _originDeviceIdMeta,
+        originDeviceId.isAcceptableOrUnknown(
+          data['origin_device_id']!,
+          _originDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_originDeviceIdMeta);
+    }
+    if (data.containsKey('changed_at')) {
+      context.handle(
+        _changedAtMeta,
+        changedAt.isAcceptableOrUnknown(data['changed_at']!, _changedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_changedAtMeta);
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    if (data.containsKey('applied_at')) {
+      context.handle(
+        _appliedAtMeta,
+        appliedAt.isAcceptableOrUnknown(data['applied_at']!, _appliedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {localSequence};
+  @override
+  ChangeRecordRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ChangeRecordRecord(
+      localSequence:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}local_sequence'],
+          )!,
+      changeId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}change_id'],
+          )!,
+      entityType:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}entity_type'],
+          )!,
+      entityId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}entity_id'],
+          )!,
+      operation:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}operation'],
+          )!,
+      revision:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}revision'],
+          )!,
+      originDeviceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}origin_device_id'],
+          )!,
+      changedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}changed_at'],
+          )!,
+      payloadJson:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}payload_json'],
+          )!,
+      appliedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}applied_at'],
+      ),
+    );
+  }
+
+  @override
+  $ChangeRecordRecordsTable createAlias(String alias) {
+    return $ChangeRecordRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class ChangeRecordRecord extends DataClass
+    implements Insertable<ChangeRecordRecord> {
+  final int localSequence;
+  final String changeId;
+  final String entityType;
+  final String entityId;
+  final String operation;
+  final int revision;
+  final String originDeviceId;
+  final String changedAt;
+  final String payloadJson;
+  final String? appliedAt;
+  const ChangeRecordRecord({
+    required this.localSequence,
+    required this.changeId,
+    required this.entityType,
+    required this.entityId,
+    required this.operation,
+    required this.revision,
+    required this.originDeviceId,
+    required this.changedAt,
+    required this.payloadJson,
+    this.appliedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['local_sequence'] = Variable<int>(localSequence);
+    map['change_id'] = Variable<String>(changeId);
+    map['entity_type'] = Variable<String>(entityType);
+    map['entity_id'] = Variable<String>(entityId);
+    map['operation'] = Variable<String>(operation);
+    map['revision'] = Variable<int>(revision);
+    map['origin_device_id'] = Variable<String>(originDeviceId);
+    map['changed_at'] = Variable<String>(changedAt);
+    map['payload_json'] = Variable<String>(payloadJson);
+    if (!nullToAbsent || appliedAt != null) {
+      map['applied_at'] = Variable<String>(appliedAt);
+    }
+    return map;
+  }
+
+  ChangeRecordRecordsCompanion toCompanion(bool nullToAbsent) {
+    return ChangeRecordRecordsCompanion(
+      localSequence: Value(localSequence),
+      changeId: Value(changeId),
+      entityType: Value(entityType),
+      entityId: Value(entityId),
+      operation: Value(operation),
+      revision: Value(revision),
+      originDeviceId: Value(originDeviceId),
+      changedAt: Value(changedAt),
+      payloadJson: Value(payloadJson),
+      appliedAt:
+          appliedAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(appliedAt),
+    );
+  }
+
+  factory ChangeRecordRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ChangeRecordRecord(
+      localSequence: serializer.fromJson<int>(json['localSequence']),
+      changeId: serializer.fromJson<String>(json['changeId']),
+      entityType: serializer.fromJson<String>(json['entityType']),
+      entityId: serializer.fromJson<String>(json['entityId']),
+      operation: serializer.fromJson<String>(json['operation']),
+      revision: serializer.fromJson<int>(json['revision']),
+      originDeviceId: serializer.fromJson<String>(json['originDeviceId']),
+      changedAt: serializer.fromJson<String>(json['changedAt']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      appliedAt: serializer.fromJson<String?>(json['appliedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'localSequence': serializer.toJson<int>(localSequence),
+      'changeId': serializer.toJson<String>(changeId),
+      'entityType': serializer.toJson<String>(entityType),
+      'entityId': serializer.toJson<String>(entityId),
+      'operation': serializer.toJson<String>(operation),
+      'revision': serializer.toJson<int>(revision),
+      'originDeviceId': serializer.toJson<String>(originDeviceId),
+      'changedAt': serializer.toJson<String>(changedAt),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'appliedAt': serializer.toJson<String?>(appliedAt),
+    };
+  }
+
+  ChangeRecordRecord copyWith({
+    int? localSequence,
+    String? changeId,
+    String? entityType,
+    String? entityId,
+    String? operation,
+    int? revision,
+    String? originDeviceId,
+    String? changedAt,
+    String? payloadJson,
+    Value<String?> appliedAt = const Value.absent(),
+  }) => ChangeRecordRecord(
+    localSequence: localSequence ?? this.localSequence,
+    changeId: changeId ?? this.changeId,
+    entityType: entityType ?? this.entityType,
+    entityId: entityId ?? this.entityId,
+    operation: operation ?? this.operation,
+    revision: revision ?? this.revision,
+    originDeviceId: originDeviceId ?? this.originDeviceId,
+    changedAt: changedAt ?? this.changedAt,
+    payloadJson: payloadJson ?? this.payloadJson,
+    appliedAt: appliedAt.present ? appliedAt.value : this.appliedAt,
+  );
+  ChangeRecordRecord copyWithCompanion(ChangeRecordRecordsCompanion data) {
+    return ChangeRecordRecord(
+      localSequence:
+          data.localSequence.present
+              ? data.localSequence.value
+              : this.localSequence,
+      changeId: data.changeId.present ? data.changeId.value : this.changeId,
+      entityType:
+          data.entityType.present ? data.entityType.value : this.entityType,
+      entityId: data.entityId.present ? data.entityId.value : this.entityId,
+      operation: data.operation.present ? data.operation.value : this.operation,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      originDeviceId:
+          data.originDeviceId.present
+              ? data.originDeviceId.value
+              : this.originDeviceId,
+      changedAt: data.changedAt.present ? data.changedAt.value : this.changedAt,
+      payloadJson:
+          data.payloadJson.present ? data.payloadJson.value : this.payloadJson,
+      appliedAt: data.appliedAt.present ? data.appliedAt.value : this.appliedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChangeRecordRecord(')
+          ..write('localSequence: $localSequence, ')
+          ..write('changeId: $changeId, ')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('operation: $operation, ')
+          ..write('revision: $revision, ')
+          ..write('originDeviceId: $originDeviceId, ')
+          ..write('changedAt: $changedAt, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('appliedAt: $appliedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    localSequence,
+    changeId,
+    entityType,
+    entityId,
+    operation,
+    revision,
+    originDeviceId,
+    changedAt,
+    payloadJson,
+    appliedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ChangeRecordRecord &&
+          other.localSequence == this.localSequence &&
+          other.changeId == this.changeId &&
+          other.entityType == this.entityType &&
+          other.entityId == this.entityId &&
+          other.operation == this.operation &&
+          other.revision == this.revision &&
+          other.originDeviceId == this.originDeviceId &&
+          other.changedAt == this.changedAt &&
+          other.payloadJson == this.payloadJson &&
+          other.appliedAt == this.appliedAt);
+}
+
+class ChangeRecordRecordsCompanion extends UpdateCompanion<ChangeRecordRecord> {
+  final Value<int> localSequence;
+  final Value<String> changeId;
+  final Value<String> entityType;
+  final Value<String> entityId;
+  final Value<String> operation;
+  final Value<int> revision;
+  final Value<String> originDeviceId;
+  final Value<String> changedAt;
+  final Value<String> payloadJson;
+  final Value<String?> appliedAt;
+  const ChangeRecordRecordsCompanion({
+    this.localSequence = const Value.absent(),
+    this.changeId = const Value.absent(),
+    this.entityType = const Value.absent(),
+    this.entityId = const Value.absent(),
+    this.operation = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.originDeviceId = const Value.absent(),
+    this.changedAt = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.appliedAt = const Value.absent(),
+  });
+  ChangeRecordRecordsCompanion.insert({
+    this.localSequence = const Value.absent(),
+    required String changeId,
+    required String entityType,
+    required String entityId,
+    required String operation,
+    required int revision,
+    required String originDeviceId,
+    required String changedAt,
+    required String payloadJson,
+    this.appliedAt = const Value.absent(),
+  }) : changeId = Value(changeId),
+       entityType = Value(entityType),
+       entityId = Value(entityId),
+       operation = Value(operation),
+       revision = Value(revision),
+       originDeviceId = Value(originDeviceId),
+       changedAt = Value(changedAt),
+       payloadJson = Value(payloadJson);
+  static Insertable<ChangeRecordRecord> custom({
+    Expression<int>? localSequence,
+    Expression<String>? changeId,
+    Expression<String>? entityType,
+    Expression<String>? entityId,
+    Expression<String>? operation,
+    Expression<int>? revision,
+    Expression<String>? originDeviceId,
+    Expression<String>? changedAt,
+    Expression<String>? payloadJson,
+    Expression<String>? appliedAt,
+  }) {
+    return RawValuesInsertable({
+      if (localSequence != null) 'local_sequence': localSequence,
+      if (changeId != null) 'change_id': changeId,
+      if (entityType != null) 'entity_type': entityType,
+      if (entityId != null) 'entity_id': entityId,
+      if (operation != null) 'operation': operation,
+      if (revision != null) 'revision': revision,
+      if (originDeviceId != null) 'origin_device_id': originDeviceId,
+      if (changedAt != null) 'changed_at': changedAt,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (appliedAt != null) 'applied_at': appliedAt,
+    });
+  }
+
+  ChangeRecordRecordsCompanion copyWith({
+    Value<int>? localSequence,
+    Value<String>? changeId,
+    Value<String>? entityType,
+    Value<String>? entityId,
+    Value<String>? operation,
+    Value<int>? revision,
+    Value<String>? originDeviceId,
+    Value<String>? changedAt,
+    Value<String>? payloadJson,
+    Value<String?>? appliedAt,
+  }) {
+    return ChangeRecordRecordsCompanion(
+      localSequence: localSequence ?? this.localSequence,
+      changeId: changeId ?? this.changeId,
+      entityType: entityType ?? this.entityType,
+      entityId: entityId ?? this.entityId,
+      operation: operation ?? this.operation,
+      revision: revision ?? this.revision,
+      originDeviceId: originDeviceId ?? this.originDeviceId,
+      changedAt: changedAt ?? this.changedAt,
+      payloadJson: payloadJson ?? this.payloadJson,
+      appliedAt: appliedAt ?? this.appliedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (localSequence.present) {
+      map['local_sequence'] = Variable<int>(localSequence.value);
+    }
+    if (changeId.present) {
+      map['change_id'] = Variable<String>(changeId.value);
+    }
+    if (entityType.present) {
+      map['entity_type'] = Variable<String>(entityType.value);
+    }
+    if (entityId.present) {
+      map['entity_id'] = Variable<String>(entityId.value);
+    }
+    if (operation.present) {
+      map['operation'] = Variable<String>(operation.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (originDeviceId.present) {
+      map['origin_device_id'] = Variable<String>(originDeviceId.value);
+    }
+    if (changedAt.present) {
+      map['changed_at'] = Variable<String>(changedAt.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (appliedAt.present) {
+      map['applied_at'] = Variable<String>(appliedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChangeRecordRecordsCompanion(')
+          ..write('localSequence: $localSequence, ')
+          ..write('changeId: $changeId, ')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('operation: $operation, ')
+          ..write('revision: $revision, ')
+          ..write('originDeviceId: $originDeviceId, ')
+          ..write('changedAt: $changedAt, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('appliedAt: $appliedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SyncCursorRecordsTable extends SyncCursorRecords
+    with TableInfo<$SyncCursorRecordsTable, SyncCursorRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncCursorRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _peerDeviceIdMeta = const VerificationMeta(
+    'peerDeviceId',
+  );
+  @override
+  late final GeneratedColumn<String> peerDeviceId = GeneratedColumn<String>(
+    'peer_device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastSentSequenceMeta = const VerificationMeta(
+    'lastSentSequence',
+  );
+  @override
+  late final GeneratedColumn<int> lastSentSequence = GeneratedColumn<int>(
+    'last_sent_sequence',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lastReceivedChangeIdMeta =
+      const VerificationMeta('lastReceivedChangeId');
+  @override
+  late final GeneratedColumn<String> lastReceivedChangeId =
+      GeneratedColumn<String>(
+        'last_received_change_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastSuccessAtMeta = const VerificationMeta(
+    'lastSuccessAt',
+  );
+  @override
+  late final GeneratedColumn<String> lastSuccessAt = GeneratedColumn<String>(
+    'last_success_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    peerDeviceId,
+    lastSentSequence,
+    lastReceivedChangeId,
+    lastSuccessAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_cursors';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncCursorRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('peer_device_id')) {
+      context.handle(
+        _peerDeviceIdMeta,
+        peerDeviceId.isAcceptableOrUnknown(
+          data['peer_device_id']!,
+          _peerDeviceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_peerDeviceIdMeta);
+    }
+    if (data.containsKey('last_sent_sequence')) {
+      context.handle(
+        _lastSentSequenceMeta,
+        lastSentSequence.isAcceptableOrUnknown(
+          data['last_sent_sequence']!,
+          _lastSentSequenceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_received_change_id')) {
+      context.handle(
+        _lastReceivedChangeIdMeta,
+        lastReceivedChangeId.isAcceptableOrUnknown(
+          data['last_received_change_id']!,
+          _lastReceivedChangeIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_success_at')) {
+      context.handle(
+        _lastSuccessAtMeta,
+        lastSuccessAt.isAcceptableOrUnknown(
+          data['last_success_at']!,
+          _lastSuccessAtMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {peerDeviceId};
+  @override
+  SyncCursorRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncCursorRecord(
+      peerDeviceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}peer_device_id'],
+          )!,
+      lastSentSequence:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}last_sent_sequence'],
+          )!,
+      lastReceivedChangeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_received_change_id'],
+      ),
+      lastSuccessAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_success_at'],
+      ),
+    );
+  }
+
+  @override
+  $SyncCursorRecordsTable createAlias(String alias) {
+    return $SyncCursorRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class SyncCursorRecord extends DataClass
+    implements Insertable<SyncCursorRecord> {
+  final String peerDeviceId;
+  final int lastSentSequence;
+  final String? lastReceivedChangeId;
+  final String? lastSuccessAt;
+  const SyncCursorRecord({
+    required this.peerDeviceId,
+    required this.lastSentSequence,
+    this.lastReceivedChangeId,
+    this.lastSuccessAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['peer_device_id'] = Variable<String>(peerDeviceId);
+    map['last_sent_sequence'] = Variable<int>(lastSentSequence);
+    if (!nullToAbsent || lastReceivedChangeId != null) {
+      map['last_received_change_id'] = Variable<String>(lastReceivedChangeId);
+    }
+    if (!nullToAbsent || lastSuccessAt != null) {
+      map['last_success_at'] = Variable<String>(lastSuccessAt);
+    }
+    return map;
+  }
+
+  SyncCursorRecordsCompanion toCompanion(bool nullToAbsent) {
+    return SyncCursorRecordsCompanion(
+      peerDeviceId: Value(peerDeviceId),
+      lastSentSequence: Value(lastSentSequence),
+      lastReceivedChangeId:
+          lastReceivedChangeId == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastReceivedChangeId),
+      lastSuccessAt:
+          lastSuccessAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastSuccessAt),
+    );
+  }
+
+  factory SyncCursorRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncCursorRecord(
+      peerDeviceId: serializer.fromJson<String>(json['peerDeviceId']),
+      lastSentSequence: serializer.fromJson<int>(json['lastSentSequence']),
+      lastReceivedChangeId: serializer.fromJson<String?>(
+        json['lastReceivedChangeId'],
+      ),
+      lastSuccessAt: serializer.fromJson<String?>(json['lastSuccessAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'peerDeviceId': serializer.toJson<String>(peerDeviceId),
+      'lastSentSequence': serializer.toJson<int>(lastSentSequence),
+      'lastReceivedChangeId': serializer.toJson<String?>(lastReceivedChangeId),
+      'lastSuccessAt': serializer.toJson<String?>(lastSuccessAt),
+    };
+  }
+
+  SyncCursorRecord copyWith({
+    String? peerDeviceId,
+    int? lastSentSequence,
+    Value<String?> lastReceivedChangeId = const Value.absent(),
+    Value<String?> lastSuccessAt = const Value.absent(),
+  }) => SyncCursorRecord(
+    peerDeviceId: peerDeviceId ?? this.peerDeviceId,
+    lastSentSequence: lastSentSequence ?? this.lastSentSequence,
+    lastReceivedChangeId:
+        lastReceivedChangeId.present
+            ? lastReceivedChangeId.value
+            : this.lastReceivedChangeId,
+    lastSuccessAt:
+        lastSuccessAt.present ? lastSuccessAt.value : this.lastSuccessAt,
+  );
+  SyncCursorRecord copyWithCompanion(SyncCursorRecordsCompanion data) {
+    return SyncCursorRecord(
+      peerDeviceId:
+          data.peerDeviceId.present
+              ? data.peerDeviceId.value
+              : this.peerDeviceId,
+      lastSentSequence:
+          data.lastSentSequence.present
+              ? data.lastSentSequence.value
+              : this.lastSentSequence,
+      lastReceivedChangeId:
+          data.lastReceivedChangeId.present
+              ? data.lastReceivedChangeId.value
+              : this.lastReceivedChangeId,
+      lastSuccessAt:
+          data.lastSuccessAt.present
+              ? data.lastSuccessAt.value
+              : this.lastSuccessAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncCursorRecord(')
+          ..write('peerDeviceId: $peerDeviceId, ')
+          ..write('lastSentSequence: $lastSentSequence, ')
+          ..write('lastReceivedChangeId: $lastReceivedChangeId, ')
+          ..write('lastSuccessAt: $lastSuccessAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    peerDeviceId,
+    lastSentSequence,
+    lastReceivedChangeId,
+    lastSuccessAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncCursorRecord &&
+          other.peerDeviceId == this.peerDeviceId &&
+          other.lastSentSequence == this.lastSentSequence &&
+          other.lastReceivedChangeId == this.lastReceivedChangeId &&
+          other.lastSuccessAt == this.lastSuccessAt);
+}
+
+class SyncCursorRecordsCompanion extends UpdateCompanion<SyncCursorRecord> {
+  final Value<String> peerDeviceId;
+  final Value<int> lastSentSequence;
+  final Value<String?> lastReceivedChangeId;
+  final Value<String?> lastSuccessAt;
+  final Value<int> rowid;
+  const SyncCursorRecordsCompanion({
+    this.peerDeviceId = const Value.absent(),
+    this.lastSentSequence = const Value.absent(),
+    this.lastReceivedChangeId = const Value.absent(),
+    this.lastSuccessAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncCursorRecordsCompanion.insert({
+    required String peerDeviceId,
+    this.lastSentSequence = const Value.absent(),
+    this.lastReceivedChangeId = const Value.absent(),
+    this.lastSuccessAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : peerDeviceId = Value(peerDeviceId);
+  static Insertable<SyncCursorRecord> custom({
+    Expression<String>? peerDeviceId,
+    Expression<int>? lastSentSequence,
+    Expression<String>? lastReceivedChangeId,
+    Expression<String>? lastSuccessAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (peerDeviceId != null) 'peer_device_id': peerDeviceId,
+      if (lastSentSequence != null) 'last_sent_sequence': lastSentSequence,
+      if (lastReceivedChangeId != null)
+        'last_received_change_id': lastReceivedChangeId,
+      if (lastSuccessAt != null) 'last_success_at': lastSuccessAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncCursorRecordsCompanion copyWith({
+    Value<String>? peerDeviceId,
+    Value<int>? lastSentSequence,
+    Value<String?>? lastReceivedChangeId,
+    Value<String?>? lastSuccessAt,
+    Value<int>? rowid,
+  }) {
+    return SyncCursorRecordsCompanion(
+      peerDeviceId: peerDeviceId ?? this.peerDeviceId,
+      lastSentSequence: lastSentSequence ?? this.lastSentSequence,
+      lastReceivedChangeId: lastReceivedChangeId ?? this.lastReceivedChangeId,
+      lastSuccessAt: lastSuccessAt ?? this.lastSuccessAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (peerDeviceId.present) {
+      map['peer_device_id'] = Variable<String>(peerDeviceId.value);
+    }
+    if (lastSentSequence.present) {
+      map['last_sent_sequence'] = Variable<int>(lastSentSequence.value);
+    }
+    if (lastReceivedChangeId.present) {
+      map['last_received_change_id'] = Variable<String>(
+        lastReceivedChangeId.value,
+      );
+    }
+    if (lastSuccessAt.present) {
+      map['last_success_at'] = Variable<String>(lastSuccessAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncCursorRecordsCompanion(')
+          ..write('peerDeviceId: $peerDeviceId, ')
+          ..write('lastSentSequence: $lastSentSequence, ')
+          ..write('lastReceivedChangeId: $lastReceivedChangeId, ')
+          ..write('lastSuccessAt: $lastSuccessAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ChronicleDatabase extends GeneratedDatabase {
   _$ChronicleDatabase(QueryExecutor e) : super(e);
   $ChronicleDatabaseManager get managers => $ChronicleDatabaseManager(this);
@@ -4101,6 +6078,14 @@ abstract class _$ChronicleDatabase extends GeneratedDatabase {
   late final $TimeEntryRecordsTable timeEntryRecords = $TimeEntryRecordsTable(
     this,
   );
+  late final $DeviceIdentityRecordsTable deviceIdentityRecords =
+      $DeviceIdentityRecordsTable(this);
+  late final $TrustedDeviceRecordsTable trustedDeviceRecords =
+      $TrustedDeviceRecordsTable(this);
+  late final $ChangeRecordRecordsTable changeRecordRecords =
+      $ChangeRecordRecordsTable(this);
+  late final $SyncCursorRecordsTable syncCursorRecords =
+      $SyncCursorRecordsTable(this);
   late final Index idxProjectsArchived = Index(
     'idx_projects_archived',
     'CREATE INDEX idx_projects_archived ON projects (archived, updated_at)',
@@ -4137,6 +6122,18 @@ abstract class _$ChronicleDatabase extends GeneratedDatabase {
     'idx_time_entries_project',
     'CREATE INDEX idx_time_entries_project ON time_entries (project_id, started_at)',
   );
+  late final Index idxTrustedDevicesActive = Index(
+    'idx_trusted_devices_active',
+    'CREATE INDEX idx_trusted_devices_active ON trusted_devices (revoked_at, last_sync_at)',
+  );
+  late final Index idxChangeRecordsEntity = Index(
+    'idx_change_records_entity',
+    'CREATE INDEX idx_change_records_entity ON change_records (entity_type, entity_id, revision)',
+  );
+  late final Index idxChangeRecordsOrigin = Index(
+    'idx_change_records_origin',
+    'CREATE INDEX idx_change_records_origin ON change_records (origin_device_id, local_sequence)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4149,6 +6146,10 @@ abstract class _$ChronicleDatabase extends GeneratedDatabase {
     noteVersionRecords,
     taskRecords,
     timeEntryRecords,
+    deviceIdentityRecords,
+    trustedDeviceRecords,
+    changeRecordRecords,
+    syncCursorRecords,
     idxProjectsArchived,
     idxNotesProject,
     idxNoteLinksTarget,
@@ -4158,6 +6159,9 @@ abstract class _$ChronicleDatabase extends GeneratedDatabase {
     idxTasksProject,
     idxTimeEntriesStarted,
     idxTimeEntriesProject,
+    idxTrustedDevicesActive,
+    idxChangeRecordsEntity,
+    idxChangeRecordsOrigin,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -7964,6 +9968,1084 @@ typedef $$TimeEntryRecordsTableProcessedTableManager =
       TimeEntryRecord,
       PrefetchHooks Function({bool projectId, bool taskId, bool noteId})
     >;
+typedef $$DeviceIdentityRecordsTableCreateCompanionBuilder =
+    DeviceIdentityRecordsCompanion Function({
+      required String deviceId,
+      required String displayName,
+      required String platform,
+      required String createdAt,
+      required String lastSeenAt,
+      Value<int> rowid,
+    });
+typedef $$DeviceIdentityRecordsTableUpdateCompanionBuilder =
+    DeviceIdentityRecordsCompanion Function({
+      Value<String> deviceId,
+      Value<String> displayName,
+      Value<String> platform,
+      Value<String> createdAt,
+      Value<String> lastSeenAt,
+      Value<int> rowid,
+    });
+
+class $$DeviceIdentityRecordsTableFilterComposer
+    extends Composer<_$ChronicleDatabase, $DeviceIdentityRecordsTable> {
+  $$DeviceIdentityRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get platform => $composableBuilder(
+    column: $table.platform,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DeviceIdentityRecordsTableOrderingComposer
+    extends Composer<_$ChronicleDatabase, $DeviceIdentityRecordsTable> {
+  $$DeviceIdentityRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get platform => $composableBuilder(
+    column: $table.platform,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DeviceIdentityRecordsTableAnnotationComposer
+    extends Composer<_$ChronicleDatabase, $DeviceIdentityRecordsTable> {
+  $$DeviceIdentityRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get platform =>
+      $composableBuilder(column: $table.platform, builder: (column) => column);
+
+  GeneratedColumn<String> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => column,
+  );
+}
+
+class $$DeviceIdentityRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$ChronicleDatabase,
+          $DeviceIdentityRecordsTable,
+          DeviceIdentityRecord,
+          $$DeviceIdentityRecordsTableFilterComposer,
+          $$DeviceIdentityRecordsTableOrderingComposer,
+          $$DeviceIdentityRecordsTableAnnotationComposer,
+          $$DeviceIdentityRecordsTableCreateCompanionBuilder,
+          $$DeviceIdentityRecordsTableUpdateCompanionBuilder,
+          (
+            DeviceIdentityRecord,
+            BaseReferences<
+              _$ChronicleDatabase,
+              $DeviceIdentityRecordsTable,
+              DeviceIdentityRecord
+            >,
+          ),
+          DeviceIdentityRecord,
+          PrefetchHooks Function()
+        > {
+  $$DeviceIdentityRecordsTableTableManager(
+    _$ChronicleDatabase db,
+    $DeviceIdentityRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$DeviceIdentityRecordsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$DeviceIdentityRecordsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$DeviceIdentityRecordsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> deviceId = const Value.absent(),
+                Value<String> displayName = const Value.absent(),
+                Value<String> platform = const Value.absent(),
+                Value<String> createdAt = const Value.absent(),
+                Value<String> lastSeenAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DeviceIdentityRecordsCompanion(
+                deviceId: deviceId,
+                displayName: displayName,
+                platform: platform,
+                createdAt: createdAt,
+                lastSeenAt: lastSeenAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String deviceId,
+                required String displayName,
+                required String platform,
+                required String createdAt,
+                required String lastSeenAt,
+                Value<int> rowid = const Value.absent(),
+              }) => DeviceIdentityRecordsCompanion.insert(
+                deviceId: deviceId,
+                displayName: displayName,
+                platform: platform,
+                createdAt: createdAt,
+                lastSeenAt: lastSeenAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DeviceIdentityRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ChronicleDatabase,
+      $DeviceIdentityRecordsTable,
+      DeviceIdentityRecord,
+      $$DeviceIdentityRecordsTableFilterComposer,
+      $$DeviceIdentityRecordsTableOrderingComposer,
+      $$DeviceIdentityRecordsTableAnnotationComposer,
+      $$DeviceIdentityRecordsTableCreateCompanionBuilder,
+      $$DeviceIdentityRecordsTableUpdateCompanionBuilder,
+      (
+        DeviceIdentityRecord,
+        BaseReferences<
+          _$ChronicleDatabase,
+          $DeviceIdentityRecordsTable,
+          DeviceIdentityRecord
+        >,
+      ),
+      DeviceIdentityRecord,
+      PrefetchHooks Function()
+    >;
+typedef $$TrustedDeviceRecordsTableCreateCompanionBuilder =
+    TrustedDeviceRecordsCompanion Function({
+      required String deviceId,
+      required String displayName,
+      required String platform,
+      required String publicKey,
+      required String pairedAt,
+      Value<String?> lastSeenAt,
+      Value<String?> lastSyncAt,
+      Value<String?> revokedAt,
+      Value<bool> autoSyncEnabled,
+      Value<int> rowid,
+    });
+typedef $$TrustedDeviceRecordsTableUpdateCompanionBuilder =
+    TrustedDeviceRecordsCompanion Function({
+      Value<String> deviceId,
+      Value<String> displayName,
+      Value<String> platform,
+      Value<String> publicKey,
+      Value<String> pairedAt,
+      Value<String?> lastSeenAt,
+      Value<String?> lastSyncAt,
+      Value<String?> revokedAt,
+      Value<bool> autoSyncEnabled,
+      Value<int> rowid,
+    });
+
+class $$TrustedDeviceRecordsTableFilterComposer
+    extends Composer<_$ChronicleDatabase, $TrustedDeviceRecordsTable> {
+  $$TrustedDeviceRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get platform => $composableBuilder(
+    column: $table.platform,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get publicKey => $composableBuilder(
+    column: $table.publicKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pairedAt => $composableBuilder(
+    column: $table.pairedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get revokedAt => $composableBuilder(
+    column: $table.revokedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get autoSyncEnabled => $composableBuilder(
+    column: $table.autoSyncEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TrustedDeviceRecordsTableOrderingComposer
+    extends Composer<_$ChronicleDatabase, $TrustedDeviceRecordsTable> {
+  $$TrustedDeviceRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get platform => $composableBuilder(
+    column: $table.platform,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get publicKey => $composableBuilder(
+    column: $table.publicKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pairedAt => $composableBuilder(
+    column: $table.pairedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get revokedAt => $composableBuilder(
+    column: $table.revokedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get autoSyncEnabled => $composableBuilder(
+    column: $table.autoSyncEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TrustedDeviceRecordsTableAnnotationComposer
+    extends Composer<_$ChronicleDatabase, $TrustedDeviceRecordsTable> {
+  $$TrustedDeviceRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get platform =>
+      $composableBuilder(column: $table.platform, builder: (column) => column);
+
+  GeneratedColumn<String> get publicKey =>
+      $composableBuilder(column: $table.publicKey, builder: (column) => column);
+
+  GeneratedColumn<String> get pairedAt =>
+      $composableBuilder(column: $table.pairedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastSyncAt => $composableBuilder(
+    column: $table.lastSyncAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get revokedAt =>
+      $composableBuilder(column: $table.revokedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get autoSyncEnabled => $composableBuilder(
+    column: $table.autoSyncEnabled,
+    builder: (column) => column,
+  );
+}
+
+class $$TrustedDeviceRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$ChronicleDatabase,
+          $TrustedDeviceRecordsTable,
+          TrustedDeviceRecord,
+          $$TrustedDeviceRecordsTableFilterComposer,
+          $$TrustedDeviceRecordsTableOrderingComposer,
+          $$TrustedDeviceRecordsTableAnnotationComposer,
+          $$TrustedDeviceRecordsTableCreateCompanionBuilder,
+          $$TrustedDeviceRecordsTableUpdateCompanionBuilder,
+          (
+            TrustedDeviceRecord,
+            BaseReferences<
+              _$ChronicleDatabase,
+              $TrustedDeviceRecordsTable,
+              TrustedDeviceRecord
+            >,
+          ),
+          TrustedDeviceRecord,
+          PrefetchHooks Function()
+        > {
+  $$TrustedDeviceRecordsTableTableManager(
+    _$ChronicleDatabase db,
+    $TrustedDeviceRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$TrustedDeviceRecordsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$TrustedDeviceRecordsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$TrustedDeviceRecordsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> deviceId = const Value.absent(),
+                Value<String> displayName = const Value.absent(),
+                Value<String> platform = const Value.absent(),
+                Value<String> publicKey = const Value.absent(),
+                Value<String> pairedAt = const Value.absent(),
+                Value<String?> lastSeenAt = const Value.absent(),
+                Value<String?> lastSyncAt = const Value.absent(),
+                Value<String?> revokedAt = const Value.absent(),
+                Value<bool> autoSyncEnabled = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TrustedDeviceRecordsCompanion(
+                deviceId: deviceId,
+                displayName: displayName,
+                platform: platform,
+                publicKey: publicKey,
+                pairedAt: pairedAt,
+                lastSeenAt: lastSeenAt,
+                lastSyncAt: lastSyncAt,
+                revokedAt: revokedAt,
+                autoSyncEnabled: autoSyncEnabled,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String deviceId,
+                required String displayName,
+                required String platform,
+                required String publicKey,
+                required String pairedAt,
+                Value<String?> lastSeenAt = const Value.absent(),
+                Value<String?> lastSyncAt = const Value.absent(),
+                Value<String?> revokedAt = const Value.absent(),
+                Value<bool> autoSyncEnabled = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TrustedDeviceRecordsCompanion.insert(
+                deviceId: deviceId,
+                displayName: displayName,
+                platform: platform,
+                publicKey: publicKey,
+                pairedAt: pairedAt,
+                lastSeenAt: lastSeenAt,
+                lastSyncAt: lastSyncAt,
+                revokedAt: revokedAt,
+                autoSyncEnabled: autoSyncEnabled,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TrustedDeviceRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ChronicleDatabase,
+      $TrustedDeviceRecordsTable,
+      TrustedDeviceRecord,
+      $$TrustedDeviceRecordsTableFilterComposer,
+      $$TrustedDeviceRecordsTableOrderingComposer,
+      $$TrustedDeviceRecordsTableAnnotationComposer,
+      $$TrustedDeviceRecordsTableCreateCompanionBuilder,
+      $$TrustedDeviceRecordsTableUpdateCompanionBuilder,
+      (
+        TrustedDeviceRecord,
+        BaseReferences<
+          _$ChronicleDatabase,
+          $TrustedDeviceRecordsTable,
+          TrustedDeviceRecord
+        >,
+      ),
+      TrustedDeviceRecord,
+      PrefetchHooks Function()
+    >;
+typedef $$ChangeRecordRecordsTableCreateCompanionBuilder =
+    ChangeRecordRecordsCompanion Function({
+      Value<int> localSequence,
+      required String changeId,
+      required String entityType,
+      required String entityId,
+      required String operation,
+      required int revision,
+      required String originDeviceId,
+      required String changedAt,
+      required String payloadJson,
+      Value<String?> appliedAt,
+    });
+typedef $$ChangeRecordRecordsTableUpdateCompanionBuilder =
+    ChangeRecordRecordsCompanion Function({
+      Value<int> localSequence,
+      Value<String> changeId,
+      Value<String> entityType,
+      Value<String> entityId,
+      Value<String> operation,
+      Value<int> revision,
+      Value<String> originDeviceId,
+      Value<String> changedAt,
+      Value<String> payloadJson,
+      Value<String?> appliedAt,
+    });
+
+class $$ChangeRecordRecordsTableFilterComposer
+    extends Composer<_$ChronicleDatabase, $ChangeRecordRecordsTable> {
+  $$ChangeRecordRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get localSequence => $composableBuilder(
+    column: $table.localSequence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get changeId => $composableBuilder(
+    column: $table.changeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originDeviceId => $composableBuilder(
+    column: $table.originDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get changedAt => $composableBuilder(
+    column: $table.changedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get appliedAt => $composableBuilder(
+    column: $table.appliedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ChangeRecordRecordsTableOrderingComposer
+    extends Composer<_$ChronicleDatabase, $ChangeRecordRecordsTable> {
+  $$ChangeRecordRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get localSequence => $composableBuilder(
+    column: $table.localSequence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get changeId => $composableBuilder(
+    column: $table.changeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originDeviceId => $composableBuilder(
+    column: $table.originDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get changedAt => $composableBuilder(
+    column: $table.changedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get appliedAt => $composableBuilder(
+    column: $table.appliedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ChangeRecordRecordsTableAnnotationComposer
+    extends Composer<_$ChronicleDatabase, $ChangeRecordRecordsTable> {
+  $$ChangeRecordRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get localSequence => $composableBuilder(
+    column: $table.localSequence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get changeId =>
+      $composableBuilder(column: $table.changeId, builder: (column) => column);
+
+  GeneratedColumn<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get entityId =>
+      $composableBuilder(column: $table.entityId, builder: (column) => column);
+
+  GeneratedColumn<String> get operation =>
+      $composableBuilder(column: $table.operation, builder: (column) => column);
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<String> get originDeviceId => $composableBuilder(
+    column: $table.originDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get changedAt =>
+      $composableBuilder(column: $table.changedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get appliedAt =>
+      $composableBuilder(column: $table.appliedAt, builder: (column) => column);
+}
+
+class $$ChangeRecordRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$ChronicleDatabase,
+          $ChangeRecordRecordsTable,
+          ChangeRecordRecord,
+          $$ChangeRecordRecordsTableFilterComposer,
+          $$ChangeRecordRecordsTableOrderingComposer,
+          $$ChangeRecordRecordsTableAnnotationComposer,
+          $$ChangeRecordRecordsTableCreateCompanionBuilder,
+          $$ChangeRecordRecordsTableUpdateCompanionBuilder,
+          (
+            ChangeRecordRecord,
+            BaseReferences<
+              _$ChronicleDatabase,
+              $ChangeRecordRecordsTable,
+              ChangeRecordRecord
+            >,
+          ),
+          ChangeRecordRecord,
+          PrefetchHooks Function()
+        > {
+  $$ChangeRecordRecordsTableTableManager(
+    _$ChronicleDatabase db,
+    $ChangeRecordRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$ChangeRecordRecordsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$ChangeRecordRecordsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$ChangeRecordRecordsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> localSequence = const Value.absent(),
+                Value<String> changeId = const Value.absent(),
+                Value<String> entityType = const Value.absent(),
+                Value<String> entityId = const Value.absent(),
+                Value<String> operation = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<String> originDeviceId = const Value.absent(),
+                Value<String> changedAt = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<String?> appliedAt = const Value.absent(),
+              }) => ChangeRecordRecordsCompanion(
+                localSequence: localSequence,
+                changeId: changeId,
+                entityType: entityType,
+                entityId: entityId,
+                operation: operation,
+                revision: revision,
+                originDeviceId: originDeviceId,
+                changedAt: changedAt,
+                payloadJson: payloadJson,
+                appliedAt: appliedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> localSequence = const Value.absent(),
+                required String changeId,
+                required String entityType,
+                required String entityId,
+                required String operation,
+                required int revision,
+                required String originDeviceId,
+                required String changedAt,
+                required String payloadJson,
+                Value<String?> appliedAt = const Value.absent(),
+              }) => ChangeRecordRecordsCompanion.insert(
+                localSequence: localSequence,
+                changeId: changeId,
+                entityType: entityType,
+                entityId: entityId,
+                operation: operation,
+                revision: revision,
+                originDeviceId: originDeviceId,
+                changedAt: changedAt,
+                payloadJson: payloadJson,
+                appliedAt: appliedAt,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ChangeRecordRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ChronicleDatabase,
+      $ChangeRecordRecordsTable,
+      ChangeRecordRecord,
+      $$ChangeRecordRecordsTableFilterComposer,
+      $$ChangeRecordRecordsTableOrderingComposer,
+      $$ChangeRecordRecordsTableAnnotationComposer,
+      $$ChangeRecordRecordsTableCreateCompanionBuilder,
+      $$ChangeRecordRecordsTableUpdateCompanionBuilder,
+      (
+        ChangeRecordRecord,
+        BaseReferences<
+          _$ChronicleDatabase,
+          $ChangeRecordRecordsTable,
+          ChangeRecordRecord
+        >,
+      ),
+      ChangeRecordRecord,
+      PrefetchHooks Function()
+    >;
+typedef $$SyncCursorRecordsTableCreateCompanionBuilder =
+    SyncCursorRecordsCompanion Function({
+      required String peerDeviceId,
+      Value<int> lastSentSequence,
+      Value<String?> lastReceivedChangeId,
+      Value<String?> lastSuccessAt,
+      Value<int> rowid,
+    });
+typedef $$SyncCursorRecordsTableUpdateCompanionBuilder =
+    SyncCursorRecordsCompanion Function({
+      Value<String> peerDeviceId,
+      Value<int> lastSentSequence,
+      Value<String?> lastReceivedChangeId,
+      Value<String?> lastSuccessAt,
+      Value<int> rowid,
+    });
+
+class $$SyncCursorRecordsTableFilterComposer
+    extends Composer<_$ChronicleDatabase, $SyncCursorRecordsTable> {
+  $$SyncCursorRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get peerDeviceId => $composableBuilder(
+    column: $table.peerDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastSentSequence => $composableBuilder(
+    column: $table.lastSentSequence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastReceivedChangeId => $composableBuilder(
+    column: $table.lastReceivedChangeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastSuccessAt => $composableBuilder(
+    column: $table.lastSuccessAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncCursorRecordsTableOrderingComposer
+    extends Composer<_$ChronicleDatabase, $SyncCursorRecordsTable> {
+  $$SyncCursorRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get peerDeviceId => $composableBuilder(
+    column: $table.peerDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastSentSequence => $composableBuilder(
+    column: $table.lastSentSequence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastReceivedChangeId => $composableBuilder(
+    column: $table.lastReceivedChangeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastSuccessAt => $composableBuilder(
+    column: $table.lastSuccessAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncCursorRecordsTableAnnotationComposer
+    extends Composer<_$ChronicleDatabase, $SyncCursorRecordsTable> {
+  $$SyncCursorRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get peerDeviceId => $composableBuilder(
+    column: $table.peerDeviceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lastSentSequence => $composableBuilder(
+    column: $table.lastSentSequence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastReceivedChangeId => $composableBuilder(
+    column: $table.lastReceivedChangeId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastSuccessAt => $composableBuilder(
+    column: $table.lastSuccessAt,
+    builder: (column) => column,
+  );
+}
+
+class $$SyncCursorRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$ChronicleDatabase,
+          $SyncCursorRecordsTable,
+          SyncCursorRecord,
+          $$SyncCursorRecordsTableFilterComposer,
+          $$SyncCursorRecordsTableOrderingComposer,
+          $$SyncCursorRecordsTableAnnotationComposer,
+          $$SyncCursorRecordsTableCreateCompanionBuilder,
+          $$SyncCursorRecordsTableUpdateCompanionBuilder,
+          (
+            SyncCursorRecord,
+            BaseReferences<
+              _$ChronicleDatabase,
+              $SyncCursorRecordsTable,
+              SyncCursorRecord
+            >,
+          ),
+          SyncCursorRecord,
+          PrefetchHooks Function()
+        > {
+  $$SyncCursorRecordsTableTableManager(
+    _$ChronicleDatabase db,
+    $SyncCursorRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$SyncCursorRecordsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$SyncCursorRecordsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$SyncCursorRecordsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> peerDeviceId = const Value.absent(),
+                Value<int> lastSentSequence = const Value.absent(),
+                Value<String?> lastReceivedChangeId = const Value.absent(),
+                Value<String?> lastSuccessAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncCursorRecordsCompanion(
+                peerDeviceId: peerDeviceId,
+                lastSentSequence: lastSentSequence,
+                lastReceivedChangeId: lastReceivedChangeId,
+                lastSuccessAt: lastSuccessAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String peerDeviceId,
+                Value<int> lastSentSequence = const Value.absent(),
+                Value<String?> lastReceivedChangeId = const Value.absent(),
+                Value<String?> lastSuccessAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncCursorRecordsCompanion.insert(
+                peerDeviceId: peerDeviceId,
+                lastSentSequence: lastSentSequence,
+                lastReceivedChangeId: lastReceivedChangeId,
+                lastSuccessAt: lastSuccessAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncCursorRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ChronicleDatabase,
+      $SyncCursorRecordsTable,
+      SyncCursorRecord,
+      $$SyncCursorRecordsTableFilterComposer,
+      $$SyncCursorRecordsTableOrderingComposer,
+      $$SyncCursorRecordsTableAnnotationComposer,
+      $$SyncCursorRecordsTableCreateCompanionBuilder,
+      $$SyncCursorRecordsTableUpdateCompanionBuilder,
+      (
+        SyncCursorRecord,
+        BaseReferences<
+          _$ChronicleDatabase,
+          $SyncCursorRecordsTable,
+          SyncCursorRecord
+        >,
+      ),
+      SyncCursorRecord,
+      PrefetchHooks Function()
+    >;
 
 class $ChronicleDatabaseManager {
   final _$ChronicleDatabase _db;
@@ -7982,4 +11064,12 @@ class $ChronicleDatabaseManager {
       $$TaskRecordsTableTableManager(_db, _db.taskRecords);
   $$TimeEntryRecordsTableTableManager get timeEntryRecords =>
       $$TimeEntryRecordsTableTableManager(_db, _db.timeEntryRecords);
+  $$DeviceIdentityRecordsTableTableManager get deviceIdentityRecords =>
+      $$DeviceIdentityRecordsTableTableManager(_db, _db.deviceIdentityRecords);
+  $$TrustedDeviceRecordsTableTableManager get trustedDeviceRecords =>
+      $$TrustedDeviceRecordsTableTableManager(_db, _db.trustedDeviceRecords);
+  $$ChangeRecordRecordsTableTableManager get changeRecordRecords =>
+      $$ChangeRecordRecordsTableTableManager(_db, _db.changeRecordRecords);
+  $$SyncCursorRecordsTableTableManager get syncCursorRecords =>
+      $$SyncCursorRecordsTableTableManager(_db, _db.syncCursorRecords);
 }

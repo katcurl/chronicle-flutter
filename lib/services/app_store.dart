@@ -8,6 +8,7 @@ import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
 import '../features/notes/note_document.dart';
 import '../models/app_models.dart';
+import '../sync/sync_models.dart';
 
 class AppStore extends ChangeNotifier {
   AppStore({
@@ -29,6 +30,13 @@ class AppStore extends ChangeNotifier {
   bool ready = false;
   Object? loadError;
 
+  DeviceIdentity? deviceIdentity;
+  List<TrustedDevice> trustedDevices = [];
+  List<ChangeRecord> recentChanges = [];
+  List<SyncCursor> syncCursors = [];
+  SyncPreferences syncPreferences = const SyncPreferences();
+  int journalEntryCount = 0;
+
   DateTime? activeStartedAt;
   String activeDescription = '';
   String? activeProjectId;
@@ -36,6 +44,7 @@ class AppStore extends ChangeNotifier {
   String? activeNoteId;
 
   Timer? _ticker;
+  Timer? _syncRefreshDebounce;
   int nowTick = 0;
 
   Future<void> load() async {
@@ -56,6 +65,7 @@ class AppStore extends ChangeNotifier {
 
       await _hydrateNoteMetadata();
       await rebuildAllNoteLinks();
+      await refreshSyncFoundation(notify: false);
 
       final activeTimer = await _repository.loadActiveTimer();
       if (activeTimer != null &&
@@ -312,6 +322,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     data.entries.insert(0, entry);
     await _repository.saveTimeEntry(entry);
     await _repository.saveActiveTimer(null);
+    _scheduleSyncOverviewRefresh();
 
     activeStartedAt = null;
     activeDescription = '';
@@ -325,6 +336,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
   void addTask(WorkTask task) {
     data.tasks.insert(0, task);
     unawaited(_repository.saveTask(task));
+    _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
 
@@ -333,6 +345,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     final index = data.tasks.indexWhere((item) => item.id == task.id);
     if (index >= 0) data.tasks[index] = task;
     unawaited(_repository.saveTask(task));
+    _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
 
@@ -341,6 +354,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     task.updatedAt = DateTime.now();
     task.completedAt = status == 'done' ? DateTime.now() : null;
     unawaited(_repository.saveTask(task));
+    _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
 
@@ -353,12 +367,14 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       unawaited(_repository.saveTask(child));
     }
     unawaited(_repository.softDeleteTask(id, deletedAt));
+    _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
 
   void addProject(Project project) {
     data.projects.add(project);
     unawaited(_repository.saveProject(project));
+    _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
 
@@ -367,6 +383,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     final index = data.projects.indexWhere((item) => item.id == project.id);
     if (index >= 0) data.projects[index] = project;
     unawaited(_repository.saveProject(project));
+    _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
 
@@ -374,6 +391,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     project.archived = archived;
     project.updatedAt = DateTime.now();
     unawaited(_repository.saveProject(project));
+    _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
 
@@ -381,6 +399,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     data.notes.insert(0, note);
     unawaited(_repository.saveNote(note));
     unawaited(_syncNoteLinks(note));
+    _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
 
@@ -391,12 +410,14 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     if (index >= 0) data.notes[index] = note;
     unawaited(_repository.saveNote(note));
     unawaited(_syncNoteLinks(note));
+    _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
 
   void addNoteVersion(NoteVersion version) {
     data.noteVersions.insert(0, version);
     unawaited(_repository.saveNoteVersion(version));
+    _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
 
@@ -427,6 +448,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     }
     unawaited(_repository.replaceNoteLinks(id, const []));
     unawaited(_repository.softDeleteNote(id, deletedAt));
+    _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
 
@@ -493,6 +515,88 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     }
   }
 
+  Future<void> refreshSyncFoundation({bool notify = true}) async {
+    deviceIdentity = await _repository.ensureDeviceIdentity();
+    trustedDevices = await _repository.loadTrustedDevices();
+    syncPreferences = await _repository.loadSyncPreferences();
+    final journalBootstrapped = await _repository.isSyncJournalBootstrapped();
+    if (!journalBootstrapped) {
+      await _bootstrapSyncJournal();
+      await _repository.markSyncJournalBootstrapped();
+    }
+    journalEntryCount = await _repository.countJournalEntries();
+    recentChanges = await _repository.loadRecentChanges(limit: 20);
+    syncCursors = await _repository.loadSyncCursors();
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  Future<void> _bootstrapSyncJournal() async {
+    for (final project in data.projects) {
+      await _repository.recordLocalChange(
+        entityType: 'project',
+        entityId: project.id,
+        operation: 'snapshot',
+        payload: project.toJson(),
+      );
+    }
+    for (final task in data.tasks) {
+      await _repository.recordLocalChange(
+        entityType: 'task',
+        entityId: task.id,
+        operation: 'snapshot',
+        payload: task.toJson(),
+      );
+    }
+    for (final note in data.notes) {
+      await _repository.recordLocalChange(
+        entityType: 'note',
+        entityId: note.id,
+        operation: 'snapshot',
+        payload: note.toJson(),
+      );
+    }
+    for (final entry in data.entries) {
+      await _repository.recordLocalChange(
+        entityType: 'time_entry',
+        entityId: entry.id,
+        operation: 'snapshot',
+        payload: entry.toJson(),
+      );
+    }
+  }
+
+  Future<void> renameLocalDevice(String displayName) async {
+    final identity = deviceIdentity ?? await _repository.ensureDeviceIdentity();
+    final trimmed = displayName.trim();
+    if (trimmed.isEmpty || trimmed == identity.displayName) {
+      return;
+    }
+    identity.displayName = trimmed;
+    await _repository.saveDeviceIdentity(identity);
+    deviceIdentity = identity;
+    notifyListeners();
+  }
+
+  Future<void> updateSyncPreferences(SyncPreferences preferences) async {
+    syncPreferences = preferences;
+    await _repository.saveSyncPreferences(preferences);
+    notifyListeners();
+  }
+
+  Future<void> revokeTrustedDevice(String deviceId) async {
+    await _repository.revokeTrustedDevice(deviceId, DateTime.now());
+    await refreshSyncFoundation();
+  }
+
+  void _scheduleSyncOverviewRefresh() {
+    _syncRefreshDebounce?.cancel();
+    _syncRefreshDebounce = Timer(const Duration(milliseconds: 350), () {
+      unawaited(refreshSyncFoundation());
+    });
+  }
+
   Future<String> exportBackupJson() => _repository.exportJson();
 
   Future<void> importBackupJson(String raw) async {
@@ -519,6 +623,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
   @override
   void dispose() {
     _ticker?.cancel();
+    _syncRefreshDebounce?.cancel();
     unawaited(_repository.close());
     super.dispose();
   }
