@@ -1,15 +1,26 @@
-name: Build Android APK
+name: Build signed Android APK
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
+      - feature/data-core
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
+
+    env:
+      CHRONICLE_APPLICATION_ID: io.github.katcurl.chronicle
+      CHRONICLE_KEYSTORE_BASE64: ${{ secrets.CHRONICLE_KEYSTORE_BASE64 }}
+      CHRONICLE_STORE_PASSWORD: ${{ secrets.CHRONICLE_STORE_PASSWORD }}
+      CHRONICLE_KEY_ALIAS: ${{ secrets.CHRONICLE_KEY_ALIAS }}
+      CHRONICLE_KEY_PASSWORD: ${{ secrets.CHRONICLE_KEY_PASSWORD }}
 
     steps:
       - name: Checkout repository
@@ -19,7 +30,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -33,84 +44,163 @@ jobs:
       - name: Install Android SDK 36
         run: |
           yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
 
       - name: Show Flutter version
         run: flutter --version
 
-      - name: Create Android platform if missing
+      - name: Validate signing secrets
+        shell: bash
         run: |
-          if [ ! -d android ]; then
-            flutter create --platforms=android .
-          fi
+          set -euo pipefail
+          for variable in \
+            CHRONICLE_KEYSTORE_BASE64 \
+            CHRONICLE_STORE_PASSWORD \
+            CHRONICLE_KEY_ALIAS \
+            CHRONICLE_KEY_PASSWORD
+          do
+            if [ -z "${!variable:-}" ]; then
+              echo "Required GitHub Actions secret is missing: $variable"
+              exit 1
+            fi
+          done
 
-      - name: Set compileSdk to 36
+      - name: Create Android platform
         run: |
+          rm -rf android
+          flutter create \
+            --platforms=android \
+            --org io.github.katcurl \
+            --project-name chronicle \
+            --no-pub \
+            .
+
+      - name: Restore release keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$CHRONICLE_KEYSTORE_BASE64" \
+            | base64 --decode \
+            > "$RUNNER_TEMP/chronicle-release.jks"
+          test -s "$RUNNER_TEMP/chronicle-release.jks"
+          chmod 600 "$RUNNER_TEMP/chronicle-release.jks"
+
+      - name: Configure Android release signing
+        shell: bash
+        run: |
+          set -euo pipefail
           python3 - <<'PY'
-          from pathlib import Path
+          import os
           import re
+          from pathlib import Path
 
-          kotlin_file = Path("android/app/build.gradle.kts")
-          groovy_file = Path("android/app/build.gradle")
+          application_id = os.environ['CHRONICLE_APPLICATION_ID']
+          keystore_path = Path(os.environ['RUNNER_TEMP']) / 'chronicle-release.jks'
 
-          if kotlin_file.exists():
-              text = kotlin_file.read_text(encoding="utf-8")
-
-              text, count = re.subn(
-                  r"compileSdk\s*=\s*(?:flutter\.compileSdkVersion|\d+)",
-                  "compileSdk = 36",
-                  text,
-                  count=1,
+          def properties_escape(value: str) -> str:
+              return (
+                  value.replace('\\', '\\\\')
+                  .replace('\n', '\\n')
+                  .replace('\r', '\\r')
               )
 
-              if count == 0:
-                  raise SystemExit(
-                      "Не удалось найти compileSdk в android/app/build.gradle.kts"
-                  )
+          key_properties = Path('android/key.properties')
+          key_properties.write_text(
+              '\n'.join(
+                  [
+                      f"storePassword={properties_escape(os.environ['CHRONICLE_STORE_PASSWORD'])}",
+                      f"keyPassword={properties_escape(os.environ['CHRONICLE_KEY_PASSWORD'])}",
+                      f"keyAlias={properties_escape(os.environ['CHRONICLE_KEY_ALIAS'])}",
+                      f"storeFile={properties_escape(str(keystore_path))}",
+                      '',
+                  ]
+              ),
+              encoding='utf-8',
+          )
 
-              kotlin_file.write_text(text, encoding="utf-8")
-              print("Updated:", kotlin_file)
+          gradle = Path('android/app/build.gradle.kts')
+          text = gradle.read_text(encoding='utf-8')
 
-          elif groovy_file.exists():
-              text = groovy_file.read_text(encoding="utf-8")
+          if 'import java.util.Properties' not in text:
+              text = (
+                  'import java.util.Properties\n'
+                  'import java.io.FileInputStream\n\n'
+                  + text
+              )
 
-              patterns = [
-                  r"compileSdkVersion\s+(?:flutter\.compileSdkVersion|\d+)",
-                  r"compileSdk\s+(?:flutter\.compileSdkVersion|\d+)",
-                  r"compileSdkVersion\s*=\s*(?:flutter\.compileSdkVersion|\d+)",
-                  r"compileSdk\s*=\s*(?:flutter\.compileSdkVersion|\d+)",
-              ]
+          properties_block = '''
+          val keystoreProperties = Properties()
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+          }
 
-              changed = False
+          '''
+          if 'val keystoreProperties = Properties()' not in text:
+              text = text.replace('android {', properties_block + 'android {', 1)
 
-              for pattern in patterns:
-                  new_text, count = re.subn(
-                      pattern,
-                      "compileSdkVersion 36",
-                      text,
-                      count=1,
-                  )
+          text, namespace_count = re.subn(
+              r'namespace\s*=\s*"[^"]+"',
+              f'namespace = "{application_id}"',
+              text,
+              count=1,
+          )
+          text, app_id_count = re.subn(
+              r'applicationId\s*=\s*"[^"]+"',
+              f'applicationId = "{application_id}"',
+              text,
+              count=1,
+          )
+          text, sdk_count = re.subn(
+              r'compileSdk\s*=\s*(?:flutter\.compileSdkVersion|\d+)',
+              'compileSdk = 36',
+              text,
+              count=1,
+          )
 
-                  if count:
-                      text = new_text
-                      changed = True
-                      break
+          if not all((namespace_count, app_id_count, sdk_count)):
+              raise SystemExit(
+                  'Could not update namespace, applicationId, or compileSdk in build.gradle.kts'
+              )
 
-              if not changed:
-                  raise SystemExit(
-                      "Не удалось найти compileSdk в android/app/build.gradle"
-                  )
+          signing_block = '''
+              signingConfigs {
+                  create("release") {
+                      keyAlias = keystoreProperties["keyAlias"] as String
+                      keyPassword = keystoreProperties["keyPassword"] as String
+                      storeFile = keystoreProperties["storeFile"]?.let { file(it) }
+                      storePassword = keystoreProperties["storePassword"] as String
+                  }
+              }
 
-              groovy_file.write_text(text, encoding="utf-8")
-              print("Updated:", groovy_file)
+          '''
+          if 'create("release")' not in text:
+              text = text.replace('    buildTypes {', signing_block + '    buildTypes {', 1)
 
-          else:
-              raise SystemExit("Файл Android Gradle не найден")
+          text, signing_count = re.subn(
+              r'signingConfig\s*=\s*signingConfigs\.getByName\("debug"\)',
+              'signingConfig = signingConfigs.getByName("release")',
+              text,
+              count=1,
+          )
+          if signing_count == 0 and 'signingConfigs.getByName("release")' not in text:
+              raise SystemExit('Could not configure release signing in build.gradle.kts')
+
+          gradle.write_text(text, encoding='utf-8')
+
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          manifest_text = manifest.read_text(encoding='utf-8')
+          manifest_text = re.sub(
+              r'android:label="[^"]*"',
+              'android:label="Chronicle"',
+              manifest_text,
+              count=1,
+          )
+          manifest.write_text(manifest_text, encoding='utf-8')
+
+          print(f'Configured permanent application ID: {application_id}')
+          print('Configured release signing without writing secrets to the repository.')
           PY
-
-      - name: Show Android build configuration
-        run: |
-          grep -R "compileSdk" android/app/build.gradle* || true
 
       - name: Install dependencies
         run: flutter pub get
@@ -118,20 +208,35 @@ jobs:
       - name: Analyze source code
         run: flutter analyze
 
-      - name: Run tests if present
-        run: |
-          if find test -name '*_test.dart' -print -quit 2>/dev/null | grep -q .; then
-            flutter test
-          else
-            echo "No Flutter tests found"
-          fi
+      - name: Run tests
+        run: flutter test
 
-      - name: Build release APK
+      - name: Build signed release APK
         run: flutter build apk --release
 
-      - name: Upload APK
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='build/app/outputs/flutter-apk/app-release.apk'
+          test -s "$APK"
+          apksigner verify --verbose --print-certs "$APK"
+
+      - name: Prepare release artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          VERSION="$(awk '/^version:/{print $2}' pubspec.yaml)"
+          SAFE_VERSION="${VERSION//+/-build-}"
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "release/chronicle-${SAFE_VERSION}-android.apk"
+          sha256sum release/*.apk > release/SHA256SUMS.txt
+
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: chronicle-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 7
+          name: chronicle-signed-release-apk
+          path: release/
+          retention-days: 30
+          if-no-files-found: error
