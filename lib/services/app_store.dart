@@ -9,13 +9,17 @@ import '../data/repositories/drift_app_repository.dart';
 import '../features/notes/note_document.dart';
 import '../models/app_models.dart';
 import '../sync/sync_models.dart';
+import '../vault/vault_models.dart';
+import '../vault/vault_service.dart';
 
 class AppStore extends ChangeNotifier {
   AppStore({
     required AppRepository repository,
     LegacyPreferencesImporter? legacyImporter,
+    VaultService? vaultService,
   }) : _repository = repository,
-       _legacyImporter = legacyImporter;
+       _legacyImporter = legacyImporter,
+       _vaultService = vaultService ?? VaultService();
 
   factory AppStore.production() => AppStore(
     repository: DriftAppRepository(),
@@ -24,6 +28,7 @@ class AppStore extends ChangeNotifier {
 
   final AppRepository _repository;
   final LegacyPreferencesImporter? _legacyImporter;
+  final VaultService _vaultService;
   final _uuid = const Uuid();
 
   AppData data = AppData.empty();
@@ -37,6 +42,10 @@ class AppStore extends ChangeNotifier {
   SyncPreferences syncPreferences = const SyncPreferences();
   int journalEntryCount = 0;
 
+  VaultStatus vaultStatus = const VaultStatus.unavailable();
+  bool vaultBusy = false;
+  String? lastEmergencyBackupPath;
+
   DateTime? activeStartedAt;
   String activeDescription = '';
   String? activeProjectId;
@@ -45,6 +54,7 @@ class AppStore extends ChangeNotifier {
 
   Timer? _ticker;
   Timer? _syncRefreshDebounce;
+  Timer? _vaultMirrorDebounce;
   int nowTick = 0;
 
   Future<void> load() async {
@@ -66,6 +76,7 @@ class AppStore extends ChangeNotifier {
       await _hydrateNoteMetadata();
       await rebuildAllNoteLinks();
       await refreshSyncFoundation(notify: false);
+      await _initializeVaultFoundation();
 
       final activeTimer = await _repository.loadActiveTimer();
       if (activeTimer != null &&
@@ -400,6 +411,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     unawaited(_repository.saveNote(note));
     unawaited(_syncNoteLinks(note));
     _scheduleSyncOverviewRefresh();
+    _scheduleVaultMirror();
     notifyListeners();
   }
 
@@ -411,6 +423,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     unawaited(_repository.saveNote(note));
     unawaited(_syncNoteLinks(note));
     _scheduleSyncOverviewRefresh();
+    _scheduleVaultMirror();
     notifyListeners();
   }
 
@@ -449,6 +462,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     unawaited(_repository.replaceNoteLinks(id, const []));
     unawaited(_repository.softDeleteNote(id, deletedAt));
     _scheduleSyncOverviewRefresh();
+    _scheduleVaultMirror();
     notifyListeners();
   }
 
@@ -597,9 +611,116 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     });
   }
 
+  Future<void> _initializeVaultFoundation() async {
+    try {
+      vaultStatus = await _vaultService.inspect();
+      if (vaultStatus.supported) {
+        vaultStatus = await _vaultService.writeMirror(data);
+      }
+    } on Object catch (error) {
+      vaultStatus = VaultStatus.unavailable(message: error.toString());
+    }
+  }
+
+  Future<void> refreshVaultStatus({bool notify = true}) async {
+    try {
+      vaultStatus = await _vaultService.inspect();
+    } on Object catch (error) {
+      vaultStatus = VaultStatus.unavailable(message: error.toString());
+    }
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  Future<void> writeVaultMirror() async {
+    if (vaultBusy) {
+      return;
+    }
+    vaultBusy = true;
+    notifyListeners();
+    try {
+      vaultStatus = await _vaultService.writeMirror(data);
+    } finally {
+      vaultBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> chooseVaultFolder() async {
+    if (vaultBusy) {
+      return false;
+    }
+    vaultBusy = true;
+    notifyListeners();
+    try {
+      final result = await _vaultService.chooseRootAndWrite(data);
+      if (result == null) {
+        return false;
+      }
+      vaultStatus = result;
+      return true;
+    } finally {
+      vaultBusy = false;
+      notifyListeners();
+    }
+  }
+
+  void _scheduleVaultMirror() {
+    _vaultMirrorDebounce?.cancel();
+    _vaultMirrorDebounce = Timer(const Duration(milliseconds: 700), () {
+      unawaited(writeVaultMirror());
+    });
+  }
+
+  Future<BackupExportResult?> exportBackupFile() async {
+    if (vaultBusy) {
+      return null;
+    }
+    vaultBusy = true;
+    notifyListeners();
+    try {
+      vaultStatus = await _vaultService.writeMirror(data);
+      return _vaultService.exportBackup(data: data, identity: deviceIdentity);
+    } finally {
+      vaultBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<BackupImportPayload?> pickBackupFile() {
+    return _vaultService.pickBackup();
+  }
+
+  Future<void> restoreBackupFile(BackupImportPayload payload) async {
+    if (vaultBusy) {
+      return;
+    }
+    vaultBusy = true;
+    notifyListeners();
+    try {
+      lastEmergencyBackupPath = await _vaultService.createEmergencyBackup(
+        data: data,
+        identity: deviceIdentity,
+      );
+      await _replaceDataFromBackup(payload.databaseJson);
+      vaultStatus = await _vaultService.writeMirror(data);
+      await refreshSyncFoundation(notify: false);
+    } finally {
+      vaultBusy = false;
+      notifyListeners();
+    }
+  }
+
   Future<String> exportBackupJson() => _repository.exportJson();
 
   Future<void> importBackupJson(String raw) async {
+    await _replaceDataFromBackup(raw);
+    _scheduleVaultMirror();
+    notifyListeners();
+  }
+
+  Future<void> _replaceDataFromBackup(String raw) async {
     _ticker?.cancel();
     activeStartedAt = null;
     activeDescription = '';
@@ -609,7 +730,8 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     await _repository.saveActiveTimer(null);
     await _repository.importJson(raw);
     data = await _repository.load();
-    notifyListeners();
+    await _hydrateNoteMetadata();
+    await rebuildAllNoteLinks();
   }
 
   void _startTicker() {
@@ -624,6 +746,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
   void dispose() {
     _ticker?.cancel();
     _syncRefreshDebounce?.cancel();
+    _vaultMirrorDebounce?.cancel();
     unawaited(_repository.close());
     super.dispose();
   }
