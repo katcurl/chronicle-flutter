@@ -47,14 +47,14 @@ class VaultBackend {
     await root.create(recursive: true);
 
     for (final relativePath in staleManagedPaths) {
-      final target = File(p.join(rootPath, relativePath));
+      final target = File(p.join(rootPath, _native(relativePath)));
       if (await target.exists()) {
         await target.delete();
       }
     }
 
     for (final entry in files.entries) {
-      final target = File(p.join(rootPath, entry.key));
+      final target = File(p.join(rootPath, _native(entry.key)));
       await target.parent.create(recursive: true);
       final temporary = File('${target.path}.tmp');
       await temporary.writeAsString(entry.value, flush: true);
@@ -72,15 +72,109 @@ class VaultBackend {
   }
 
   Future<String?> readTextFile(String rootPath, String relativePath) async {
-    final file = File(p.join(rootPath, relativePath));
+    final file = File(p.join(rootPath, _native(relativePath)));
     if (!await file.exists()) {
       return null;
     }
     return file.readAsString();
   }
 
+  Future<Map<String, String>> listTextFiles({
+    required String rootPath,
+    required String directory,
+    required String extension,
+  }) async {
+    final base = Directory(p.join(rootPath, _native(directory)));
+    if (!await base.exists()) {
+      return <String, String>{};
+    }
+
+    final result = <String, String>{};
+    await for (final entity in base.list(recursive: true, followLinks: false)) {
+      if (entity is! File ||
+          !entity.path.toLowerCase().endsWith(extension.toLowerCase())) {
+        continue;
+      }
+      final relative = p
+          .relative(entity.path, from: rootPath)
+          .replaceAll(p.separator, '/');
+      result[relative] = await entity.readAsString();
+    }
+    return result;
+  }
+
+  Future<void> deleteFiles({
+    required String rootPath,
+    required Set<String> relativePaths,
+  }) async {
+    final normalizedRoot = p.normalize(p.absolute(rootPath));
+    for (final relativePath in relativePaths) {
+      final targetPath = p.normalize(
+        p.absolute(p.join(rootPath, _native(relativePath))),
+      );
+      if (targetPath != normalizedRoot &&
+          !p.isWithin(normalizedRoot, targetPath)) {
+        continue;
+      }
+      final target = File(targetPath);
+      if (await target.exists()) {
+        await target.delete();
+      }
+    }
+  }
+
+  Future<Map<String, Uint8List>> listBinaryFiles({
+    required String rootPath,
+    required String directory,
+  }) async {
+    final base = Directory(p.join(rootPath, _native(directory)));
+    if (!await base.exists()) {
+      return <String, Uint8List>{};
+    }
+    final result = <String, Uint8List>{};
+    await for (final entity in base.list(recursive: true, followLinks: false)) {
+      if (entity is! File) {
+        continue;
+      }
+      final relative = p
+          .relative(entity.path, from: rootPath)
+          .replaceAll(p.separator, '/');
+      result[relative] = await entity.readAsBytes();
+    }
+    return result;
+  }
+
   Future<bool> fileExists(String rootPath, String relativePath) {
-    return File(p.join(rootPath, relativePath)).exists();
+    return File(p.join(rootPath, _native(relativePath))).exists();
+  }
+
+  Future<void> writeBinaryFile({
+    required String rootPath,
+    required String relativePath,
+    required Uint8List bytes,
+  }) async {
+    final target = File(p.join(rootPath, _native(relativePath)));
+    await target.parent.create(recursive: true);
+    final temporary = File('${target.path}.tmp');
+    await temporary.writeAsBytes(bytes, flush: true);
+    if (await target.exists()) {
+      await target.delete();
+    }
+    await temporary.rename(target.path);
+  }
+
+  Future<PickedVaultFile?> pickAttachment() async {
+    final result = await FilePicker.pickFiles(
+      dialogTitle: 'Добавить вложение в Chronicle',
+      allowMultiple: false,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return null;
+    }
+    final selected = result.files.single;
+    final bytes = selected.bytes ?? await selected.xFile.readAsBytes();
+    return PickedVaultFile(name: selected.name, bytes: bytes);
   }
 
   Future<String?> saveBackup({
@@ -127,4 +221,7 @@ class VaultBackend {
     await temporary.rename(target.path);
     return target.path;
   }
+
+  String _native(String relativePath) =>
+      relativePath.replaceAll('/', p.separator);
 }

@@ -164,13 +164,15 @@ class _DevicesScreenState extends State<DevicesScreen> {
           const SizedBox(height: 24),
           const _SectionHeader(
             title: 'Markdown Vault',
-            subtitle: 'Открытое файловое зеркало заметок без облака.',
+            subtitle:
+                'Двусторонние Markdown-файлы и локальные вложения без облака.',
           ),
           const SizedBox(height: 10),
           _VaultCard(
             status: widget.store.vaultStatus,
             busy: widget.store.vaultBusy,
             onWrite: _writeVault,
+            onScan: _scanVault,
             onChooseFolder: _chooseVaultFolder,
           ),
           const SizedBox(height: 24),
@@ -347,6 +349,151 @@ class _DevicesScreenState extends State<DevicesScreen> {
     }
   }
 
+  Future<void> _scanVault() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final scan = await widget.store.scanVaultChanges();
+      if (!mounted) {
+        return;
+      }
+      if (!scan.hasChanges) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Внешних изменений не найдено')),
+        );
+        return;
+      }
+      final resolution = await _showVaultChanges(scan);
+      if (resolution == null || !mounted) {
+        return;
+      }
+      final result = await widget.store.applyVaultChanges(
+        scan,
+        conflictResolution: resolution,
+      );
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Vault применён: ${result.createdCount} новых, '
+            '${result.updatedCount} обновлено, '
+            '${result.duplicatedCount} сохранено отдельно.',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось проверить Vault: $error')),
+      );
+    }
+  }
+
+  Future<VaultConflictResolution?> _showVaultChanges(VaultScanResult scan) {
+    final safe = scan.safeChanges;
+    final conflicts = scan.conflicts;
+    return showDialog<VaultConflictResolution>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            icon: Icon(
+              conflicts.isEmpty
+                  ? Icons.sync_alt_rounded
+                  : Icons.merge_type_rounded,
+              size: 42,
+            ),
+            title: Text(
+              conflicts.isEmpty
+                  ? 'Импортировать изменения Vault?'
+                  : 'Обнаружены конфликты Vault',
+            ),
+            content: SizedBox(
+              width: 620,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Безопасные изменения: ${safe.length}'),
+                    Text('Конфликты: ${conflicts.length}'),
+                    Text('Отсутствующие файлы: ${scan.missingFiles.length}'),
+                    const SizedBox(height: 14),
+                    for (final change in scan.changes.take(10))
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          change.isConflict
+                              ? Icons.warning_amber_rounded
+                              : change.isNew
+                              ? Icons.note_add_outlined
+                              : Icons.edit_note_rounded,
+                        ),
+                        title: Text(change.proposedNote.title),
+                        subtitle: Text(change.relativePath),
+                      ),
+                    if (scan.changes.length > 10)
+                      Text('И ещё ${scan.changes.length - 10} изменений…'),
+                    if (scan.missingFiles.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Удалённые с диска управляемые файлы будут восстановлены. '
+                        'Заметки из базы не удаляются автоматически.',
+                      ),
+                    ],
+                    if (conflicts.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Выбранное решение будет применено ко всем конфликтам. '
+                        'Перед импортом Chronicle сохранит внутреннюю версию каждой '
+                        'заметки в истории.',
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Отмена'),
+              ),
+              if (conflicts.isNotEmpty)
+                TextButton(
+                  onPressed:
+                      () => Navigator.pop(
+                        dialogContext,
+                        VaultConflictResolution.keepChronicle,
+                      ),
+                  child: const Text('Оставить Chronicle'),
+                ),
+              if (conflicts.isNotEmpty)
+                OutlinedButton(
+                  onPressed:
+                      () => Navigator.pop(
+                        dialogContext,
+                        VaultConflictResolution.keepBoth,
+                      ),
+                  child: const Text('Сохранить обе'),
+                ),
+              FilledButton(
+                onPressed:
+                    () => Navigator.pop(
+                      dialogContext,
+                      VaultConflictResolution.importFile,
+                    ),
+                child: Text(
+                  conflicts.isEmpty ? 'Импортировать' : 'Взять версию файла',
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
   Future<void> _exportBackup() async {
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -422,6 +569,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                   Text('Задачи: ${preview.taskCount}'),
                   Text('Заметки: ${preview.noteCount}'),
                   Text('Записи времени: ${preview.entryCount}'),
+                  Text('Вложения: ${preview.attachmentCount}'),
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -476,12 +624,14 @@ class _VaultCard extends StatelessWidget {
     required this.status,
     required this.busy,
     required this.onWrite,
+    required this.onScan,
     required this.onChooseFolder,
   });
 
   final VaultStatus status;
   final bool busy;
   final VoidCallback onWrite;
+  final VoidCallback onScan;
   final VoidCallback onChooseFolder;
 
   @override
@@ -547,6 +697,11 @@ class _VaultCard extends StatelessWidget {
               children: [
                 Text('Заметок: ${status.noteCount}'),
                 Text('Файлов: ${status.fileCount}'),
+                Text('Вложений: ${status.attachmentCount}'),
+                Text('Изменений: ${status.pendingChangeCount}'),
+                Text('Конфликтов: ${status.conflictCount}'),
+                if (status.missingFileCount > 0)
+                  Text('Отсутствует: ${status.missingFileCount}'),
                 Text('Обновлён: $lastWrittenText'),
               ],
             ),
@@ -564,10 +719,19 @@ class _VaultCard extends StatelessWidget {
               spacing: 10,
               runSpacing: 10,
               children: [
+                FilledButton.icon(
+                  onPressed: busy || !status.supported ? null : onScan,
+                  icon: const Icon(Icons.manage_search_rounded),
+                  label: Text(
+                    status.pendingChangeCount > 0
+                        ? 'Просмотреть изменения'
+                        : 'Проверить изменения',
+                  ),
+                ),
                 FilledButton.tonalIcon(
                   onPressed: busy || !status.supported ? null : onWrite,
                   icon: const Icon(Icons.sync_rounded),
-                  label: const Text('Обновить Vault'),
+                  label: const Text('Записать из Chronicle'),
                 ),
                 OutlinedButton.icon(
                   onPressed: busy ? null : onChooseFolder,
@@ -836,9 +1000,9 @@ class _FoundationNotice extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'v0.13 добавляет настоящий Markdown Vault и переносимые '
-              'резервные копии с проверкой целостности. Сетевой обмен пока '
-              'намеренно не включён.',
+              'v0.14 делает Markdown Vault двусторонним, защищает внешние '
+              'изменения от перезаписи и добавляет локальные вложения. Сетевой '
+              'обмен пока намеренно не включён.',
               style: TextStyle(color: colors.onTertiaryContainer),
             ),
           ),

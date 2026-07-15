@@ -6,6 +6,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown/markdown.dart' as md;
 
+import '../../vault/vault_asset_loader.dart';
 import 'note_document.dart';
 
 class NoteMarkdownView extends StatelessWidget {
@@ -13,11 +14,13 @@ class NoteMarkdownView extends StatelessWidget {
     super.key,
     required this.markdown,
     this.onWikiLink,
+    this.vaultRootPath = '',
     this.padding = const EdgeInsets.fromLTRB(20, 18, 20, 120),
   });
 
   final String markdown;
   final ValueChanged<String>? onWikiLink;
+  final String vaultRootPath;
   final EdgeInsets padding;
 
   @override
@@ -67,6 +70,32 @@ class NoteMarkdownView extends StatelessWidget {
           fit: BoxFit.contain,
           errorBuilder: (_, __, ___) => _ImageFallback(label: alt),
         ),
+      );
+    }
+    if (vaultRootPath.isNotEmpty &&
+        uri.toString().toLowerCase().contains('attachments/')) {
+      return FutureBuilder<Uint8List?>(
+        future: loadVaultAttachment(vaultRootPath, uri.toString()),
+        builder: (context, snapshot) {
+          final bytes = snapshot.data;
+          if (bytes == null) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.all(20),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            return _ImageFallback(label: alt ?? uri.toString());
+          }
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.memory(
+              bytes,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => _ImageFallback(label: alt),
+            ),
+          );
+        },
       );
     }
     return _ImageFallback(label: alt ?? uri.toString());
@@ -178,23 +207,24 @@ List<_MarkdownChunk> _splitMarkdown(String source) {
       );
     }
     final raw = match.group(0) ?? '';
-    final value =
-        raw.startsWith(r'\[')
-            ? raw.substring(2, raw.length - 2)
-            : raw.substring(2, raw.length - 2);
+    final value = raw.substring(2, raw.length - 2);
     result.add(_MarkdownChunk(value.trim(), isMath: true));
     cursor = match.end;
   }
   if (cursor < source.length) {
     result.add(_MarkdownChunk(source.substring(cursor), isMath: false));
   }
-  if (result.isEmpty) result.add(_MarkdownChunk(source, isMath: false));
+  if (result.isEmpty) {
+    result.add(_MarkdownChunk(source, isMath: false));
+  }
   return result;
 }
 
 Uint8List? _decodeDataUri(String value) {
   final comma = value.indexOf(',');
-  if (comma < 0 || !value.substring(0, comma).contains(';base64')) return null;
+  if (comma < 0 || !value.substring(0, comma).contains(';base64')) {
+    return null;
+  }
   try {
     return base64Decode(value.substring(comma + 1));
   } on FormatException {

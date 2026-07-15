@@ -19,8 +19,11 @@ void main() {
 
     final store = _createStore();
 
+    await store.load();
+
     await tester.pumpWidget(ChronicleApp(store: store));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
@@ -37,8 +40,11 @@ void main() {
 
     final store = _createStore();
 
+    await store.load();
+
     await tester.pumpWidget(ChronicleApp(store: store));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
@@ -55,8 +61,11 @@ void main() {
 
     final store = _createStore();
 
+    await store.load();
+
     await tester.pumpWidget(ChronicleApp(store: store));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('Контекст'), findsOneWidget);
     expect(find.text('Быстрые клавиши'), findsOneWidget);

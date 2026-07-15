@@ -43,6 +43,7 @@ class AppStore extends ChangeNotifier {
   int journalEntryCount = 0;
 
   VaultStatus vaultStatus = const VaultStatus.unavailable();
+  VaultScanResult? pendingVaultScan;
   bool vaultBusy = false;
   String? lastEmergencyBackupPath;
 
@@ -616,21 +617,55 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       vaultStatus = await _vaultService.inspect();
       if (vaultStatus.supported) {
         vaultStatus = await _vaultService.writeMirror(data);
+        pendingVaultScan = await _vaultService.scan(data);
+        _mergeVaultScanIntoStatus();
       }
     } on Object catch (error) {
       vaultStatus = VaultStatus.unavailable(message: error.toString());
+      pendingVaultScan = null;
     }
   }
 
   Future<void> refreshVaultStatus({bool notify = true}) async {
     try {
       vaultStatus = await _vaultService.inspect();
+      if (vaultStatus.supported) {
+        pendingVaultScan = await _vaultService.scan(data);
+        _mergeVaultScanIntoStatus();
+      }
     } on Object catch (error) {
       vaultStatus = VaultStatus.unavailable(message: error.toString());
+      pendingVaultScan = null;
     }
     if (notify) {
       notifyListeners();
     }
+  }
+
+  Future<VaultScanResult> scanVaultChanges({bool notify = true}) async {
+    final scan = await _vaultService.scan(data);
+    pendingVaultScan = scan;
+    _mergeVaultScanIntoStatus();
+    if (notify) {
+      notifyListeners();
+    }
+    return scan;
+  }
+
+  void _mergeVaultScanIntoStatus() {
+    final scan = pendingVaultScan;
+    if (scan == null) {
+      return;
+    }
+    vaultStatus = vaultStatus.copyWith(
+      pendingChangeCount: scan.pendingCount,
+      conflictCount: scan.conflicts.length,
+      missingFileCount: scan.missingFiles.length,
+      message:
+          scan.hasChanges
+              ? 'Найдены внешние изменения. Просмотри их перед импортом.'
+              : 'Chronicle и Markdown Vault синхронизированы.',
+    );
   }
 
   Future<void> writeVaultMirror() async {
@@ -641,6 +676,8 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     notifyListeners();
     try {
       vaultStatus = await _vaultService.writeMirror(data);
+      pendingVaultScan = await _vaultService.scan(data);
+      _mergeVaultScanIntoStatus();
     } finally {
       vaultBusy = false;
       notifyListeners();
@@ -659,11 +696,162 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         return false;
       }
       vaultStatus = result;
+      pendingVaultScan = await _vaultService.scan(data);
+      _mergeVaultScanIntoStatus();
       return true;
     } finally {
       vaultBusy = false;
       notifyListeners();
     }
+  }
+
+  Future<AttachmentImportResult?> pickAttachmentForNote(Note note) {
+    return _vaultService.pickAndStoreAttachment(note);
+  }
+
+  Future<VaultApplyResult> applyVaultChanges(
+    VaultScanResult scan, {
+    required VaultConflictResolution conflictResolution,
+  }) async {
+    if (vaultBusy) {
+      throw StateError('Vault уже занят другой операцией.');
+    }
+    vaultBusy = true;
+    notifyListeners();
+
+    var createdCount = 0;
+    var updatedCount = 0;
+    var duplicatedCount = 0;
+    var keptChronicleCount = 0;
+
+    try {
+      for (final change in scan.safeChanges) {
+        if (change.isNew || noteById(change.currentNoteId ?? '') == null) {
+          await _createNoteFromVault(change.proposedNote);
+          createdCount++;
+        } else {
+          await _overwriteNoteFromVault(
+            noteById(change.currentNoteId!)!,
+            change.proposedNote,
+          );
+          updatedCount++;
+        }
+      }
+
+      for (final conflict in scan.conflicts) {
+        final current = noteById(conflict.currentNoteId ?? '');
+        if (current == null) {
+          await _createNoteFromVault(conflict.proposedNote);
+          createdCount++;
+          continue;
+        }
+        switch (conflictResolution) {
+          case VaultConflictResolution.keepChronicle:
+            keptChronicleCount++;
+            break;
+          case VaultConflictResolution.importFile:
+            await _overwriteNoteFromVault(current, conflict.proposedNote);
+            updatedCount++;
+            break;
+          case VaultConflictResolution.keepBoth:
+            await _createNoteFromVault(
+              conflict.proposedNote,
+              forceNewId: true,
+              titleSuffix: ' (версия Vault)',
+            );
+            duplicatedCount++;
+            break;
+        }
+      }
+
+      await rebuildAllNoteLinks();
+      await refreshSyncFoundation(notify: false);
+      vaultStatus = await _vaultService.rewriteAfterApply(data, scan);
+      pendingVaultScan = await _vaultService.scan(data);
+      _mergeVaultScanIntoStatus();
+
+      return VaultApplyResult(
+        createdCount: createdCount,
+        updatedCount: updatedCount,
+        duplicatedCount: duplicatedCount,
+        keptChronicleCount: keptChronicleCount,
+        restoredFileCount: scan.missingFiles.length,
+      );
+    } finally {
+      vaultBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _createNoteFromVault(
+    Note source, {
+    bool forceNewId = false,
+    String titleSuffix = '',
+  }) async {
+    if (data.projects.isEmpty) {
+      throw StateError('Сначала создай хотя бы один проект.');
+    }
+    final projectId =
+        data.projects.any((project) => project.id == source.projectId)
+            ? source.projectId
+            : data.projects.first.id;
+    final imported = Note(
+      id: forceNewId || noteById(source.id) != null ? _uuid.v4() : source.id,
+      title: '${source.title}$titleSuffix',
+      projectId: projectId,
+      body: '',
+      tags: List<String>.from(source.tags),
+      status: source.status,
+      folderPath: source.folderPath,
+      noteType: source.noteType,
+      properties: Map<String, String>.from(source.properties),
+      pinned: source.pinned,
+      revision: source.revision < 1 ? 1 : source.revision,
+      createdAt: source.createdAt,
+      updatedAt: DateTime.now(),
+    );
+    imported.body = NoteDocument.serialize(
+      imported,
+      NoteDocument.parse(source.body).content,
+    );
+    data.notes.add(imported);
+    await _repository.saveNote(imported);
+  }
+
+  Future<void> _overwriteNoteFromVault(Note current, Note source) async {
+    final version = NoteVersion(
+      id: _uuid.v4(),
+      noteId: current.id,
+      title: current.title,
+      body: current.body,
+      tags: List<String>.from(current.tags),
+      status: current.status,
+      folderPath: current.folderPath,
+      noteType: current.noteType,
+      properties: Map<String, String>.from(current.properties),
+      reason: 'Перед импортом из Markdown Vault',
+    );
+    data.noteVersions.insert(0, version);
+    await _repository.saveNoteVersion(version);
+
+    current.title = source.title;
+    current.projectId =
+        data.projects.any((project) => project.id == source.projectId)
+            ? source.projectId
+            : current.projectId;
+    current.tags = List<String>.from(source.tags);
+    current.status = source.status;
+    current.folderPath = source.folderPath;
+    current.noteType = source.noteType;
+    current.properties = Map<String, String>.from(source.properties);
+    current.pinned = source.pinned;
+    current.revision += 1;
+    current.updatedAt = DateTime.now();
+    current.body = NoteDocument.serialize(
+      current,
+      NoteDocument.parse(source.body).content,
+    );
+    await _repository.saveNote(current);
   }
 
   void _scheduleVaultMirror() {
@@ -704,7 +892,10 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         identity: deviceIdentity,
       );
       await _replaceDataFromBackup(payload.databaseJson);
-      vaultStatus = await _vaultService.writeMirror(data);
+      await _vaultService.restoreAttachments(payload);
+      vaultStatus = await _vaultService.writeMirror(data, force: true);
+      pendingVaultScan = await _vaultService.scan(data);
+      _mergeVaultScanIntoStatus();
       await refreshSyncFoundation(notify: false);
     } finally {
       vaultBusy = false;

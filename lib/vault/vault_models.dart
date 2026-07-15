@@ -1,3 +1,7 @@
+import 'dart:typed_data';
+
+import '../models/app_models.dart';
+
 class VaultStatus {
   const VaultStatus({
     required this.supported,
@@ -6,6 +10,10 @@ class VaultStatus {
     required this.fileCount,
     this.lastWrittenAt,
     this.message,
+    this.pendingChangeCount = 0,
+    this.conflictCount = 0,
+    this.missingFileCount = 0,
+    this.attachmentCount = 0,
   });
 
   const VaultStatus.unavailable({this.message})
@@ -13,7 +21,11 @@ class VaultStatus {
       rootPath = '',
       noteCount = 0,
       fileCount = 0,
-      lastWrittenAt = null;
+      lastWrittenAt = null,
+      pendingChangeCount = 0,
+      conflictCount = 0,
+      missingFileCount = 0,
+      attachmentCount = 0;
 
   final bool supported;
   final String rootPath;
@@ -21,6 +33,130 @@ class VaultStatus {
   final int fileCount;
   final DateTime? lastWrittenAt;
   final String? message;
+  final int pendingChangeCount;
+  final int conflictCount;
+  final int missingFileCount;
+  final int attachmentCount;
+
+  VaultStatus copyWith({
+    bool? supported,
+    String? rootPath,
+    int? noteCount,
+    int? fileCount,
+    DateTime? lastWrittenAt,
+    String? message,
+    bool clearMessage = false,
+    int? pendingChangeCount,
+    int? conflictCount,
+    int? missingFileCount,
+    int? attachmentCount,
+  }) {
+    return VaultStatus(
+      supported: supported ?? this.supported,
+      rootPath: rootPath ?? this.rootPath,
+      noteCount: noteCount ?? this.noteCount,
+      fileCount: fileCount ?? this.fileCount,
+      lastWrittenAt: lastWrittenAt ?? this.lastWrittenAt,
+      message: clearMessage ? null : message ?? this.message,
+      pendingChangeCount: pendingChangeCount ?? this.pendingChangeCount,
+      conflictCount: conflictCount ?? this.conflictCount,
+      missingFileCount: missingFileCount ?? this.missingFileCount,
+      attachmentCount: attachmentCount ?? this.attachmentCount,
+    );
+  }
+}
+
+enum VaultChangeKind { newNote, externalUpdate, movedOrRenamed, conflict }
+
+class VaultNoteChange {
+  const VaultNoteChange({
+    required this.kind,
+    required this.relativePath,
+    required this.proposedNote,
+    required this.fileHash,
+    this.currentNoteId,
+    this.previousPath,
+    this.baselineHash,
+    this.databaseHash,
+  });
+
+  final VaultChangeKind kind;
+  final String relativePath;
+  final Note proposedNote;
+  final String fileHash;
+  final String? currentNoteId;
+  final String? previousPath;
+  final String? baselineHash;
+  final String? databaseHash;
+
+  bool get isConflict => kind == VaultChangeKind.conflict;
+  bool get isNew => kind == VaultChangeKind.newNote;
+}
+
+class VaultMissingFile {
+  const VaultMissingFile({required this.noteId, required this.relativePath});
+
+  final String noteId;
+  final String relativePath;
+}
+
+class VaultScanResult {
+  const VaultScanResult({
+    required this.rootPath,
+    required this.scannedAt,
+    required this.changes,
+    required this.missingFiles,
+  });
+
+  final String rootPath;
+  final DateTime scannedAt;
+  final List<VaultNoteChange> changes;
+  final List<VaultMissingFile> missingFiles;
+
+  List<VaultNoteChange> get safeChanges =>
+      changes.where((change) => !change.isConflict).toList(growable: false);
+
+  List<VaultNoteChange> get conflicts =>
+      changes.where((change) => change.isConflict).toList(growable: false);
+
+  int get pendingCount => changes.length + missingFiles.length;
+  bool get hasChanges => pendingCount > 0;
+}
+
+enum VaultConflictResolution { keepChronicle, importFile, keepBoth }
+
+class VaultApplyResult {
+  const VaultApplyResult({
+    required this.createdCount,
+    required this.updatedCount,
+    required this.duplicatedCount,
+    required this.keptChronicleCount,
+    required this.restoredFileCount,
+  });
+
+  final int createdCount;
+  final int updatedCount;
+  final int duplicatedCount;
+  final int keptChronicleCount;
+  final int restoredFileCount;
+
+  int get appliedCount => createdCount + updatedCount + duplicatedCount;
+}
+
+class AttachmentImportResult {
+  const AttachmentImportResult({
+    required this.fileName,
+    required this.relativePath,
+    required this.markdown,
+    required this.byteLength,
+    required this.isImage,
+  });
+
+  final String fileName;
+  final String relativePath;
+  final String markdown;
+  final int byteLength;
+  final bool isImage;
 }
 
 class BackupPreview {
@@ -34,6 +170,7 @@ class BackupPreview {
     required this.checksumsVerified,
     this.sourceDeviceId,
     this.sourceDeviceName,
+    this.attachmentCount = 0,
   });
 
   final int formatVersion;
@@ -45,6 +182,7 @@ class BackupPreview {
   final bool checksumsVerified;
   final String? sourceDeviceId;
   final String? sourceDeviceName;
+  final int attachmentCount;
 }
 
 class BackupImportPayload {
@@ -52,11 +190,13 @@ class BackupImportPayload {
     required this.databaseJson,
     required this.preview,
     required this.sourceName,
+    this.attachments = const {},
   });
 
   final String databaseJson;
   final BackupPreview preview;
   final String sourceName;
+  final Map<String, Uint8List> attachments;
 }
 
 class BackupExportResult {

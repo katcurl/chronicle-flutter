@@ -23,7 +23,33 @@ class VaultBackend {
   Future<String?> readTextFile(String rootPath, String relativePath) async =>
       null;
 
+  Future<Map<String, String>> listTextFiles({
+    required String rootPath,
+    required String directory,
+    required String extension,
+  }) async => <String, String>{};
+
+  Future<void> deleteFiles({
+    required String rootPath,
+    required Set<String> relativePaths,
+  }) async {}
+
+  Future<Map<String, Uint8List>> listBinaryFiles({
+    required String rootPath,
+    required String directory,
+  }) async => <String, Uint8List>{};
+
   Future<bool> fileExists(String rootPath, String relativePath) async => false;
+
+  Future<void> writeBinaryFile({
+    required String rootPath,
+    required String relativePath,
+    required Uint8List bytes,
+  }) async {
+    throw UnsupportedError('Attachments are unavailable on this platform.');
+  }
+
+  Future<PickedVaultFile?> pickAttachment() async => null;
 
   Future<String?> saveBackup({
     required String fileName,

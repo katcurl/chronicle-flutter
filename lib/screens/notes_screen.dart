@@ -577,7 +577,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
             ),
           ),
         ),
-        _EditorToolbar(controller: contentController),
+        _EditorToolbar(controller: contentController, onAttach: _attachFile),
         const Divider(height: 1),
         Expanded(
           child: TextField(
@@ -607,6 +607,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     return NoteMarkdownView(
       markdown: contentController.text,
       onWikiLink: _openWikiLink,
+      vaultRootPath: widget.store.vaultStatus.rootPath,
     );
   }
 
@@ -824,6 +825,44 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     });
   }
 
+  Future<void> _attachFile() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final attachment = await widget.store.pickAttachmentForNote(widget.note);
+      if (attachment == null || !mounted) {
+        return;
+      }
+      final value = contentController.value;
+      final selection = value.selection;
+      final start = selection.isValid ? selection.start : value.text.length;
+      final end = selection.isValid ? selection.end : value.text.length;
+      final before =
+          start > 0 && !value.text.substring(0, start).endsWith('\n')
+              ? '\n'
+              : '';
+      final after =
+          end < value.text.length && !value.text.substring(end).startsWith('\n')
+              ? '\n'
+              : '';
+      final replacement = '$before${attachment.markdown}$after';
+      contentController.value = value.copyWith(
+        text: value.text.replaceRange(start, end, replacement),
+        selection: TextSelection.collapsed(offset: start + replacement.length),
+        composing: TextRange.empty,
+      );
+      messenger.showSnackBar(
+        SnackBar(content: Text('Вложение добавлено: ${attachment.fileName}')),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось добавить вложение: $error')),
+      );
+    }
+  }
+
   Future<void> _createTask() async {
     final task = await TaskEditorSheet.show(
       context,
@@ -919,9 +958,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
 }
 
 class _EditorToolbar extends StatelessWidget {
-  const _EditorToolbar({required this.controller});
+  const _EditorToolbar({required this.controller, required this.onAttach});
 
   final TextEditingController controller;
+  final VoidCallback onAttach;
 
   @override
   Widget build(BuildContext context) {
@@ -939,6 +979,11 @@ class _EditorToolbar extends StatelessWidget {
           _button(Icons.link_rounded, '[[', ']]'),
           _button(Icons.functions_rounded, r'$', r'$'),
           _button(Icons.calculate_outlined, '\n\\[\n', '\n\\]\n'),
+          IconButton(
+            tooltip: 'Добавить локальное вложение',
+            onPressed: onAttach,
+            icon: const Icon(Icons.attach_file_rounded),
+          ),
           _button(Icons.image_outlined, '![описание](', ')'),
           _button(Icons.code_rounded, '```\n', '\n```'),
         ],
