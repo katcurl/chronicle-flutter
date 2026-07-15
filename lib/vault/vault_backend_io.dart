@@ -164,16 +164,18 @@ class VaultBackend {
   }
 
   Future<PickedVaultFile?> pickAttachment() async {
-    final result = await FilePicker.pickFiles(
-      dialogTitle: 'Добавить вложение в Chronicle',
-      allowMultiple: false,
-      withData: true,
+    final selected = await FilePicker.pickFile(
+      dialogTitle: 'Выбрать резервную копию Chronicle',
+      type: FileType.custom,
+      allowedExtensions: const ['chronicle'],
     );
-    if (result == null || result.files.isEmpty) {
+
+    if (selected == null) {
       return null;
     }
-    final selected = result.files.single;
-    final bytes = selected.bytes ?? await selected.xFile.readAsBytes();
+
+    final bytes = await selected.readAsBytes();
+
     return PickedVaultFile(name: selected.name, bytes: bytes);
   }
 
@@ -191,18 +193,18 @@ class VaultBackend {
   }
 
   Future<PickedVaultFile?> pickBackup() async {
-    final result = await FilePicker.pickFiles(
+    final selected = await FilePicker.pickFile(
       dialogTitle: 'Выбрать резервную копию Chronicle',
       type: FileType.custom,
       allowedExtensions: const ['chronicle'],
-      allowMultiple: false,
-      withData: true,
     );
-    if (result == null || result.files.isEmpty) {
+
+    if (selected == null) {
       return null;
     }
-    final selected = result.files.single;
-    final bytes = selected.bytes ?? await selected.xFile.readAsBytes();
+
+    final bytes = await selected.readAsBytes();
+
     return PickedVaultFile(name: selected.name, bytes: bytes);
   }
 
