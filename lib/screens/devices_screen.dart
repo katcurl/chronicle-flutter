@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/app_store.dart';
+import 'pairing_host_screen.dart';
+import 'pairing_scan_screen.dart';
 import '../sync/sync_models.dart';
 import '../vault/vault_models.dart';
 
@@ -132,7 +135,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
           ),
           const SizedBox(height: 10),
           if (widget.store.trustedDevices.isEmpty)
-            _EmptyDevicesCard(onPair: _showPairingPreview)
+            _EmptyDevicesCard(onPair: _openPairing)
           else
             ...widget.store.trustedDevices.map(
               (device) => Padding(
@@ -147,7 +150,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: FilledButton.tonalIcon(
-                onPressed: _showPairingPreview,
+                onPressed: _openPairing,
                 icon: const Icon(Icons.add_link_rounded),
                 label: const Text('Подключить устройство'),
               ),
@@ -257,28 +260,85 @@ class _DevicesScreenState extends State<DevicesScreen> {
     await widget.store.renameLocalDevice(result);
   }
 
-  Future<void> _showPairingPreview() async {
-    await showDialog<void>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            icon: const Icon(Icons.qr_code_2_rounded, size: 42),
-            title: const Text('QR-сопряжение подготовлено'),
-            content: const Text(
-              'В этой версии Chronicle уже хранит постоянный device ID, '
-              'доверенные устройства, курсоры и журнал изменений. Сам QR-код, '
-              'ключи и сетевое соединение появятся следующим этапом.\n\n'
-              'До реального подтверждения никакое устройство не получает доступ '
-              'к данным — даже в той же Wi‑Fi-сети.',
-            ),
-            actions: [
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Понятно'),
+  Future<void> _openPairing() async {
+    if (kIsWeb) {
+      await showDialog<void>(
+        context: context,
+        builder:
+            (dialogContext) => AlertDialog(
+              title: const Text('Нужна нативная версия Chronicle'),
+              content: const Text(
+                'Локальное QR-сопряжение работает в Android и desktop-сборках. '
+                'Браузерная версия не может открыть локальный sync-сервис.',
               ),
-            ],
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Понятно'),
+                ),
+              ],
+            ),
+      );
+      return;
+    }
+
+    final isAndroid = defaultTargetPlatform == TargetPlatform.android;
+    if (!isAndroid) {
+      await _openPairingHost();
+      return;
+    }
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder:
+          (sheetContext) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.qr_code_scanner_rounded),
+                    title: const Text('Сканировать QR-код'),
+                    subtitle: const Text(
+                      'Подключить телефон к Chronicle на компьютере.',
+                    ),
+                    onTap: () => Navigator.pop(sheetContext, 'scan'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.qr_code_2_rounded),
+                    title: const Text('Показать QR-код'),
+                    subtitle: const Text(
+                      'Разрешить другому устройству отсканировать этот телефон.',
+                    ),
+                    onTap: () => Navigator.pop(sheetContext, 'host'),
+                  ),
+                ],
+              ),
+            ),
           ),
     );
+    if (!mounted || action == null) {
+      return;
+    }
+    if (action == 'scan') {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => PairingScanScreen(store: widget.store),
+        ),
+      );
+    } else {
+      await _openPairingHost();
+    }
+    await widget.store.refreshSyncFoundation();
+  }
+
+  Future<void> _openPairingHost() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => PairingHostScreen(store: widget.store)),
+    );
+    await widget.store.refreshSyncFoundation();
   }
 
   Future<void> _confirmRevoke(TrustedDevice device) async {
@@ -1000,9 +1060,9 @@ class _FoundationNotice extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'v0.14 делает Markdown Vault двусторонним, защищает внешние '
-              'изменения от перезаписи и добавляет локальные вложения. Сетевой '
-              'обмен пока намеренно не включён.',
+              'v0.15 добавляет настоящее QR-сопряжение, одноразовый токен и '
+              'проверку ключей устройств. Передача проектов и заметок начнётся '
+              'в следующей версии после проверки доверенного соединения.',
               style: TextStyle(color: colors.onTertiaryContainer),
             ),
           ),

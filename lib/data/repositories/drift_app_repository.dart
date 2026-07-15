@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/app_models.dart';
+import '../../sync/pairing_models.dart';
 import '../../sync/sync_models.dart';
 import '../database/chronicle_database.dart';
 import 'app_repository.dart';
@@ -16,6 +17,7 @@ class DriftAppRepository implements AppRepository {
   static const _activeTimerKey = 'active_timer';
   static const _syncPreferencesKey = 'sync_preferences';
   static const _syncJournalBootstrappedKey = 'sync_journal_bootstrapped';
+  static const _deviceKeyMaterialKey = 'device_key_material_v1';
 
   final ChronicleDatabase _database;
   final Uuid _uuid = const Uuid();
@@ -302,6 +304,31 @@ class DriftAppRepository implements AppRepository {
     identity.lastSeenAt = DateTime.now();
     await _upsert('device_identity', identity.toDb());
     _identityCache = identity;
+  }
+
+  @override
+  Future<DeviceKeyMaterial?> loadDeviceKeyMaterial() async {
+    final raw = await _readState(_deviceKeyMaterialKey);
+    if (raw == null) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return DeviceKeyMaterial.fromJson(decoded);
+      }
+      if (decoded is Map) {
+        return DeviceKeyMaterial.fromJson(Map<String, dynamic>.from(decoded));
+      }
+    } on Object {
+      return null;
+    }
+    return null;
+  }
+
+  @override
+  Future<void> saveDeviceKeyMaterial(DeviceKeyMaterial material) {
+    return _putState(_deviceKeyMaterialKey, jsonEncode(material.toJson()));
   }
 
   @override

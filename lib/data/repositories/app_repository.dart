@@ -1,4 +1,5 @@
 import '../../models/app_models.dart';
+import '../../sync/pairing_models.dart';
 import '../../sync/sync_models.dart';
 
 abstract class AppRepository {
@@ -35,6 +36,10 @@ abstract class AppRepository {
   Future<DeviceIdentity> ensureDeviceIdentity();
 
   Future<void> saveDeviceIdentity(DeviceIdentity identity);
+
+  Future<DeviceKeyMaterial?> loadDeviceKeyMaterial();
+
+  Future<void> saveDeviceKeyMaterial(DeviceKeyMaterial material);
 
   Future<List<TrustedDevice>> loadTrustedDevices({bool includeRevoked = false});
 

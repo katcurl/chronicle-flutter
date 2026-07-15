@@ -1,0 +1,13 @@
+group 'io.github.katcurl.chronicle_lan_android'
+version '1.0-SNAPSHOT'
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'io.github.katcurl.chronicle_lan_android'
+    compileSdk 36
+
+    defaultConfig {
+        minSdk 23
+    }
+}

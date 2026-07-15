@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:uuid/uuid.dart';
 
 import '../../models/app_models.dart';
+import '../../sync/pairing_models.dart';
 import '../../sync/sync_models.dart';
 import 'app_repository.dart';
 
@@ -15,6 +16,7 @@ class InMemoryAppRepository implements AppRepository {
   bool _initialized = false;
   ActiveTimerState? _activeTimer;
   DeviceIdentity? _identity;
+  DeviceKeyMaterial? _deviceKeyMaterial;
   SyncPreferences _syncPreferences = const SyncPreferences();
   final List<TrustedDevice> _trustedDevices = [];
   final List<ChangeRecord> _changes = [];
@@ -203,6 +205,15 @@ class InMemoryAppRepository implements AppRepository {
   Future<void> saveDeviceIdentity(DeviceIdentity identity) async {
     identity.lastSeenAt = DateTime.now();
     _identity = identity;
+  }
+
+  @override
+  Future<DeviceKeyMaterial?> loadDeviceKeyMaterial() async =>
+      _deviceKeyMaterial;
+
+  @override
+  Future<void> saveDeviceKeyMaterial(DeviceKeyMaterial material) async {
+    _deviceKeyMaterial = material;
   }
 
   @override

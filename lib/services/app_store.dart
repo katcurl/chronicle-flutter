@@ -8,6 +8,7 @@ import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
 import '../features/notes/note_document.dart';
 import '../models/app_models.dart';
+import '../sync/pairing_service.dart';
 import '../sync/sync_models.dart';
 import '../vault/vault_models.dart';
 import '../vault/vault_service.dart';
@@ -17,9 +18,12 @@ class AppStore extends ChangeNotifier {
     required AppRepository repository,
     LegacyPreferencesImporter? legacyImporter,
     VaultService? vaultService,
+    PairingService? pairingService,
   }) : _repository = repository,
        _legacyImporter = legacyImporter,
-       _vaultService = vaultService ?? VaultService();
+       _vaultService = vaultService ?? VaultService(),
+       pairingService =
+           pairingService ?? PairingService(repository: repository);
 
   factory AppStore.production() => AppStore(
     repository: DriftAppRepository(),
@@ -29,6 +33,7 @@ class AppStore extends ChangeNotifier {
   final AppRepository _repository;
   final LegacyPreferencesImporter? _legacyImporter;
   final VaultService _vaultService;
+  final PairingService pairingService;
   final _uuid = const Uuid();
 
   AppData data = AppData.empty();
