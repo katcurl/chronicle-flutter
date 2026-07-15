@@ -1,5 +1,5 @@
 name: chronicle
-version: 0.14.0+16
+version: 0.15.0+17
 publish_to: none
 description: Local-first research, study, notes and time tracking workspace.
 
@@ -23,7 +23,16 @@ dependencies:
   uuid: ^4.5.1
 
   crypto: ^3.0.7
-  file_picker: ^11.0.2
+  file_picker:
+    git:
+      url: https://github.com/miguelpruivo/flutter_file_picker.git
+      ref: a54f138
+  cryptography: ^2.9.0
+  mobile_scanner: ^7.2.1
+  qr_flutter: ^4.1.0
+  chronicle_lan_android:
+    path: packages/chronicle_lan_android
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
