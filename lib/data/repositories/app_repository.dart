@@ -66,6 +66,14 @@ abstract class AppRepository {
     required Map<String, dynamic> payload,
   });
 
+  Future<SyncJournalBatch> loadOutgoingChanges({
+    required String peerDeviceId,
+    required int afterSequence,
+    int limit = 200,
+  });
+
+  Future<SyncApplyResult> applyRemoteChanges(List<ChangeRecord> changes);
+
   Future<List<SyncCursor>> loadSyncCursors();
 
   Future<void> saveSyncCursor(SyncCursor cursor);

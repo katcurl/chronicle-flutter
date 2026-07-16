@@ -422,6 +422,101 @@ class DriftAppRepository implements AppRepository {
   }
 
   @override
+  Future<SyncJournalBatch> loadOutgoingChanges({
+    required String peerDeviceId,
+    required int afterSequence,
+    int limit = 200,
+  }) async {
+    final safeAfter = afterSequence < 0 ? 0 : afterSequence;
+    final safeLimit = limit.clamp(1, 1000).toInt();
+    final rows =
+        await _database
+            .customSelect(
+              'SELECT * FROM change_records '
+              'WHERE local_sequence > ? '
+              'ORDER BY local_sequence ASC LIMIT ?',
+              variables: [
+                Variable<int>(safeAfter),
+                Variable<int>(safeLimit + 1),
+              ],
+            )
+            .get();
+    final hasMore = rows.length > safeLimit;
+    final scannedRows = rows.take(safeLimit).toList(growable: false);
+    final scanned = scannedRows
+        .map((row) => ChangeRecord.fromDb(row.data))
+        .toList(growable: false);
+    return SyncJournalBatch(
+      afterSequence: safeAfter,
+      throughSequence: scanned.isEmpty ? safeAfter : scanned.last.localSequence,
+      changes: scanned
+          .where((change) => change.originDeviceId != peerDeviceId)
+          .toList(growable: false),
+      hasMore: hasMore,
+    );
+  }
+
+  @override
+  Future<SyncApplyResult> applyRemoteChanges(List<ChangeRecord> changes) async {
+    var insertedCount = 0;
+    var appliedCount = 0;
+    var duplicateCount = 0;
+    var staleCount = 0;
+    var unsupportedCount = 0;
+    final ordered = List<ChangeRecord>.from(changes)
+      ..sort(_compareRemoteApplicationOrder);
+
+    await _database.transaction(() async {
+      for (final incoming in ordered) {
+        if (await _containsChangeInTransaction(incoming.changeId)) {
+          duplicateCount++;
+          continue;
+        }
+
+        final currentWinner = await _freshestChangeInTransaction(
+          entityType: incoming.entityType,
+          entityId: incoming.entityId,
+        );
+        final stored = ChangeRecord(
+          localSequence: 0,
+          changeId: incoming.changeId,
+          entityType: incoming.entityType,
+          entityId: incoming.entityId,
+          operation: incoming.operation,
+          revision: incoming.revision,
+          originDeviceId: incoming.originDeviceId,
+          changedAt: incoming.changedAt,
+          payloadJson: incoming.payloadJson,
+          appliedAt: DateTime.now(),
+        );
+        await _insertRemoteChangeInTransaction(stored);
+        insertedCount++;
+
+        if (currentWinner != null &&
+            compareChangeFreshness(stored, currentWinner) <= 0) {
+          staleCount++;
+          continue;
+        }
+
+        if (await _applyRemoteEntityInTransaction(stored)) {
+          appliedCount++;
+        } else {
+          unsupportedCount++;
+        }
+      }
+    });
+
+    return SyncApplyResult(
+      receivedCount: changes.length,
+      insertedCount: insertedCount,
+      appliedCount: appliedCount,
+      duplicateCount: duplicateCount,
+      staleCount: staleCount,
+      unsupportedCount: unsupportedCount,
+    );
+  }
+
+  @override
   Future<List<SyncCursor>> loadSyncCursors() async {
     final rows = await _readRows(
       'SELECT * FROM sync_cursors ORDER BY last_success_at DESC',
@@ -463,6 +558,164 @@ class DriftAppRepository implements AppRepository {
         payload: payload,
       );
     });
+  }
+
+  Future<bool> _containsChangeInTransaction(String changeId) async {
+    final rows =
+        await _database
+            .customSelect(
+              'SELECT 1 AS present FROM change_records '
+              'WHERE change_id = ? LIMIT 1',
+              variables: [Variable<String>(changeId)],
+            )
+            .get();
+    return rows.isNotEmpty;
+  }
+
+  Future<ChangeRecord?> _freshestChangeInTransaction({
+    required String entityType,
+    required String entityId,
+  }) async {
+    final rows =
+        await _database
+            .customSelect(
+              'SELECT * FROM change_records '
+              'WHERE entity_type = ? AND entity_id = ?',
+              variables: [
+                Variable<String>(entityType),
+                Variable<String>(entityId),
+              ],
+            )
+            .get();
+    ChangeRecord? winner;
+    for (final row in rows) {
+      final candidate = ChangeRecord.fromDb(row.data);
+      if (winner == null || compareChangeFreshness(candidate, winner) > 0) {
+        winner = candidate;
+      }
+    }
+    return winner;
+  }
+
+  Future<void> _insertRemoteChangeInTransaction(ChangeRecord change) async {
+    await _database.customStatement(
+      'INSERT INTO change_records ('
+      'change_id, entity_type, entity_id, operation, revision, '
+      'origin_device_id, changed_at, payload_json, applied_at'
+      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        change.changeId,
+        change.entityType,
+        change.entityId,
+        change.operation,
+        change.revision,
+        change.originDeviceId,
+        change.changedAt.toUtc().toIso8601String(),
+        change.payloadJson,
+        change.appliedAt?.toUtc().toIso8601String(),
+      ],
+    );
+  }
+
+  Future<bool> _applyRemoteEntityInTransaction(ChangeRecord change) async {
+    final payload = change.payload;
+    final upsertOperation =
+        change.operation == 'upsert' ||
+        change.operation == 'snapshot' ||
+        change.operation == 'append';
+
+    switch (change.entityType) {
+      case 'project':
+        if (!upsertOperation) {
+          return false;
+        }
+        final project = Project.fromJson(payload);
+        _verifyRemoteEntityId(change, project.id);
+        await _upsert('projects', project.toDb());
+        return true;
+      case 'task':
+        if (change.operation == 'delete') {
+          final deletedAt =
+              DateTime.tryParse('${payload['deletedAt']}') ?? change.changedAt;
+          await _database.customStatement(
+            'UPDATE tasks SET deleted_at = ?, updated_at = ? WHERE id = ?',
+            [
+              deletedAt.toUtc().toIso8601String(),
+              deletedAt.toUtc().toIso8601String(),
+              change.entityId,
+            ],
+          );
+          return true;
+        }
+        if (change.operation == 'restore') {
+          await _database.customStatement(
+            'UPDATE tasks SET deleted_at = NULL, updated_at = ? WHERE id = ?',
+            [change.changedAt.toUtc().toIso8601String(), change.entityId],
+          );
+          return true;
+        }
+        if (!upsertOperation) {
+          return false;
+        }
+        final task = WorkTask.fromJson(payload);
+        _verifyRemoteEntityId(change, task.id);
+        await _upsert('tasks', task.toDb());
+        return true;
+      case 'note':
+        if (change.operation == 'delete') {
+          final deletedAt =
+              DateTime.tryParse('${payload['deletedAt']}') ?? change.changedAt;
+          await _database.customStatement(
+            'UPDATE notes SET deleted_at = ?, updated_at = ? WHERE id = ?',
+            [
+              deletedAt.toUtc().toIso8601String(),
+              deletedAt.toUtc().toIso8601String(),
+              change.entityId,
+            ],
+          );
+          return true;
+        }
+        if (change.operation == 'restore') {
+          await _database.customStatement(
+            'UPDATE notes SET deleted_at = NULL, updated_at = ? WHERE id = ?',
+            [change.changedAt.toUtc().toIso8601String(), change.entityId],
+          );
+          return true;
+        }
+        if (!upsertOperation) {
+          return false;
+        }
+        final note = Note.fromJson(payload);
+        _verifyRemoteEntityId(change, note.id);
+        await _upsert('notes', note.toDb());
+        return true;
+      case 'note_version':
+        if (!upsertOperation) {
+          return false;
+        }
+        final version = NoteVersion.fromJson(payload);
+        _verifyRemoteEntityId(change, version.id);
+        await _upsert('note_versions', version.toDb());
+        return true;
+      case 'time_entry':
+        if (!upsertOperation) {
+          return false;
+        }
+        final entry = TimeEntry.fromJson(payload);
+        _verifyRemoteEntityId(change, entry.id);
+        await _upsert('time_entries', entry.toDb());
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  void _verifyRemoteEntityId(ChangeRecord change, String payloadId) {
+    if (payloadId != change.entityId) {
+      throw FormatException(
+        'Sync change ${change.changeId} has mismatched entity id.',
+      );
+    }
   }
 
   Future<ChangeRecord> _recordLocalChangeInTransaction({
@@ -576,4 +829,33 @@ class DriftAppRepository implements AppRepository {
       columns.map((column) => values[column]).toList(growable: false),
     );
   }
+}
+
+int _compareRemoteApplicationOrder(ChangeRecord left, ChangeRecord right) {
+  final dependency = _syncEntityRank(
+    left.entityType,
+  ).compareTo(_syncEntityRank(right.entityType));
+  if (dependency != 0) {
+    return dependency;
+  }
+  final entityType = left.entityType.compareTo(right.entityType);
+  if (entityType != 0) {
+    return entityType;
+  }
+  final entityId = left.entityId.compareTo(right.entityId);
+  if (entityId != 0) {
+    return entityId;
+  }
+  return compareChangeFreshness(left, right);
+}
+
+int _syncEntityRank(String entityType) {
+  return switch (entityType) {
+    'project' => 0,
+    'note' => 1,
+    'task' => 2,
+    'note_version' => 3,
+    'time_entry' => 4,
+    _ => 100,
+  };
 }

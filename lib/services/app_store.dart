@@ -472,11 +472,13 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     notifyListeners();
   }
 
-  Future<void> rebuildAllNoteLinks() async {
+  Future<void> rebuildAllNoteLinks({bool notify = true}) async {
     for (final note in data.notes) {
       await _syncNoteLinks(note, notify: false);
     }
-    notifyListeners();
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   Future<void> _syncNoteLinks(Note note, {bool notify = true}) async {
@@ -585,6 +587,36 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         payload: entry.toJson(),
       );
     }
+  }
+
+  Future<SyncJournalBatch> buildOutgoingSyncBatch({
+    required String peerDeviceId,
+    required int afterSequence,
+    int limit = 200,
+  }) {
+    return _repository.loadOutgoingChanges(
+      peerDeviceId: peerDeviceId,
+      afterSequence: afterSequence,
+      limit: limit,
+    );
+  }
+
+  Future<SyncApplyResult> applyIncomingSyncChanges(
+    List<ChangeRecord> changes,
+  ) async {
+    final result = await _repository.applyRemoteChanges(changes);
+    if (result.insertedCount == 0) {
+      return result;
+    }
+
+    data = await _repository.load();
+    await rebuildAllNoteLinks(notify: false);
+    await refreshSyncFoundation(notify: false);
+    if (result.changedData) {
+      _scheduleVaultMirror();
+    }
+    notifyListeners();
+    return result;
   }
 
   Future<void> renameLocalDevice(String displayName) async {

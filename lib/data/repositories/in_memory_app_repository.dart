@@ -32,7 +32,12 @@ class InMemoryAppRepository implements AppRepository {
   }
 
   @override
-  Future<AppData> load() async => AppData.decode(_data.encode());
+  Future<AppData> load() async {
+    final copy = AppData.decode(_data.encode());
+    copy.tasks.removeWhere((task) => task.deletedAt != null);
+    copy.notes.removeWhere((note) => note.deletedAt != null);
+    return copy;
+  }
 
   @override
   Future<void> replaceAll(AppData data) async {
@@ -304,6 +309,107 @@ class InMemoryAppRepository implements AppRepository {
   }
 
   @override
+  Future<SyncJournalBatch> loadOutgoingChanges({
+    required String peerDeviceId,
+    required int afterSequence,
+    int limit = 200,
+  }) async {
+    final safeAfter = afterSequence < 0 ? 0 : afterSequence;
+    final safeLimit = limit.clamp(1, 1000).toInt();
+    final candidates = _changes
+      .where((change) => change.localSequence > safeAfter)
+      .toList(growable: false)..sort(
+      (left, right) => left.localSequence.compareTo(right.localSequence),
+    );
+    final scanned = candidates.take(safeLimit).toList(growable: false);
+    return SyncJournalBatch(
+      afterSequence: safeAfter,
+      throughSequence: scanned.isEmpty ? safeAfter : scanned.last.localSequence,
+      changes: scanned
+          .where((change) => change.originDeviceId != peerDeviceId)
+          .toList(growable: false),
+      hasMore: candidates.length > scanned.length,
+    );
+  }
+
+  @override
+  Future<SyncApplyResult> applyRemoteChanges(List<ChangeRecord> changes) async {
+    var insertedCount = 0;
+    var appliedCount = 0;
+    var duplicateCount = 0;
+    var staleCount = 0;
+    var unsupportedCount = 0;
+
+    final ordered = List<ChangeRecord>.from(changes)
+      ..sort(_compareRemoteApplicationOrder);
+    final dataBefore = AppData.decode(_data.encode());
+    final changeCountBefore = _changes.length;
+
+    try {
+      for (final incoming in ordered) {
+        if (_changes.any((change) => change.changeId == incoming.changeId)) {
+          duplicateCount++;
+          continue;
+        }
+
+        ChangeRecord? currentWinner;
+        for (final existing in _changes) {
+          if (existing.entityType != incoming.entityType ||
+              existing.entityId != incoming.entityId) {
+            continue;
+          }
+          if (currentWinner == null ||
+              compareChangeFreshness(existing, currentWinner) > 0) {
+            currentWinner = existing;
+          }
+        }
+
+        final stored = ChangeRecord(
+          localSequence: _changes.length + 1,
+          changeId: incoming.changeId,
+          entityType: incoming.entityType,
+          entityId: incoming.entityId,
+          operation: incoming.operation,
+          revision: incoming.revision,
+          originDeviceId: incoming.originDeviceId,
+          changedAt: incoming.changedAt,
+          payloadJson: incoming.payloadJson,
+          appliedAt: DateTime.now(),
+        );
+        _changes.add(stored);
+        insertedCount++;
+
+        if (currentWinner != null &&
+            compareChangeFreshness(stored, currentWinner) <= 0) {
+          staleCount++;
+          continue;
+        }
+
+        if (_applyRemoteEntity(stored)) {
+          appliedCount++;
+        } else {
+          unsupportedCount++;
+        }
+      }
+    } on Object {
+      _data = dataBefore;
+      if (_changes.length > changeCountBefore) {
+        _changes.removeRange(changeCountBefore, _changes.length);
+      }
+      rethrow;
+    }
+
+    return SyncApplyResult(
+      receivedCount: changes.length,
+      insertedCount: insertedCount,
+      appliedCount: appliedCount,
+      duplicateCount: duplicateCount,
+      staleCount: staleCount,
+      unsupportedCount: unsupportedCount,
+    );
+  }
+
+  @override
   Future<List<SyncCursor>> loadSyncCursors() async =>
       List<SyncCursor>.from(_syncCursors);
 
@@ -324,6 +430,109 @@ class InMemoryAppRepository implements AppRepository {
   @override
   Future<void> close() async {}
 
+  bool _applyRemoteEntity(ChangeRecord change) {
+    final payload = change.payload;
+    final upsertOperation =
+        change.operation == 'upsert' ||
+        change.operation == 'snapshot' ||
+        change.operation == 'append';
+
+    switch (change.entityType) {
+      case 'project':
+        if (!upsertOperation) {
+          return false;
+        }
+        final project = Project.fromJson(payload);
+        _verifyEntityId(change, project.id);
+        _replaceById<Project>(_data.projects, project, (item) => item.id);
+        return true;
+      case 'task':
+        if (change.operation == 'delete') {
+          final deletedAt = DateTime.tryParse('${payload['deletedAt']}');
+          final index = _data.tasks.indexWhere(
+            (task) => task.id == change.entityId,
+          );
+          if (index >= 0) {
+            _data.tasks[index].deletedAt = deletedAt ?? change.changedAt;
+          }
+          return true;
+        }
+        if (change.operation == 'restore') {
+          final index = _data.tasks.indexWhere(
+            (task) => task.id == change.entityId,
+          );
+          if (index >= 0) {
+            _data.tasks[index].deletedAt = null;
+          }
+          return true;
+        }
+        if (!upsertOperation) {
+          return false;
+        }
+        final task = WorkTask.fromJson(payload);
+        _verifyEntityId(change, task.id);
+        _replaceById<WorkTask>(_data.tasks, task, (item) => item.id);
+        return true;
+      case 'note':
+        if (change.operation == 'delete') {
+          final deletedAt = DateTime.tryParse('${payload['deletedAt']}');
+          final index = _data.notes.indexWhere(
+            (note) => note.id == change.entityId,
+          );
+          if (index >= 0) {
+            _data.notes[index].deletedAt = deletedAt ?? change.changedAt;
+          }
+          return true;
+        }
+        if (change.operation == 'restore') {
+          final index = _data.notes.indexWhere(
+            (note) => note.id == change.entityId,
+          );
+          if (index >= 0) {
+            _data.notes[index].deletedAt = null;
+          }
+          return true;
+        }
+        if (!upsertOperation) {
+          return false;
+        }
+        final note = Note.fromJson(payload);
+        _verifyEntityId(change, note.id);
+        _replaceById<Note>(_data.notes, note, (item) => item.id);
+        return true;
+      case 'note_version':
+        if (!upsertOperation) {
+          return false;
+        }
+        final version = NoteVersion.fromJson(payload);
+        _verifyEntityId(change, version.id);
+        _replaceById<NoteVersion>(
+          _data.noteVersions,
+          version,
+          (item) => item.id,
+        );
+        return true;
+      case 'time_entry':
+        if (!upsertOperation) {
+          return false;
+        }
+        final entry = TimeEntry.fromJson(payload);
+        _verifyEntityId(change, entry.id);
+        _replaceById<TimeEntry>(_data.entries, entry, (item) => item.id);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  void _verifyEntityId(ChangeRecord change, String payloadId) {
+    if (payloadId != change.entityId) {
+      throw FormatException(
+        'Sync change ${change.changeId} has mismatched entity id.',
+      );
+    }
+  }
+
   void _replaceById<T>(List<T> items, T value, String Function(T item) readId) {
     final index = items.indexWhere((item) => readId(item) == readId(value));
     if (index < 0) {
@@ -332,4 +541,33 @@ class InMemoryAppRepository implements AppRepository {
       items[index] = value;
     }
   }
+}
+
+int _compareRemoteApplicationOrder(ChangeRecord left, ChangeRecord right) {
+  final dependency = _syncEntityRank(
+    left.entityType,
+  ).compareTo(_syncEntityRank(right.entityType));
+  if (dependency != 0) {
+    return dependency;
+  }
+  final entityType = left.entityType.compareTo(right.entityType);
+  if (entityType != 0) {
+    return entityType;
+  }
+  final entityId = left.entityId.compareTo(right.entityId);
+  if (entityId != 0) {
+    return entityId;
+  }
+  return compareChangeFreshness(left, right);
+}
+
+int _syncEntityRank(String entityType) {
+  return switch (entityType) {
+    'project' => 0,
+    'note' => 1,
+    'task' => 2,
+    'note_version' => 3,
+    'time_entry' => 4,
+    _ => 100,
+  };
 }

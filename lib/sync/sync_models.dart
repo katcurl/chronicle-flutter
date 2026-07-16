@@ -235,10 +235,45 @@ class ChangeRecord {
     'operation': operation,
     'revision': revision,
     'originDeviceId': originDeviceId,
-    'changedAt': changedAt.toIso8601String(),
+    'changedAt': changedAt.toUtc().toIso8601String(),
     'payload': payload,
-    'appliedAt': appliedAt?.toIso8601String(),
+    'appliedAt': appliedAt?.toUtc().toIso8601String(),
   };
+
+  ChangeRecord copyWith({int? localSequence, DateTime? appliedAt}) {
+    return ChangeRecord(
+      localSequence: localSequence ?? this.localSequence,
+      changeId: changeId,
+      entityType: entityType,
+      entityId: entityId,
+      operation: operation,
+      revision: revision,
+      originDeviceId: originDeviceId,
+      changedAt: changedAt,
+      payloadJson: payloadJson,
+      appliedAt: appliedAt ?? this.appliedAt,
+    );
+  }
+
+  factory ChangeRecord.fromJson(Map<String, dynamic> json) {
+    final rawPayload = json['payload'];
+    final payload =
+        rawPayload is Map
+            ? Map<String, dynamic>.from(rawPayload)
+            : const <String, dynamic>{};
+    return ChangeRecord(
+      localSequence: _readSyncInt(json['localSequence']),
+      changeId: json['changeId']! as String,
+      entityType: json['entityType']! as String,
+      entityId: json['entityId']! as String,
+      operation: json['operation']! as String,
+      revision: _readSyncInt(json['revision'], fallback: 1),
+      originDeviceId: json['originDeviceId']! as String,
+      changedAt: _readSyncDate(json['changedAt']).toLocal(),
+      payloadJson: jsonEncode(payload),
+      appliedAt: _readNullableSyncDate(json['appliedAt'])?.toLocal(),
+    );
+  }
 
   factory ChangeRecord.fromDb(Map<String, Object?> row) => ChangeRecord(
     localSequence: _readSyncInt(row['local_sequence']),
@@ -252,6 +287,76 @@ class ChangeRecord {
     payloadJson: row['payload_json'] as String? ?? '{}',
     appliedAt: _readNullableSyncDate(row['applied_at']),
   );
+}
+
+int compareChangeFreshness(ChangeRecord left, ChangeRecord right) {
+  final revision = left.revision.compareTo(right.revision);
+  if (revision != 0) {
+    return revision;
+  }
+  final changedAt = left.changedAt.toUtc().compareTo(right.changedAt.toUtc());
+  if (changedAt != 0) {
+    return changedAt;
+  }
+  return left.changeId.compareTo(right.changeId);
+}
+
+class SyncJournalBatch {
+  const SyncJournalBatch({
+    required this.afterSequence,
+    required this.throughSequence,
+    required this.changes,
+    required this.hasMore,
+  });
+
+  final int afterSequence;
+  final int throughSequence;
+  final List<ChangeRecord> changes;
+  final bool hasMore;
+
+  bool get isEmpty => changes.isEmpty;
+
+  Map<String, dynamic> toJson() => {
+    'afterSequence': afterSequence,
+    'throughSequence': throughSequence,
+    'hasMore': hasMore,
+    'changes': changes.map((change) => change.toJson()).toList(growable: false),
+  };
+
+  factory SyncJournalBatch.fromJson(Map<String, dynamic> json) {
+    final rawChanges = json['changes'] as List? ?? const [];
+    return SyncJournalBatch(
+      afterSequence: _readSyncInt(json['afterSequence']),
+      throughSequence: _readSyncInt(json['throughSequence']),
+      hasMore: _readSyncBool(json['hasMore']),
+      changes: rawChanges
+          .map(
+            (change) =>
+                ChangeRecord.fromJson(Map<String, dynamic>.from(change as Map)),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+class SyncApplyResult {
+  const SyncApplyResult({
+    required this.receivedCount,
+    required this.insertedCount,
+    required this.appliedCount,
+    required this.duplicateCount,
+    required this.staleCount,
+    required this.unsupportedCount,
+  });
+
+  final int receivedCount;
+  final int insertedCount;
+  final int appliedCount;
+  final int duplicateCount;
+  final int staleCount;
+  final int unsupportedCount;
+
+  bool get changedData => appliedCount > 0;
 }
 
 class SyncCursor {
