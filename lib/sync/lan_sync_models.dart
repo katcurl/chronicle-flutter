@@ -1,0 +1,291 @@
+import 'dart:convert';
+
+import 'pairing_models.dart';
+import 'sync_models.dart';
+
+const lanSyncProtocol = 'chronicle-sync-v1';
+
+class LanSyncOffer {
+  const LanSyncOffer({
+    required this.host,
+    required this.port,
+    required this.sessionId,
+    required this.token,
+    required this.expiresAt,
+    required this.hostPeer,
+    required this.targetDeviceId,
+  });
+
+  final String host;
+  final int port;
+  final String sessionId;
+  final String token;
+  final DateTime expiresAt;
+  final PairingPeer hostPeer;
+  final String targetDeviceId;
+
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
+
+  LanSyncOffer copyWithHost(String value) => LanSyncOffer(
+    host: value,
+    port: port,
+    sessionId: sessionId,
+    token: token,
+    expiresAt: expiresAt,
+    hostPeer: hostPeer,
+    targetDeviceId: targetDeviceId,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'protocol': lanSyncProtocol,
+    'host': host,
+    'port': port,
+    'sessionId': sessionId,
+    'token': token,
+    'expiresAt': expiresAt.toUtc().toIso8601String(),
+    'hostPeer': hostPeer.toJson(),
+    'targetDeviceId': targetDeviceId,
+  };
+
+  String encode() {
+    final bytes = utf8.encode(jsonEncode(toJson()));
+    final payload = base64Url.encode(bytes).replaceAll('=', '');
+    return 'chronicle://sync/$payload';
+  }
+
+  factory LanSyncOffer.decode(String raw) {
+    final uri = Uri.tryParse(raw.trim());
+    if (uri == null || uri.scheme != 'chronicle' || uri.host != 'sync') {
+      throw const FormatException('Это не код синхронизации Chronicle.');
+    }
+    final payload = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
+    if (payload.isEmpty) {
+      throw const FormatException('Код не содержит данных синхронизации.');
+    }
+    final decoded = jsonDecode(
+      utf8.decode(base64Url.decode(base64Url.normalize(payload))),
+    );
+    if (decoded is! Map) {
+      throw const FormatException('Неверный формат кода Chronicle.');
+    }
+    final json = Map<String, dynamic>.from(decoded);
+    if (json['protocol'] != lanSyncProtocol) {
+      throw const FormatException('Эта версия протокола не поддерживается.');
+    }
+    final offer = LanSyncOffer(
+      host: json['host']! as String,
+      port: (json['port']! as num).toInt(),
+      sessionId: json['sessionId']! as String,
+      token: json['token']! as String,
+      expiresAt: DateTime.parse(json['expiresAt']! as String).toLocal(),
+      hostPeer: PairingPeer.fromJson(
+        Map<String, dynamic>.from(json['hostPeer']! as Map),
+      ),
+      targetDeviceId: json['targetDeviceId']! as String,
+    );
+    if (offer.isExpired) {
+      throw const FormatException('Срок действия кода синхронизации истёк.');
+    }
+    return offer;
+  }
+}
+
+class LanSyncExchangeRequest {
+  const LanSyncExchangeRequest({
+    required this.sessionId,
+    required this.token,
+    required this.roundId,
+    required this.peer,
+    required this.batch,
+    required this.signature,
+  });
+
+  final String sessionId;
+  final String token;
+  final String roundId;
+  final PairingPeer peer;
+  final SyncJournalBatch batch;
+  final String signature;
+
+  String get signingPayload => jsonEncode({
+    'protocol': lanSyncProtocol,
+    'kind': 'exchange-request',
+    'sessionId': sessionId,
+    'token': token,
+    'roundId': roundId,
+    'peer': peer.toJson(),
+    'batch': batch.toJson(),
+  });
+
+  Map<String, dynamic> toJson() => {
+    'sessionId': sessionId,
+    'token': token,
+    'roundId': roundId,
+    'peer': peer.toJson(),
+    'batch': batch.toJson(),
+    'signature': signature,
+  };
+
+  factory LanSyncExchangeRequest.fromJson(Map<String, dynamic> json) {
+    return LanSyncExchangeRequest(
+      sessionId: json['sessionId']! as String,
+      token: json['token']! as String,
+      roundId: json['roundId']! as String,
+      peer: PairingPeer.fromJson(
+        Map<String, dynamic>.from(json['peer']! as Map),
+      ),
+      batch: SyncJournalBatch.fromJson(
+        Map<String, dynamic>.from(json['batch']! as Map),
+      ),
+      signature: json['signature']! as String,
+    );
+  }
+}
+
+class LanSyncExchangeResponse {
+  const LanSyncExchangeResponse({
+    required this.sessionId,
+    required this.roundId,
+    required this.hostPeer,
+    required this.batch,
+    required this.remoteApplyResult,
+    required this.signature,
+  });
+
+  final String sessionId;
+  final String roundId;
+  final PairingPeer hostPeer;
+  final SyncJournalBatch batch;
+  final SyncApplyResult remoteApplyResult;
+  final String signature;
+
+  String get signingPayload => jsonEncode({
+    'protocol': lanSyncProtocol,
+    'kind': 'exchange-response',
+    'sessionId': sessionId,
+    'roundId': roundId,
+    'hostPeer': hostPeer.toJson(),
+    'batch': batch.toJson(),
+    'remoteApplyResult': remoteApplyResult.toJson(),
+  });
+
+  Map<String, dynamic> toJson() => {
+    'sessionId': sessionId,
+    'roundId': roundId,
+    'hostPeer': hostPeer.toJson(),
+    'batch': batch.toJson(),
+    'remoteApplyResult': remoteApplyResult.toJson(),
+    'signature': signature,
+  };
+
+  factory LanSyncExchangeResponse.fromJson(Map<String, dynamic> json) {
+    return LanSyncExchangeResponse(
+      sessionId: json['sessionId']! as String,
+      roundId: json['roundId']! as String,
+      hostPeer: PairingPeer.fromJson(
+        Map<String, dynamic>.from(json['hostPeer']! as Map),
+      ),
+      batch: SyncJournalBatch.fromJson(
+        Map<String, dynamic>.from(json['batch']! as Map),
+      ),
+      remoteApplyResult: SyncApplyResult.fromJson(
+        Map<String, dynamic>.from(json['remoteApplyResult']! as Map),
+      ),
+      signature: json['signature']! as String,
+    );
+  }
+}
+
+class LanSyncAck {
+  const LanSyncAck({
+    required this.sessionId,
+    required this.roundId,
+    required this.clientDeviceId,
+    required this.receivedThroughSequence,
+    required this.signature,
+  });
+
+  final String sessionId;
+  final String roundId;
+  final String clientDeviceId;
+  final int receivedThroughSequence;
+  final String signature;
+
+  String get signingPayload => jsonEncode({
+    'protocol': lanSyncProtocol,
+    'kind': 'ack',
+    'sessionId': sessionId,
+    'roundId': roundId,
+    'clientDeviceId': clientDeviceId,
+    'receivedThroughSequence': receivedThroughSequence,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'sessionId': sessionId,
+    'roundId': roundId,
+    'clientDeviceId': clientDeviceId,
+    'receivedThroughSequence': receivedThroughSequence,
+    'signature': signature,
+  };
+
+  factory LanSyncAck.fromJson(Map<String, dynamic> json) => LanSyncAck(
+    sessionId: json['sessionId']! as String,
+    roundId: json['roundId']! as String,
+    clientDeviceId: json['clientDeviceId']! as String,
+    receivedThroughSequence: (json['receivedThroughSequence']! as num).toInt(),
+    signature: json['signature']! as String,
+  );
+}
+
+class LanSyncReport {
+  const LanSyncReport({
+    required this.peer,
+    required this.startedAt,
+    required this.completedAt,
+    required this.roundCount,
+    required this.sentCount,
+    required this.receivedCount,
+    required this.appliedCount,
+    required this.duplicateCount,
+    required this.staleCount,
+    required this.unsupportedCount,
+    required this.hasMore,
+  });
+
+  final PairingPeer peer;
+  final DateTime startedAt;
+  final DateTime completedAt;
+  final int roundCount;
+  final int sentCount;
+  final int receivedCount;
+  final int appliedCount;
+  final int duplicateCount;
+  final int staleCount;
+  final int unsupportedCount;
+  final bool hasMore;
+
+  bool get changedData => appliedCount > 0;
+
+  LanSyncReport merge(LanSyncReport other) {
+    if (peer.deviceId != other.peer.deviceId) {
+      throw ArgumentError('Нельзя объединить отчёты разных устройств.');
+    }
+    return LanSyncReport(
+      peer: other.peer,
+      startedAt:
+          startedAt.isBefore(other.startedAt) ? startedAt : other.startedAt,
+      completedAt:
+          completedAt.isAfter(other.completedAt)
+              ? completedAt
+              : other.completedAt,
+      roundCount: roundCount + other.roundCount,
+      sentCount: sentCount + other.sentCount,
+      receivedCount: receivedCount + other.receivedCount,
+      appliedCount: appliedCount + other.appliedCount,
+      duplicateCount: duplicateCount + other.duplicateCount,
+      staleCount: staleCount + other.staleCount,
+      unsupportedCount: unsupportedCount + other.unsupportedCount,
+      hasMore: other.hasMore,
+    );
+  }
+}

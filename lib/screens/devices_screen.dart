@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import '../services/app_store.dart';
 import 'pairing_host_screen.dart';
 import 'pairing_scan_screen.dart';
+import 'sync_host_screen.dart';
+import 'sync_scan_screen.dart';
 import '../sync/sync_models.dart';
 import '../vault/vault_models.dart';
 import '../widgets/desktop_navigation.dart';
@@ -163,6 +165,11 @@ class _DevicesScreenState extends State<DevicesScreen> {
                         padding: const EdgeInsets.only(bottom: 10),
                         child: _TrustedDeviceCard(
                           device: device,
+                          syncing:
+                              widget.store.lanSyncBusy &&
+                              widget.store.lanSyncPeerDeviceId ==
+                                  device.deviceId,
+                          onSync: () => _syncDevice(device),
                           onRevoke: () => _confirmRevoke(device),
                         ),
                       ),
@@ -181,7 +188,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                     title: 'Журнал изменений',
                     subtitle:
                         '${widget.store.journalEntryCount} локальных событий. '
-                        'Именно этот журнал позже будет передаваться между устройствами.',
+                        'Этот журнал передаётся связанному устройству небольшими пакетами.',
                   ),
                   const SizedBox(height: 10),
                   _JournalCard(changes: widget.store.recentChanges),
@@ -367,6 +374,41 @@ class _DevicesScreenState extends State<DevicesScreen> {
   Future<void> _openPairingHost() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(builder: (_) => PairingHostScreen(store: widget.store)),
+    );
+    await widget.store.refreshSyncFoundation();
+  }
+
+  Future<void> _syncDevice(TrustedDevice device) async {
+    if (kIsWeb) {
+      await showDialog<void>(
+        context: context,
+        builder:
+            (dialogContext) => AlertDialog(
+              title: const Text('Нужна нативная версия Chronicle'),
+              content: const Text(
+                'Защищённая LAN-синхронизация работает в Android и '
+                'desktop-сборках Chronicle.',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Понятно'),
+                ),
+              ],
+            ),
+      );
+      return;
+    }
+
+    final isAndroid = defaultTargetPlatform == TargetPlatform.android;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder:
+            (_) =>
+                isAndroid
+                    ? SyncScanScreen(store: widget.store, device: device)
+                    : SyncHostScreen(store: widget.store, device: device),
+      ),
     );
     await widget.store.refreshSyncFoundation();
   }
@@ -1140,9 +1182,16 @@ class _EmptyDevicesCard extends StatelessWidget {
 }
 
 class _TrustedDeviceCard extends StatelessWidget {
-  const _TrustedDeviceCard({required this.device, required this.onRevoke});
+  const _TrustedDeviceCard({
+    required this.device,
+    required this.syncing,
+    required this.onSync,
+    required this.onRevoke,
+  });
 
   final TrustedDevice device;
+  final bool syncing;
+  final VoidCallback onSync;
   final VoidCallback onRevoke;
 
   @override
@@ -1206,6 +1255,25 @@ class _TrustedDeviceCard extends StatelessWidget {
                         icon: Icons.verified_user_outlined,
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilledButton.tonalIcon(
+                      onPressed: syncing ? null : onSync,
+                      icon:
+                          syncing
+                              ? const SizedBox.square(
+                                dimension: 17,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Icon(Icons.sync_rounded),
+                      label: Text(
+                        syncing ? 'Синхронизация…' : 'Синхронизировать',
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1361,8 +1429,9 @@ class _FoundationNotice extends StatelessWidget {
           Expanded(
             child: Text(
               'Chronicle связывает устройства одноразовым QR-кодом и хранит '
-              'доверие локально. Проекты, задачи и заметки передаются только '
-              'между подтверждёнными устройствами в одной локальной сети.',
+              'доверие локально. Кнопка «Синхронизировать» запускает '
+              'подписанный двусторонний обмен проектами, задачами, заметками '
+              'и записями времени в локальной сети.',
               style: TextStyle(color: colors.onTertiaryContainer),
             ),
           ),

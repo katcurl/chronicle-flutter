@@ -357,6 +357,26 @@ class SyncApplyResult {
   final int unsupportedCount;
 
   bool get changedData => appliedCount > 0;
+
+  Map<String, dynamic> toJson() => {
+    'receivedCount': receivedCount,
+    'insertedCount': insertedCount,
+    'appliedCount': appliedCount,
+    'duplicateCount': duplicateCount,
+    'staleCount': staleCount,
+    'unsupportedCount': unsupportedCount,
+  };
+
+  factory SyncApplyResult.fromJson(Map<String, dynamic> json) {
+    return SyncApplyResult(
+      receivedCount: _readSyncInt(json['receivedCount']),
+      insertedCount: _readSyncInt(json['insertedCount']),
+      appliedCount: _readSyncInt(json['appliedCount']),
+      duplicateCount: _readSyncInt(json['duplicateCount']),
+      staleCount: _readSyncInt(json['staleCount']),
+      unsupportedCount: _readSyncInt(json['unsupportedCount']),
+    );
+  }
 }
 
 class SyncCursor {

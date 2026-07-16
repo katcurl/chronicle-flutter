@@ -8,6 +8,9 @@ import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
 import '../features/notes/note_document.dart';
 import '../models/app_models.dart';
+import '../sync/lan_sync_models.dart';
+import '../sync/lan_sync_service.dart';
+import '../sync/lan_sync_transport.dart';
 import '../sync/pairing_service.dart';
 import '../sync/sync_models.dart';
 import '../vault/vault_models.dart';
@@ -19,11 +22,14 @@ class AppStore extends ChangeNotifier {
     LegacyPreferencesImporter? legacyImporter,
     VaultService? vaultService,
     PairingService? pairingService,
+    LanSyncService? lanSyncService,
   }) : _repository = repository,
        _legacyImporter = legacyImporter,
        _vaultService = vaultService ?? VaultService(),
        pairingService =
-           pairingService ?? PairingService(repository: repository);
+           pairingService ?? PairingService(repository: repository),
+       lanSyncService =
+           lanSyncService ?? LanSyncService(repository: repository);
 
   factory AppStore.production() => AppStore(
     repository: DriftAppRepository(),
@@ -34,6 +40,7 @@ class AppStore extends ChangeNotifier {
   final LegacyPreferencesImporter? _legacyImporter;
   final VaultService _vaultService;
   final PairingService pairingService;
+  final LanSyncService lanSyncService;
   final _uuid = const Uuid();
 
   AppData data = AppData.empty();
@@ -46,6 +53,9 @@ class AppStore extends ChangeNotifier {
   List<SyncCursor> syncCursors = [];
   SyncPreferences syncPreferences = const SyncPreferences();
   int journalEntryCount = 0;
+  bool lanSyncBusy = false;
+  String? lanSyncPeerDeviceId;
+  LanSyncReport? lastLanSyncReport;
 
   VaultStatus vaultStatus = const VaultStatus.unavailable();
   VaultScanResult? pendingVaultScan;
@@ -617,6 +627,51 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     }
     notifyListeners();
     return result;
+  }
+
+  Future<LanSyncHostSession> startLanSyncHost(String peerDeviceId) {
+    return lanSyncService.startHost(
+      peerDeviceId: peerDeviceId,
+      onRemoteApplied: (_) => refreshAfterLanSync(),
+    );
+  }
+
+  Future<LanSyncReport> syncFromLanOffer(
+    String rawOffer, {
+    required String expectedPeerDeviceId,
+  }) async {
+    if (lanSyncBusy) {
+      throw StateError('Синхронизация уже выполняется.');
+    }
+    lanSyncBusy = true;
+    lanSyncPeerDeviceId = expectedPeerDeviceId;
+    notifyListeners();
+    try {
+      final report = await lanSyncService.syncFromOffer(
+        rawOffer,
+        expectedPeerDeviceId: expectedPeerDeviceId,
+        onRemoteApplied: (_) => refreshAfterLanSync(),
+      );
+      await refreshAfterLanSync(report: report);
+      return report;
+    } finally {
+      lanSyncBusy = false;
+      lanSyncPeerDeviceId = null;
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshAfterLanSync({LanSyncReport? report}) async {
+    if (report != null) {
+      lastLanSyncReport = report;
+    }
+    data = await _repository.load();
+    await rebuildAllNoteLinks(notify: false);
+    await refreshSyncFoundation(notify: false);
+    if (report?.changedData ?? false) {
+      _scheduleVaultMirror();
+    }
+    notifyListeners();
   }
 
   Future<void> renameLocalDevice(String displayName) async {
