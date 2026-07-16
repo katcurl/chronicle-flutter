@@ -38,9 +38,16 @@ void main() {
 
     expect(find.text('Устройства и синхронизация'), findsOneWidget);
     expect(find.text('Автосинхронизация'), findsOneWidget);
-    expect(find.text('Подключить устройство'), findsOneWidget);
+    expect(find.text('Подключить устройство'), findsWidgets);
     expect(find.text('Журнал изменений'), findsOneWidget);
     expect(find.text('Markdown Vault'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Экспортировать Chronicle'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
     expect(find.text('Экспортировать Chronicle'), findsOneWidget);
     expect(find.text('Восстановить из файла'), findsOneWidget);
   });
