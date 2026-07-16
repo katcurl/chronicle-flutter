@@ -7,6 +7,7 @@ import 'pairing_host_screen.dart';
 import 'pairing_scan_screen.dart';
 import '../sync/sync_models.dart';
 import '../vault/vault_models.dart';
+import '../widgets/desktop_navigation.dart';
 
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen({super.key, required this.store});
@@ -48,179 +49,208 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final identity = widget.store.deviceIdentity;
     final preferences = widget.store.syncPreferences;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Устройства и синхронизация'),
-        actions: [
-          IconButton(
-            tooltip: 'Обновить сведения',
-            onPressed: refreshing ? null : _refresh,
-            icon:
-                refreshing
-                    ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
-        children: [
-          _SectionHeader(
-            title: 'Это устройство',
-            subtitle: 'Постоянный идентификатор создаётся один раз.',
-          ),
-          const SizedBox(height: 10),
-          _DeviceIdentityCard(
-            identity: identity,
-            onRename: identity == null ? null : () => _rename(identity),
-          ),
-          const SizedBox(height: 24),
-          const _SectionHeader(
-            title: 'Автоматическая синхронизация',
-            subtitle: 'Только между доверенными устройствами в локальной сети.',
-          ),
-          const SizedBox(height: 10),
-          Card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: const Text('Автосинхронизация'),
-                  subtitle: const Text(
-                    'Синхронизировать изменения, когда связанное устройство '
-                    'обнаружено в той же сети.',
-                  ),
-                  value: preferences.autoSyncEnabled,
-                  onChanged: (value) {
-                    widget.store.updateSyncPreferences(
-                      preferences.copyWith(autoSyncEnabled: value),
-                    );
-                  },
-                ),
-                const Divider(height: 1),
-                SwitchListTile(
-                  title: const Text('Обнаружение в локальной сети'),
-                  subtitle: const Text(
-                    'Искать Chronicle Desktop или Android через Wi‑Fi/LAN.',
-                  ),
-                  value: preferences.discoverOnLocalNetwork,
-                  onChanged: (value) {
-                    widget.store.updateSyncPreferences(
-                      preferences.copyWith(discoverOnLocalNetwork: value),
-                    );
-                  },
-                ),
-                const Divider(height: 1),
-                const ListTile(
-                  leading: Icon(Icons.lock_outline_rounded),
-                  title: Text('Только доверенные устройства'),
-                  subtitle: Text(
-                    'Одна сеть не считается авторизацией. Подключение будет '
-                    'разрешено только после QR-сопряжения.',
-                  ),
-                  trailing: Icon(Icons.verified_user_outlined),
-                ),
-              ],
+    return EscapeToClose(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Устройства и синхронизация'),
+          actions: [
+            const Padding(
+              padding: EdgeInsets.only(right: 4),
+              child: Center(child: EscapeKeyHint()),
             ),
-          ),
-          const SizedBox(height: 24),
-          _SectionHeader(
-            title: 'Связанные устройства',
-            subtitle:
-                widget.store.trustedDevices.isEmpty
-                    ? 'Пока ни одно устройство не сопряжено.'
-                    : 'Устройства, которым разрешён обмен данными.',
-          ),
-          const SizedBox(height: 10),
-          if (widget.store.trustedDevices.isEmpty)
-            _EmptyDevicesCard(onPair: _openPairing)
-          else
-            ...widget.store.trustedDevices.map(
-              (device) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _TrustedDeviceCard(
-                  device: device,
-                  onRevoke: () => _confirmRevoke(device),
-                ),
+            IconButton(
+              tooltip: 'Обновить сведения',
+              onPressed: refreshing ? null : _refresh,
+              icon:
+                  refreshing
+                      ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.refresh_rounded),
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 980),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 48),
+                children: [
+                  _SectionHeader(
+                    title: 'Это устройство',
+                    subtitle: 'Постоянный идентификатор создаётся один раз.',
+                  ),
+                  const SizedBox(height: 10),
+                  _DeviceIdentityCard(
+                    identity: identity,
+                    onRename: identity == null ? null : () => _rename(identity),
+                  ),
+                  const SizedBox(height: 14),
+                  _SyncOverviewCard(
+                    trustedDeviceCount: widget.store.trustedDevices.length,
+                    journalEntryCount: widget.store.journalEntryCount,
+                    autoSyncEnabled: preferences.autoSyncEnabled,
+                    onPair: _openPairing,
+                  ),
+                  const SizedBox(height: 28),
+                  const _SectionHeader(
+                    title: 'Автоматическая синхронизация',
+                    subtitle:
+                        'Только между доверенными устройствами в локальной сети.',
+                  ),
+                  const SizedBox(height: 10),
+                  Card(
+                    child: Column(
+                      children: [
+                        SwitchListTile(
+                          title: const Text('Автосинхронизация'),
+                          subtitle: const Text(
+                            'Синхронизировать изменения, когда связанное устройство '
+                            'обнаружено в той же сети.',
+                          ),
+                          value: preferences.autoSyncEnabled,
+                          onChanged: (value) {
+                            widget.store.updateSyncPreferences(
+                              preferences.copyWith(autoSyncEnabled: value),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1),
+                        SwitchListTile(
+                          title: const Text('Обнаружение в локальной сети'),
+                          subtitle: const Text(
+                            'Искать Chronicle Desktop или Android через Wi‑Fi/LAN.',
+                          ),
+                          value: preferences.discoverOnLocalNetwork,
+                          onChanged: (value) {
+                            widget.store.updateSyncPreferences(
+                              preferences.copyWith(
+                                discoverOnLocalNetwork: value,
+                              ),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1),
+                        const ListTile(
+                          leading: Icon(Icons.lock_outline_rounded),
+                          title: Text('Только доверенные устройства'),
+                          subtitle: Text(
+                            'Одна сеть не считается авторизацией. Подключение будет '
+                            'разрешено только после QR-сопряжения.',
+                          ),
+                          trailing: Icon(Icons.verified_user_outlined),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _SectionHeader(
+                    title: 'Связанные устройства',
+                    subtitle:
+                        widget.store.trustedDevices.isEmpty
+                            ? 'Пока ни одно устройство не сопряжено.'
+                            : 'Устройства, которым разрешён обмен данными.',
+                  ),
+                  const SizedBox(height: 10),
+                  if (widget.store.trustedDevices.isEmpty)
+                    _EmptyDevicesCard(onPair: _openPairing)
+                  else
+                    ...widget.store.trustedDevices.map(
+                      (device) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _TrustedDeviceCard(
+                          device: device,
+                          onRevoke: () => _confirmRevoke(device),
+                        ),
+                      ),
+                    ),
+                  if (widget.store.trustedDevices.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilledButton.tonalIcon(
+                        onPressed: _openPairing,
+                        icon: const Icon(Icons.add_link_rounded),
+                        label: const Text('Подключить устройство'),
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                  _SectionHeader(
+                    title: 'Журнал изменений',
+                    subtitle:
+                        '${widget.store.journalEntryCount} локальных событий. '
+                        'Именно этот журнал позже будет передаваться между устройствами.',
+                  ),
+                  const SizedBox(height: 10),
+                  _JournalCard(changes: widget.store.recentChanges),
+                  const SizedBox(height: 24),
+                  const _SectionHeader(
+                    title: 'Markdown Vault',
+                    subtitle:
+                        'Двусторонние Markdown-файлы и локальные вложения без облака.',
+                  ),
+                  const SizedBox(height: 10),
+                  _VaultCard(
+                    status: widget.store.vaultStatus,
+                    busy: widget.store.vaultBusy,
+                    onWrite: _writeVault,
+                    onScan: _scanVault,
+                    onChooseFolder: _chooseVaultFolder,
+                  ),
+                  const SizedBox(height: 24),
+                  const _SectionHeader(
+                    title: 'Резервная копия',
+                    subtitle:
+                        'Один переносимый файл с проверкой контрольных сумм.',
+                  ),
+                  const SizedBox(height: 10),
+                  Card(
+                    child: Column(
+                      children: [
+                        ListTile(
+                          enabled: !widget.store.vaultBusy,
+                          leading: const Icon(Icons.download_rounded),
+                          title: const Text('Экспортировать Chronicle'),
+                          subtitle: const Text(
+                            'Создать файл .chronicle с проектами, задачами, '
+                            'заметками, временем и Markdown Vault.',
+                          ),
+                          onTap: widget.store.vaultBusy ? null : _exportBackup,
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          enabled: !widget.store.vaultBusy,
+                          leading: const Icon(
+                            Icons.settings_backup_restore_rounded,
+                          ),
+                          title: const Text('Восстановить из файла'),
+                          subtitle: const Text(
+                            'Перед заменой данных Chronicle создаст аварийную копию.',
+                          ),
+                          onTap: widget.store.vaultBusy ? null : _restoreBackup,
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          enabled: !widget.store.vaultBusy,
+                          leading: const Icon(Icons.copy_all_outlined),
+                          title: const Text('Скопировать JSON-копию'),
+                          subtitle: const Text(
+                            'Запасной совместимый экспорт в буфер.',
+                          ),
+                          onTap: widget.store.vaultBusy ? null : _copyBackup,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const _FoundationNotice(),
+                ],
               ),
             ),
-          if (widget.store.trustedDevices.isNotEmpty)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.tonalIcon(
-                onPressed: _openPairing,
-                icon: const Icon(Icons.add_link_rounded),
-                label: const Text('Подключить устройство'),
-              ),
-            ),
-          const SizedBox(height: 24),
-          _SectionHeader(
-            title: 'Журнал изменений',
-            subtitle:
-                '${widget.store.journalEntryCount} локальных событий. '
-                'Именно этот журнал позже будет передаваться между устройствами.',
           ),
-          const SizedBox(height: 10),
-          _JournalCard(changes: widget.store.recentChanges),
-          const SizedBox(height: 24),
-          const _SectionHeader(
-            title: 'Markdown Vault',
-            subtitle:
-                'Двусторонние Markdown-файлы и локальные вложения без облака.',
-          ),
-          const SizedBox(height: 10),
-          _VaultCard(
-            status: widget.store.vaultStatus,
-            busy: widget.store.vaultBusy,
-            onWrite: _writeVault,
-            onScan: _scanVault,
-            onChooseFolder: _chooseVaultFolder,
-          ),
-          const SizedBox(height: 24),
-          const _SectionHeader(
-            title: 'Резервная копия',
-            subtitle: 'Один переносимый файл с проверкой контрольных сумм.',
-          ),
-          const SizedBox(height: 10),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  enabled: !widget.store.vaultBusy,
-                  leading: const Icon(Icons.download_rounded),
-                  title: const Text('Экспортировать Chronicle'),
-                  subtitle: const Text(
-                    'Создать файл .chronicle с проектами, задачами, '
-                    'заметками, временем и Markdown Vault.',
-                  ),
-                  onTap: widget.store.vaultBusy ? null : _exportBackup,
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  enabled: !widget.store.vaultBusy,
-                  leading: const Icon(Icons.settings_backup_restore_rounded),
-                  title: const Text('Восстановить из файла'),
-                  subtitle: const Text(
-                    'Перед заменой данных Chronicle создаст аварийную копию.',
-                  ),
-                  onTap: widget.store.vaultBusy ? null : _restoreBackup,
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  enabled: !widget.store.vaultBusy,
-                  leading: const Icon(Icons.copy_all_outlined),
-                  title: const Text('Скопировать JSON-копию'),
-                  subtitle: const Text('Запасной совместимый экспорт в буфер.'),
-                  onTap: widget.store.vaultBusy ? null : _copyBackup,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          const _FoundationNotice(),
-        ],
+        ),
       ),
     );
   }
@@ -679,6 +709,165 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 }
 
+class _SyncOverviewCard extends StatelessWidget {
+  const _SyncOverviewCard({
+    required this.trustedDeviceCount,
+    required this.journalEntryCount,
+    required this.autoSyncEnabled,
+    required this.onPair,
+  });
+
+  final int trustedDeviceCount;
+  final int journalEntryCount;
+  final bool autoSyncEnabled;
+  final VoidCallback onPair;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer.withValues(alpha: 0.58),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 660;
+          final summary = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: colors.primary,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.sync_lock_rounded,
+                      color: colors.onPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Локальная синхронизация',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          autoSyncEnabled
+                              ? 'Автосинхронизация включена'
+                              : 'Автосинхронизация приостановлена',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _OverviewMetric(
+                    icon: Icons.devices_rounded,
+                    value: '$trustedDeviceCount',
+                    label: 'доверенных',
+                  ),
+                  _OverviewMetric(
+                    icon: Icons.history_rounded,
+                    value: '$journalEntryCount',
+                    label: 'изменений',
+                  ),
+                  _OverviewMetric(
+                    icon:
+                        autoSyncEnabled
+                            ? Icons.cloud_done_outlined
+                            : Icons.pause_circle_outline_rounded,
+                    value: autoSyncEnabled ? 'Вкл.' : 'Выкл.',
+                    label: 'автосинхр.',
+                  ),
+                ],
+              ),
+            ],
+          );
+
+          final action = FilledButton.icon(
+            onPressed: onPair,
+            icon: const Icon(Icons.add_link_rounded),
+            label: const Text('Подключить устройство'),
+          );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [summary, const SizedBox(height: 18), action],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: summary),
+              const SizedBox(width: 24),
+              action,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _OverviewMetric extends StatelessWidget {
+  const _OverviewMetric({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: colors.surface.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: colors.primary),
+          const SizedBox(width: 7),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(width: 5),
+          Text(label),
+        ],
+      ),
+    );
+  }
+}
+
 class _VaultCard extends StatelessWidget {
   const _VaultCard({
     required this.status,
@@ -958,27 +1147,138 @@ class _TrustedDeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final hasSynced = device.lastSyncAt != null;
+
     return Card(
-      child: ListTile(
-        leading: Icon(_platformIcon(device.platform)),
-        title: Text(device.displayName),
-        subtitle: Text(
-          device.lastSyncAt == null
-              ? '${platformDisplayName(device.platform)} · ещё не синхронизировалось'
-              : '${platformDisplayName(device.platform)} · '
-                  'синхронизация ${_relativeTime(device.lastSyncAt!)}',
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: colors.secondaryContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                _platformIcon(device.platform),
+                color: colors.onSecondaryContainer,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    device.displayName,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${platformDisplayName(device.platform)} · локальное доверие',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _DeviceStatusPill(
+                        active: hasSynced,
+                        label:
+                            hasSynced
+                                ? 'Синхронизация ${_relativeTime(device.lastSyncAt!)}'
+                                : 'Ожидает первой синхронизации',
+                      ),
+                      const _DeviceStatusPill(
+                        active: true,
+                        label: 'Доверенное',
+                        icon: Icons.verified_user_outlined,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            PopupMenuButton<String>(
+              tooltip: 'Действия с устройством',
+              onSelected: (value) {
+                if (value == 'revoke') {
+                  onRevoke();
+                }
+              },
+              itemBuilder:
+                  (_) => const [
+                    PopupMenuItem(
+                      value: 'revoke',
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.link_off_rounded),
+                        title: Text('Отозвать доверие'),
+                      ),
+                    ),
+                  ],
+            ),
+          ],
         ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) {
-            if (value == 'revoke') {
-              onRevoke();
-            }
-          },
-          itemBuilder:
-              (_) => const [
-                PopupMenuItem(value: 'revoke', child: Text('Отозвать доверие')),
-              ],
-        ),
+      ),
+    );
+  }
+}
+
+class _DeviceStatusPill extends StatelessWidget {
+  const _DeviceStatusPill({
+    required this.active,
+    required this.label,
+    this.icon,
+  });
+
+  final bool active;
+  final String label;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final foreground = active ? colors.primary : colors.onSurfaceVariant;
+    final background =
+        active
+            ? colors.primaryContainer.withValues(alpha: 0.62)
+            : colors.surfaceContainerHighest;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon ?? Icons.circle,
+            size: icon == null ? 8 : 15,
+            color: foreground,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1060,9 +1360,9 @@ class _FoundationNotice extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'v0.15 добавляет настоящее QR-сопряжение, одноразовый токен и '
-              'проверку ключей устройств. Передача проектов и заметок начнётся '
-              'в следующей версии после проверки доверенного соединения.',
+              'Chronicle связывает устройства одноразовым QR-кодом и хранит '
+              'доверие локально. Проекты, задачи и заметки передаются только '
+              'между подтверждёнными устройствами в одной локальной сети.',
               style: TextStyle(color: colors.onTertiaryContainer),
             ),
           ),

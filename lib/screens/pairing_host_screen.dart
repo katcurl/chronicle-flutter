@@ -8,6 +8,7 @@ import '../services/app_store.dart';
 import '../sync/pairing_models.dart';
 import '../sync/pairing_transport.dart';
 import '../sync/sync_models.dart';
+import '../widgets/desktop_navigation.dart';
 
 class PairingHostScreen extends StatefulWidget {
   const PairingHostScreen({super.key, required this.store});
@@ -72,15 +73,25 @@ class _PairingHostScreenState extends State<PairingHostScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Показать QR-код')),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 620),
-              child: _body(),
+    return EscapeToClose(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Подключение устройства'),
+          actions: const [
+            Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: Center(child: EscapeKeyHint()),
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 620),
+                child: _body(),
+              ),
             ),
           ),
         ),
@@ -118,6 +129,15 @@ class _PairingHostScreenState extends State<PairingHostScreen> {
 
     return Column(
       children: [
+        _PairingSteps(
+          activeStep:
+              request == null
+                  ? 1
+                  : request.state == PairingRequestState.completed
+                  ? 3
+                  : 2,
+        ),
+        const SizedBox(height: 14),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(22),
@@ -267,6 +287,108 @@ class _PairingHostScreenState extends State<PairingHostScreen> {
       return;
     }
     await host.deny(request.requestId);
+  }
+}
+
+class _PairingSteps extends StatelessWidget {
+  const _PairingSteps({required this.activeStep});
+
+  final int activeStep;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            _PairingStep(
+              number: 1,
+              label: 'Сканирование',
+              activeStep: activeStep,
+            ),
+            const _StepConnector(),
+            _PairingStep(
+              number: 2,
+              label: 'Проверка кода',
+              activeStep: activeStep,
+            ),
+            const _StepConnector(),
+            _PairingStep(number: 3, label: 'Готово', activeStep: activeStep),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PairingStep extends StatelessWidget {
+  const _PairingStep({
+    required this.number,
+    required this.label,
+    required this.activeStep,
+  });
+
+  final int number;
+  final String label;
+  final int activeStep;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final completed = number < activeStep;
+    final active = number == activeStep;
+    final foreground =
+        completed || active ? colors.onPrimary : colors.onSurfaceVariant;
+    final background =
+        completed || active ? colors.primary : colors.surfaceContainerHighest;
+
+    return Expanded(
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: background,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              completed ? Icons.check_rounded : null,
+              color: foreground,
+              size: 18,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: active ? colors.primary : colors.onSurfaceVariant,
+              fontWeight: active ? FontWeight.w800 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepConnector extends StatelessWidget {
+  const _StepConnector();
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        height: 1,
+        margin: const EdgeInsets.only(bottom: 24),
+        color: Theme.of(context).colorScheme.outlineVariant,
+      ),
+    );
   }
 }
 

@@ -7,6 +7,7 @@ import '../services/app_store.dart';
 import '../sync/pairing_models.dart';
 import '../sync/pairing_transport.dart';
 import '../sync/sync_models.dart';
+import '../widgets/desktop_navigation.dart';
 
 class PairingScanScreen extends StatefulWidget {
   const PairingScanScreen({super.key, required this.store});
@@ -41,19 +42,25 @@ class _PairingScanScreenState extends State<PairingScanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Сканировать QR-код'),
-        actions: [
-          if (stage == _ScanStage.scanning)
-            IconButton(
-              tooltip: 'Ввести код вручную',
-              onPressed: _manualEntry,
-              icon: const Icon(Icons.keyboard_alt_outlined),
+    return EscapeToClose(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Сканировать QR-код'),
+          actions: [
+            const Padding(
+              padding: EdgeInsets.only(right: 4),
+              child: Center(child: EscapeKeyHint()),
             ),
-        ],
+            if (stage == _ScanStage.scanning)
+              IconButton(
+                tooltip: 'Ввести код вручную',
+                onPressed: _manualEntry,
+                icon: const Icon(Icons.keyboard_alt_outlined),
+              ),
+          ],
+        ),
+        body: SafeArea(child: _body()),
       ),
-      body: SafeArea(child: _body()),
     );
   }
 
