@@ -42,7 +42,21 @@ void main() {
     );
 
     notifier.notifyListeners();
-    await tester.pumpAndSettle();
+
+    // Vault reads use dart:io. A single pumpAndSettle can stop before that
+    // real asynchronous read completes because no frame is scheduled yet.
+    // Give the I/O event loop a bounded chance to finish, pumping the widget
+    // tree after each wait so the completed FutureBuilder can rebuild.
+    for (var attempt = 0; attempt < 20; attempt += 1) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 25)),
+      );
+      await tester.pump();
+      if (find.byType(Image).evaluate().isNotEmpty &&
+          find.byIcon(Icons.broken_image_outlined).evaluate().isEmpty) {
+        break;
+      }
+    }
 
     expect(find.byIcon(Icons.broken_image_outlined), findsNothing);
     expect(find.byType(Image), findsOneWidget);

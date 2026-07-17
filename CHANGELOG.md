@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.21.3+39
+
+- made the remote-image widget test wait for asynchronous Vault file I/O before asserting the refreshed preview;
+- kept the production image refresh listener from 0.21.2 unchanged;
+- prevented GitHub Actions from reporting a false failure when the file read completes after `pumpAndSettle` has already stopped.
+
 ## 0.21.2+38
 
 - fixed reloading of Vault images received through LAN sync while a note is already open;
