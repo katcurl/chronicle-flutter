@@ -1230,7 +1230,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
   Future<VaultApplyResult> applyVaultChanges(
     VaultScanResult scan, {
     required VaultConflictResolution conflictResolution,
-    Map<String, VaultConflictResolution> conflictResolutions = const {},
     VaultMissingFileResolution missingFileResolution =
         VaultMissingFileResolution.restoreFiles,
   }) async {
@@ -1248,11 +1247,8 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     String? safetyBackupPath;
 
     try {
-      final needsSafetyBackup =
-          scan.conflicts.isNotEmpty ||
-          (missingFileResolution == VaultMissingFileResolution.deleteNotes &&
-              scan.missingFiles.isNotEmpty);
-      if (needsSafetyBackup) {
+      if (missingFileResolution == VaultMissingFileResolution.deleteNotes &&
+          scan.missingFiles.isNotEmpty) {
         final snapshot = await _vaultService.createEmergencyBackupSnapshot(
           data: data,
           identity: deviceIdentity,
@@ -1280,9 +1276,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
           createdCount++;
           continue;
         }
-        final resolution =
-            conflictResolutions[conflict.decisionKey] ?? conflictResolution;
-        switch (resolution) {
+        switch (conflictResolution) {
           case VaultConflictResolution.keepChronicle:
             keptChronicleCount++;
             break;
@@ -1294,7 +1288,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
             await _createNoteFromVault(
               conflict.proposedNote,
               forceNewId: true,
-              titleSuffix: ' (конфликтная версия Vault)',
+              titleSuffix: ' (версия Vault)',
             );
             duplicatedCount++;
             break;

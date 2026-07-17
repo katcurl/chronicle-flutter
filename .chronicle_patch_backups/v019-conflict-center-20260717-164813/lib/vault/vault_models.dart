@@ -91,11 +91,6 @@ class VaultNoteChange {
 
   bool get isConflict => kind == VaultChangeKind.conflict;
   bool get isNew => kind == VaultChangeKind.newNote;
-
-  /// Stable key used by the conflict center to keep an independent decision
-  /// for every conflicting Markdown file.
-  String get decisionKey =>
-      '${currentNoteId ?? proposedNote.id}::$relativePath';
 }
 
 class VaultMissingFile {

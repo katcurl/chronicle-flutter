@@ -2,8 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../features/notes/note_document.dart';
-import '../models/app_models.dart';
 import '../reliability/reliability_models.dart';
 import '../services/app_store.dart';
 import 'pairing_host_screen.dart';
@@ -626,7 +624,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
       final result = await widget.store.applyVaultChanges(
         scan,
         conflictResolution: decision.conflictResolution,
-        conflictResolutions: decision.conflictResolutions,
         missingFileResolution: decision.missingFileResolution,
       );
       if (!mounted) {
@@ -656,13 +653,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
   Future<_VaultApplyDecision?> _showVaultChanges(VaultScanResult scan) {
     final safe = scan.safeChanges;
     final conflicts = scan.conflicts;
-    final currentNotes = <String, Note>{};
-    for (final conflict in conflicts) {
-      final current = widget.store.noteById(conflict.currentNoteId ?? '');
-      if (current != null) {
-        currentNotes[conflict.decisionKey] = current;
-      }
-    }
     return showDialog<_VaultApplyDecision>(
       context: context,
       builder:
@@ -670,7 +660,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
             scan: scan,
             safeChangeCount: safe.length,
             conflictCount: conflicts.length,
-            currentNotes: currentNotes,
           ),
     );
   }
@@ -1045,12 +1034,10 @@ class _OverviewMetric extends StatelessWidget {
 class _VaultApplyDecision {
   const _VaultApplyDecision({
     required this.conflictResolution,
-    required this.conflictResolutions,
     required this.missingFileResolution,
   });
 
   final VaultConflictResolution conflictResolution;
-  final Map<String, VaultConflictResolution> conflictResolutions;
   final VaultMissingFileResolution missingFileResolution;
 }
 
@@ -1059,13 +1046,11 @@ class _VaultChangesDialog extends StatefulWidget {
     required this.scan,
     required this.safeChangeCount,
     required this.conflictCount,
-    required this.currentNotes,
   });
 
   final VaultScanResult scan;
   final int safeChangeCount;
   final int conflictCount;
-  final Map<String, Note> currentNotes;
 
   @override
   State<_VaultChangesDialog> createState() => _VaultChangesDialogState();
@@ -1074,23 +1059,11 @@ class _VaultChangesDialog extends StatefulWidget {
 class _VaultChangesDialogState extends State<_VaultChangesDialog> {
   VaultMissingFileResolution missingFileResolution =
       VaultMissingFileResolution.restoreFiles;
-  late final Map<String, VaultConflictResolution> conflictResolutions;
-
-  @override
-  void initState() {
-    super.initState();
-    conflictResolutions = <String, VaultConflictResolution>{
-      for (final conflict in widget.scan.conflicts)
-        conflict.decisionKey: VaultConflictResolution.keepBoth,
-    };
-  }
 
   @override
   Widget build(BuildContext context) {
     final scan = widget.scan;
     final conflicts = scan.conflicts;
-    final safeChanges = scan.safeChanges;
-
     return AlertDialog(
       icon: Icon(
         conflicts.isEmpty ? Icons.sync_alt_rounded : Icons.merge_type_rounded,
@@ -1099,107 +1072,35 @@ class _VaultChangesDialogState extends State<_VaultChangesDialog> {
       title: Text(
         conflicts.isEmpty
             ? 'Импортировать изменения Vault?'
-            : 'Центр конфликтов Markdown',
+            : 'Обнаружены конфликты Vault',
       ),
       content: SizedBox(
-        width: 760,
+        width: 660,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Wrap(
-                spacing: 12,
-                runSpacing: 6,
-                children: [
-                  Text('Безопасные изменения: ${widget.safeChangeCount}'),
-                  Text('Конфликты: ${widget.conflictCount}'),
-                  Text('Отсутствующие файлы: ${scan.missingFiles.length}'),
-                ],
-              ),
-              if (safeChanges.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text(
-                  'Безопасные изменения',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 6),
-                for (final change in safeChanges.take(8))
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      change.isNew
-                          ? Icons.note_add_outlined
-                          : Icons.edit_note_rounded,
-                    ),
-                    title: Text(change.proposedNote.title),
-                    subtitle: Text(change.relativePath),
+              Text('Безопасные изменения: ${widget.safeChangeCount}'),
+              Text('Конфликты: ${widget.conflictCount}'),
+              Text('Отсутствующие файлы: ${scan.missingFiles.length}'),
+              const SizedBox(height: 14),
+              for (final change in scan.changes.take(10))
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    change.isConflict
+                        ? Icons.warning_amber_rounded
+                        : change.isNew
+                        ? Icons.note_add_outlined
+                        : Icons.edit_note_rounded,
                   ),
-                if (safeChanges.length > 8)
-                  Text('И ещё ${safeChanges.length - 8} изменений…'),
-              ],
-              if (conflicts.isNotEmpty) ...[
-                const SizedBox(height: 18),
-                Text(
-                  'Разрешение конфликтов',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                  title: Text(change.proposedNote.title),
+                  subtitle: Text(change.relativePath),
                 ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Для каждого файла выбери отдельное решение. Безопасный '
-                  'вариант по умолчанию — сохранить обе версии. Перед '
-                  'применением Chronicle создаст полную страховочную копию.',
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed:
-                          () => _setAll(VaultConflictResolution.keepChronicle),
-                      icon: const Icon(Icons.computer_rounded),
-                      label: const Text('Все: Chronicle'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed:
-                          () => _setAll(VaultConflictResolution.keepBoth),
-                      icon: const Icon(Icons.copy_all_rounded),
-                      label: const Text('Все: обе версии'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed:
-                          () => _setAll(VaultConflictResolution.importFile),
-                      icon: const Icon(Icons.description_outlined),
-                      label: const Text('Все: файлы Vault'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                for (final conflict in conflicts) ...[
-                  _VaultConflictCard(
-                    conflict: conflict,
-                    currentNote: widget.currentNotes[conflict.decisionKey],
-                    resolution:
-                        conflictResolutions[conflict.decisionKey] ??
-                        VaultConflictResolution.keepBoth,
-                    scannedAt: scan.scannedAt,
-                    onChanged: (resolution) {
-                      setState(
-                        () =>
-                            conflictResolutions[conflict.decisionKey] =
-                                resolution,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                ],
-              ],
+              if (scan.changes.length > 10)
+                Text('И ещё ${scan.changes.length - 10} изменений…'),
               if (scan.missingFiles.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Text(
@@ -1238,6 +1139,14 @@ class _VaultChangesDialogState extends State<_VaultChangesDialog> {
                   ),
                 ),
               ],
+              if (conflicts.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                const Text(
+                  'Выбранное решение будет применено ко всем конфликтам. '
+                  'Перед импортом Chronicle сохранит внутреннюю версию каждой '
+                  'заметки в истории.',
+                ),
+              ],
             ],
           ),
         ),
@@ -1247,225 +1156,33 @@ class _VaultChangesDialogState extends State<_VaultChangesDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Отмена'),
         ),
-        FilledButton.icon(
-          onPressed: _finish,
-          icon: const Icon(Icons.check_rounded),
-          label: Text(
-            conflicts.isEmpty ? 'Применить изменения' : 'Применить решения',
+        if (conflicts.isNotEmpty)
+          TextButton(
+            onPressed: () => _finish(VaultConflictResolution.keepChronicle),
+            child: const Text('Оставить Chronicle'),
           ),
+        if (conflicts.isNotEmpty)
+          OutlinedButton(
+            onPressed: () => _finish(VaultConflictResolution.keepBoth),
+            child: const Text('Сохранить обе'),
+          ),
+        FilledButton(
+          onPressed: () => _finish(VaultConflictResolution.importFile),
+          child: Text(conflicts.isEmpty ? 'Применить' : 'Взять версию файла'),
         ),
       ],
     );
   }
 
-  void _setAll(VaultConflictResolution resolution) {
-    setState(() {
-      for (final conflict in widget.scan.conflicts) {
-        conflictResolutions[conflict.decisionKey] = resolution;
-      }
-    });
-  }
-
-  void _finish() {
+  void _finish(VaultConflictResolution conflictResolution) {
     Navigator.pop(
       context,
       _VaultApplyDecision(
-        conflictResolution: VaultConflictResolution.keepBoth,
-        conflictResolutions: Map.unmodifiable(conflictResolutions),
+        conflictResolution: conflictResolution,
         missingFileResolution: missingFileResolution,
       ),
     );
   }
-}
-
-class _VaultConflictCard extends StatelessWidget {
-  const _VaultConflictCard({
-    required this.conflict,
-    required this.currentNote,
-    required this.resolution,
-    required this.scannedAt,
-    required this.onChanged,
-  });
-
-  final VaultNoteChange conflict;
-  final Note? currentNote;
-  final VaultConflictResolution resolution;
-  final DateTime scannedAt;
-  final ValueChanged<VaultConflictResolution> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final current = currentNote;
-
-    return Card(
-      margin: EdgeInsets.zero,
-      color: colors.errorContainer.withValues(alpha: 0.24),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.warning_amber_rounded, color: colors.error),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        current?.title ?? conflict.proposedNote.title,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      SelectableText(
-                        conflict.relativePath,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _VaultVersionPreview(
-              label: 'Версия Chronicle',
-              icon: Icons.computer_rounded,
-              title: current?.title ?? 'Текущая заметка недоступна',
-              metadata:
-                  current == null
-                      ? 'Запись не найдена'
-                      : 'Редакция ${current.revision} · '
-                          '${_formatVaultDate(current.updatedAt)}',
-              body: current?.body ?? '',
-            ),
-            const SizedBox(height: 8),
-            _VaultVersionPreview(
-              label: 'Версия Markdown-файла',
-              icon: Icons.description_outlined,
-              title: conflict.proposedNote.title,
-              metadata: 'Обнаружена ${_formatVaultDate(scannedAt)}',
-              body: conflict.proposedNote.body,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Решение',
-              style: Theme.of(
-                context,
-              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 5),
-            InputDecorator(
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<VaultConflictResolution>(
-                  value: resolution,
-                  isExpanded: true,
-                  items: const [
-                    DropdownMenuItem(
-                      value: VaultConflictResolution.keepChronicle,
-                      child: Text('Оставить версию Chronicle'),
-                    ),
-                    DropdownMenuItem(
-                      value: VaultConflictResolution.keepBoth,
-                      child: Text('Сохранить обе версии'),
-                    ),
-                    DropdownMenuItem(
-                      value: VaultConflictResolution.importFile,
-                      child: Text('Взять версию Markdown-файла'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      onChanged(value);
-                    }
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _VaultVersionPreview extends StatelessWidget {
-  const _VaultVersionPreview({
-    required this.label,
-    required this.icon,
-    required this.title,
-    required this.metadata,
-    required this.body,
-  });
-
-  final String label;
-  final IconData icon;
-  final String title;
-  final String metadata;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 17),
-              const SizedBox(width: 7),
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
-            ],
-          ),
-          const SizedBox(height: 7),
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 2),
-          Text(metadata, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 7),
-          Text(
-            _vaultExcerpt(body),
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-String _vaultExcerpt(String body) {
-  final content = NoteDocument.parse(body).content;
-  final compact = content.replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (compact.isEmpty) {
-    return 'Пустая заметка';
-  }
-  const limit = 260;
-  return compact.length <= limit
-      ? compact
-      : '${compact.substring(0, limit).trimRight()}…';
-}
-
-String _formatVaultDate(DateTime value) {
-  final local = value.toLocal();
-  String two(int number) => number.toString().padLeft(2, '0');
-  return '${two(local.day)}.${two(local.month)}.${local.year} '
-      '${two(local.hour)}:${two(local.minute)}';
 }
 
 class _VaultCard extends StatelessWidget {
