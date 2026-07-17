@@ -281,17 +281,20 @@ class _ManagedNoteColumnsState extends State<_ManagedNoteColumns> {
                   Positioned(
                     top: 8,
                     right: 8,
-                    child: Material(
-                      color:
-                          Theme.of(context).colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(999),
-                      elevation: 2,
-                      child: InkWell(
+                    child: Tooltip(
+                      message: 'Управление колонками',
+                      child: Material(
+                        color:
+                            Theme.of(context).colorScheme.surfaceContainerHigh,
                         borderRadius: BorderRadius.circular(999),
-                        onTap: widget.onEdit,
-                        child: const Padding(
-                          padding: EdgeInsets.all(7),
-                          child: Icon(Icons.view_column_rounded, size: 18),
+                        elevation: 2,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(999),
+                          onTap: widget.onEdit,
+                          child: const Padding(
+                            padding: EdgeInsets.all(7),
+                            child: Icon(Icons.view_column_rounded, size: 18),
+                          ),
                         ),
                       ),
                     ),

@@ -72,6 +72,40 @@ void main() {
     expect(relocated.widths, [50, 50]);
   });
 
+  test('column content can be reordered without changing its Markdown', () {
+    final markdown = NoteColumnsSyntax.build(
+      widths: const [25, 50, 25],
+      contents: const ['Первая', 'Вторая', 'Третья'],
+    );
+    final block = NoteColumnsSyntax.first(markdown)!;
+    final reordered = block.orderedContents(const [2, 0, 1]);
+    final rebuilt = block.toMarkdown(contents: reordered);
+    final restored = NoteColumnsSyntax.first(rebuilt)!;
+
+    expect(restored.columns[0].markdown, 'Третья');
+    expect(restored.columns[1].markdown, 'Первая');
+    expect(restored.columns[2].markdown, 'Вторая');
+  });
+
+  test('column block can be converted back to ordinary Markdown', () {
+    final markdown = NoteColumnsSyntax.build(
+      widths: const [40, 60],
+      contents: const ['Левая часть', 'Правая часть'],
+    );
+    final block = NoteColumnsSyntax.first(markdown)!;
+
+    expect(
+      block.toPlainMarkdown(order: const [1, 0]),
+      'Правая часть\n\nЛевая часть',
+    );
+  });
+
+  test('invalid column order falls back to original order', () {
+    expect(NoteColumnsSyntax.normalizeOrder(const [1, 1], 2), [0, 1]);
+    expect(NoteColumnsSyntax.normalizeOrder(const [2, 0], 2), [0, 1]);
+    expect(NoteColumnsSyntax.normalizeOrder(const [1, 0], 2), [1, 0]);
+  });
+
   test('column control markers do not inflate word count', () {
     final markdown = NoteColumnsSyntax.build(
       widths: const [40, 60],

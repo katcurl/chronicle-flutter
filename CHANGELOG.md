@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20.1+35
+
+- added column content reordering from the existing layout dialog;
+- added safe conversion of a column block back to ordinary Markdown;
+- kept two-to-three column expansion and three-to-two merging in one dialog;
+- added clearer management controls and a preview tooltip;
+- preserved images, captions, formulas and links while columns are reordered or unwrapped;
+- added tests for content order validation and Markdown conversion.
+
 ## 0.20.0+34
 
 - fixed the Windows build failure in the three-column layout editor;

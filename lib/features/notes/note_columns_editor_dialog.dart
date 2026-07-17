@@ -2,6 +2,18 @@ import 'package:flutter/material.dart';
 
 import 'note_columns_syntax.dart';
 
+class NoteColumnsEditorResult {
+  const NoteColumnsEditorResult({
+    required this.layout,
+    required this.contentOrder,
+    this.unwrap = false,
+  });
+
+  final NoteColumnsLayout layout;
+  final List<int> contentOrder;
+  final bool unwrap;
+}
+
 class NoteColumnsEditorDialog extends StatefulWidget {
   const NoteColumnsEditorDialog({
     super.key,
@@ -12,12 +24,12 @@ class NoteColumnsEditorDialog extends StatefulWidget {
   final NoteColumnsLayout initial;
   final bool editingExisting;
 
-  static Future<NoteColumnsLayout?> show(
+  static Future<NoteColumnsEditorResult?> show(
     BuildContext context, {
     required NoteColumnsLayout initial,
     required bool editingExisting,
   }) {
-    return showDialog<NoteColumnsLayout>(
+    return showDialog<NoteColumnsEditorResult>(
       context: context,
       builder:
           (context) => NoteColumnsEditorDialog(
@@ -35,6 +47,7 @@ class NoteColumnsEditorDialog extends StatefulWidget {
 class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
   late int columnCount;
   late List<int> widths;
+  late List<int> contentOrder;
 
   @override
   void initState() {
@@ -44,16 +57,19 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
       widget.initial.widths,
       columnCount,
     );
+    contentOrder = [
+      for (var index = 0; index < columnCount; index += 1) index,
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(
-        widget.editingExisting ? 'Настроить колонки' : 'Добавить колонки',
+        widget.editingExisting ? 'Управление колонками' : 'Добавить колонки',
       ),
       content: SizedBox(
-        width: 500,
+        width: 520,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -89,6 +105,24 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
                   });
                 },
               ),
+              if (widget.editingExisting) ...[
+                const SizedBox(height: 20),
+                Text(
+                  'Порядок существующего содержимого',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 10),
+                _contentOrderControls(context),
+                const SizedBox(height: 8),
+                Text(
+                  'Стрелки перемещают содержимое колонок, не изменяя сам текст. '
+                  'При переходе с трёх колонок на две последняя будет добавлена '
+                  'в конец второй.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
               Text(
                 'Ширина колонок',
@@ -97,7 +131,10 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
               const SizedBox(height: 10),
               _WidthPreview(widths: widths),
               const SizedBox(height: 14),
-              if (columnCount == 2) _twoColumnControls() else _threeColumnControls(),
+              if (columnCount == 2)
+                _twoColumnControls()
+              else
+                _threeColumnControls(),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
@@ -129,25 +166,148 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
         ),
       ),
       actions: [
+        if (widget.editingExisting)
+          TextButton.icon(
+            onPressed: _confirmUnwrap,
+            icon: const Icon(Icons.view_stream_outlined),
+            label: const Text('Сделать обычным текстом'),
+          ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Отмена'),
         ),
         FilledButton(
-          onPressed:
-              () => Navigator.pop(
-                context,
-                NoteColumnsLayout(
-                  columnCount: columnCount,
-                  widths: NoteColumnsSyntax.normalizeWidths(
-                    widths,
-                    columnCount,
-                  ),
+          onPressed: () => Navigator.pop(
+            context,
+            NoteColumnsEditorResult(
+              layout: NoteColumnsLayout(
+                columnCount: columnCount,
+                widths: NoteColumnsSyntax.normalizeWidths(
+                  widths,
+                  columnCount,
                 ),
               ),
+              contentOrder: List<int>.unmodifiable(contentOrder),
+            ),
+          ),
           child: Text(widget.editingExisting ? 'Применить' : 'Добавить'),
         ),
       ],
+    );
+  }
+
+  Widget _contentOrderControls(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var position = 0; position < contentOrder.length; position += 1)
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: position < contentOrder.length - 1 ? 8 : 0,
+              ),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(6, 10, 6, 6),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Колонка ${contentOrder[position] + 1}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          tooltip: 'Переместить левее',
+                          visualDensity: VisualDensity.compact,
+                          onPressed:
+                              position > 0
+                                  ? () => _moveContent(position, position - 1)
+                                  : null,
+                          icon: const Icon(Icons.arrow_back_rounded, size: 19),
+                        ),
+                        IconButton(
+                          tooltip: 'Переместить правее',
+                          visualDensity: VisualDensity.compact,
+                          onPressed:
+                              position < contentOrder.length - 1
+                                  ? () => _moveContent(position, position + 1)
+                                  : null,
+                          icon: const Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 19,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _moveContent(int from, int to) {
+    if (from < 0 ||
+        from >= contentOrder.length ||
+        to < 0 ||
+        to >= contentOrder.length ||
+        from == to) {
+      return;
+    }
+    setState(() {
+      final value = contentOrder.removeAt(from);
+      contentOrder.insert(to, value);
+    });
+  }
+
+  Future<void> _confirmUnwrap() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('Убрать колонки?'),
+            content: const Text(
+              'Содержимое останется в заметке и будет расположено подряд '
+              'обычным Markdown-текстом.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Убрать колонки'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    Navigator.pop(
+      context,
+      NoteColumnsEditorResult(
+        layout: NoteColumnsLayout(
+          columnCount: columnCount,
+          widths: NoteColumnsSyntax.normalizeWidths(widths, columnCount),
+        ),
+        contentOrder: List<int>.unmodifiable(contentOrder),
+        unwrap: true,
+      ),
     );
   }
 
@@ -216,7 +376,9 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
             final maximum = 85 - left;
             final nextMiddle =
                 ((value / 5).round() * 5).clamp(15, maximum).toInt();
-            setState(() => widths = [left, nextMiddle, 100 - left - nextMiddle]);
+            setState(() {
+              widths = [left, nextMiddle, 100 - left - nextMiddle];
+            });
           },
         ),
       ],

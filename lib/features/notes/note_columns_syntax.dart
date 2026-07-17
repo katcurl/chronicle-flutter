@@ -61,12 +61,28 @@ class NoteColumnsReference {
     );
   }
 
+  List<String> orderedContents([List<int>? order]) {
+    final normalizedOrder = NoteColumnsSyntax.normalizeOrder(
+      order ?? [for (var index = 0; index < columnCount; index += 1) index],
+      columnCount,
+    );
+    return [
+      for (final index in normalizedOrder) columns[index].markdown,
+    ];
+  }
+
+  String toPlainMarkdown({List<int>? order}) {
+    return orderedContents(order)
+        .map((content) => content.trim())
+        .where((content) => content.isNotEmpty)
+        .join('\n\n');
+  }
+
   String toMarkdown({
     List<int>? widths,
     List<String>? contents,
   }) {
-    final renderedContents =
-        contents ?? [for (final column in columns) column.markdown];
+    final renderedContents = contents ?? orderedContents();
     final normalizedWidths = NoteColumnsSyntax.normalizeWidths(
       widths ?? this.widths,
       renderedContents.length,
@@ -238,6 +254,19 @@ class NoteColumnsSyntax {
 
   static String stripMarkers(String markdown) {
     return markdown.replaceAll(_allMarkerPattern, ' ');
+  }
+
+  static List<int> normalizeOrder(List<int> values, int count) {
+    final identity = [for (var index = 0; index < count; index += 1) index];
+    if (values.length != count) {
+      return identity;
+    }
+    final unique = values.toSet();
+    if (unique.length != count ||
+        values.any((value) => value < 0 || value >= count)) {
+      return identity;
+    }
+    return List<int>.from(values);
   }
 
   static List<int> normalizeWidths(List<int> values, int count) {

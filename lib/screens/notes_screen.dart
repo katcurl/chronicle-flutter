@@ -1021,13 +1021,14 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         selection.isValid && !selection.isCollapsed
             ? value.text.substring(selection.start, selection.end).trim()
             : '';
+    final layout = result.layout;
     final contents = <String>[
       'Изображение или текст',
       selected.isEmpty ? 'Текст правой колонки' : selected,
-      if (result.columnCount == 3) 'Текст третьей колонки',
+      if (layout.columnCount == 3) 'Текст третьей колонки',
     ];
     final markdown = NoteColumnsSyntax.build(
-      widths: result.widths,
+      widths: layout.widths,
       contents: contents,
     );
     _insertMarkdownAtSelection(markdown);
@@ -1053,7 +1054,18 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (result == null || !mounted) {
       return;
     }
-    _replaceColumnsLayout(current, result);
+    if (result.unwrap) {
+      _unwrapColumnsReference(
+        current,
+        contentOrder: result.contentOrder,
+      );
+      return;
+    }
+    _replaceColumnsLayout(
+      current,
+      result.layout,
+      contentOrder: result.contentOrder,
+    );
   }
 
   void _replaceColumnsWidths(
@@ -1076,8 +1088,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
 
   void _replaceColumnsLayout(
     NoteColumnsReference reference,
-    NoteColumnsLayout layout,
-  ) {
+    NoteColumnsLayout layout, {
+    List<int>? contentOrder,
+  }) {
     final current = NoteColumnsSyntax.relocate(
       contentController.text,
       reference,
@@ -1085,7 +1098,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (current == null) {
       return;
     }
-    final contents = [for (final column in current.columns) column.markdown];
+    final contents = current.orderedContents(contentOrder);
     if (layout.columnCount > contents.length) {
       while (contents.length < layout.columnCount) {
         contents.add('Новая колонка');
@@ -1103,20 +1116,53 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     );
   }
 
+  void _unwrapColumnsReference(
+    NoteColumnsReference reference, {
+    List<int>? contentOrder,
+  }) {
+    final current = NoteColumnsSyntax.relocate(
+      contentController.text,
+      reference,
+    );
+    if (current == null) {
+      return;
+    }
+    _replaceColumnsText(
+      current,
+      current.toPlainMarkdown(order: contentOrder),
+    );
+  }
+
   void _replaceColumnsBlock(
     NoteColumnsReference reference, {
     required List<int> widths,
     required List<String> contents,
   }) {
+    final current = NoteColumnsSyntax.relocate(
+      contentController.text,
+      reference,
+    );
+    if (current == null) {
+      return;
+    }
+    _replaceColumnsText(
+      current,
+      current.toMarkdown(
+        widths: widths,
+        contents: contents,
+      ),
+    );
+  }
+
+  void _replaceColumnsText(
+    NoteColumnsReference reference,
+    String replacement,
+  ) {
     final value = contentController.value;
     final current = NoteColumnsSyntax.relocate(value.text, reference);
     if (current == null) {
       return;
     }
-    final replacement = current.toMarkdown(
-      widths: widths,
-      contents: contents,
-    );
     final delta = replacement.length - (current.end - current.start);
 
     int moveOffset(int offset) {
