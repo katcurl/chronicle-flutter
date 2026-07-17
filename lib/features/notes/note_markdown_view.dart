@@ -191,26 +191,12 @@ class NoteMarkdownView extends StatelessWidget {
     }
     if (vaultRootPath.isNotEmpty &&
         uri.toString().toLowerCase().contains('attachments/')) {
-      return FutureBuilder<Uint8List?>(
-        future: loadVaultAttachment(vaultRootPath, uri.toString()),
-        builder: (context, snapshot) {
-          final bytes = snapshot.data;
-          if (bytes == null) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Padding(
-                padding: EdgeInsets.all(20),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-            return _ImageFallback(label: alt.isEmpty ? target : alt);
-          }
-          return Image.memory(
-            bytes,
-            width: expand ? double.infinity : null,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => _ImageFallback(label: alt),
-          );
-        },
+      return _VaultAttachmentImage(
+        rootPath: vaultRootPath,
+        markdownPath: uri.toString(),
+        fallbackLabel: alt.isEmpty ? target : alt,
+        expand: expand,
+        refreshListenable: assetListenable,
       );
     }
     return _ImageFallback(label: alt.isEmpty ? target : alt);
@@ -732,6 +718,92 @@ class _DisplayMath extends StatelessWidget {
               ),
         ),
       ),
+    );
+  }
+}
+
+class _VaultAttachmentImage extends StatefulWidget {
+  const _VaultAttachmentImage({
+    required this.rootPath,
+    required this.markdownPath,
+    required this.fallbackLabel,
+    required this.expand,
+    this.refreshListenable,
+  });
+
+  final String rootPath;
+  final String markdownPath;
+  final String fallbackLabel;
+  final bool expand;
+  final Listenable? refreshListenable;
+
+  @override
+  State<_VaultAttachmentImage> createState() =>
+      _VaultAttachmentImageState();
+}
+
+class _VaultAttachmentImageState extends State<_VaultAttachmentImage> {
+  late Future<Uint8List?> _bytesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _bytesFuture = _load();
+    widget.refreshListenable?.addListener(_reload);
+  }
+
+  @override
+  void didUpdateWidget(covariant _VaultAttachmentImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshListenable != widget.refreshListenable) {
+      oldWidget.refreshListenable?.removeListener(_reload);
+      widget.refreshListenable?.addListener(_reload);
+    }
+    if (oldWidget.rootPath != widget.rootPath ||
+        oldWidget.markdownPath != widget.markdownPath) {
+      _reload();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.refreshListenable?.removeListener(_reload);
+    super.dispose();
+  }
+
+  Future<Uint8List?> _load() =>
+      loadVaultAttachment(widget.rootPath, widget.markdownPath);
+
+  void _reload() {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _bytesFuture = _load());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _bytesFuture,
+      builder: (context, snapshot) {
+        final bytes = snapshot.data;
+        if (bytes == null) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          return _ImageFallback(label: widget.fallbackLabel);
+        }
+        return Image.memory(
+          bytes,
+          width: widget.expand ? double.infinity : null,
+          fit: BoxFit.contain,
+          errorBuilder:
+              (_, __, ___) => _ImageFallback(label: widget.fallbackLabel),
+        );
+      },
     );
   }
 }

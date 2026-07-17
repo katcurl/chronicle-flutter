@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.21.2+38
+
+- fixed reloading of Vault images received through LAN sync while a note is already open;
+- made each Vault-backed image listen directly for store notifications and replace its cached read future;
+- kept the remote-image widget regression test enabled on both Windows and Linux runners.
+
 ## 0.21.1+37
 
 - refreshed open note previews after synchronized attachment files arrive;
