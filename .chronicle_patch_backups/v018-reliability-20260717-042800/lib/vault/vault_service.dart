@@ -336,30 +336,6 @@ class VaultService {
     );
   }
 
-  Future<BackupExportResult> createAutomaticBackup({
-    required AppData data,
-    DeviceIdentity? identity,
-    int maxFiles = 5,
-  }) async {
-    final rootPath = await _backend.resolveRootPath();
-    if (rootPath == null || rootPath.isEmpty) {
-      throw UnsupportedError('Не удалось определить папку Vault.');
-    }
-    final package = await _buildBackupPackage(data: data, identity: identity);
-    final fileName = _backupFileName('automatic-backup');
-    final path = await _backend.writeAutomaticBackup(
-      rootPath: rootPath,
-      fileName: fileName,
-      bytes: Uint8List.fromList(utf8.encode(package.raw)),
-      maxFiles: maxFiles,
-    );
-    return BackupExportResult(
-      path: path,
-      fileName: fileName,
-      preview: package.preview,
-    );
-  }
-
   Future<BackupImportPayload?> pickBackup() async {
     final selected = await _backend.pickBackup();
     if (selected == null) {

@@ -50,14 +50,5 @@ void main() {
 
     expect(find.text('Экспортировать Chronicle'), findsOneWidget);
     expect(find.text('Восстановить из файла'), findsOneWidget);
-    expect(find.text('Создать локальную страховочную копию'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Диагностика и надёжность'),
-      400,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Диагностика и надёжность'), findsOneWidget);
-    expect(find.text('Экспортировать отчёт'), findsOneWidget);
   });
 }

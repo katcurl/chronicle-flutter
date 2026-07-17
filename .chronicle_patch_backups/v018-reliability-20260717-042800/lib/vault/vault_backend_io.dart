@@ -224,43 +224,6 @@ class VaultBackend {
     return target.path;
   }
 
-  Future<String> writeAutomaticBackup({
-    required String rootPath,
-    required String fileName,
-    required Uint8List bytes,
-    int maxFiles = 5,
-  }) async {
-    final directory = Directory(
-      p.join(rootPath, '.chronicle', 'Backups', 'Automatic'),
-    );
-    await directory.create(recursive: true);
-    final target = File(p.join(directory.path, fileName));
-    final temporary = File('${target.path}.tmp');
-    await temporary.writeAsBytes(bytes, flush: true);
-    if (await target.exists()) {
-      await target.delete();
-    }
-    await temporary.rename(target.path);
-
-    final backups = <File>[];
-    await for (final entity in directory.list(followLinks: false)) {
-      if (entity is File && entity.path.endsWith('.chronicle')) {
-        backups.add(entity);
-      }
-    }
-    backups.sort((left, right) {
-      final leftTime = left.statSync().modified;
-      final rightTime = right.statSync().modified;
-      return rightTime.compareTo(leftTime);
-    });
-    for (final stale in backups.skip(maxFiles < 1 ? 1 : maxFiles)) {
-      if (await stale.exists()) {
-        await stale.delete();
-      }
-    }
-    return target.path;
-  }
-
   String _native(String relativePath) =>
       relativePath.replaceAll('/', p.separator);
 }

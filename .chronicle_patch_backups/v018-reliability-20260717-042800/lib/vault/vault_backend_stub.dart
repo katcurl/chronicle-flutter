@@ -65,13 +65,4 @@ class VaultBackend {
   }) async {
     throw UnsupportedError('Backups are unavailable on this platform.');
   }
-
-  Future<String> writeAutomaticBackup({
-    required String rootPath,
-    required String fileName,
-    required Uint8List bytes,
-    int maxFiles = 5,
-  }) async {
-    throw UnsupportedError('Backups are unavailable on this platform.');
-  }
 }

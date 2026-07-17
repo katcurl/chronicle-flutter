@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../reliability/reliability_models.dart';
 import '../services/app_store.dart';
 import 'pairing_host_screen.dart';
 import 'pairing_scan_screen.dart';
@@ -40,7 +39,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
     try {
       await widget.store.refreshSyncFoundation();
       await widget.store.refreshVaultStatus();
-      await widget.store.refreshReliabilityStatus();
     } finally {
       if (mounted) {
         setState(() => refreshing = false);
@@ -248,26 +246,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
                     child: Column(
                       children: [
                         ListTile(
-                          enabled:
-                              !widget.store.vaultBusy &&
-                              !widget.store.reliabilityBusy,
-                          leading: const Icon(Icons.shield_outlined),
-                          title: const Text(
-                            'Создать локальную страховочную копию',
-                          ),
-                          subtitle: Text(
-                            _automaticBackupSubtitle(
-                              widget.store.lastAutomaticBackupAt,
-                            ),
-                          ),
-                          onTap:
-                              widget.store.vaultBusy ||
-                                      widget.store.reliabilityBusy
-                                  ? null
-                                  : _createSafetyBackup,
-                        ),
-                        const Divider(height: 1),
-                        ListTile(
                           enabled: !widget.store.vaultBusy,
                           leading: const Icon(Icons.download_rounded),
                           title: const Text('Экспортировать Chronicle'),
@@ -301,19 +279,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  const _SectionHeader(
-                    title: 'Диагностика и надёжность',
-                    subtitle: 'Технические события без текста заметок и задач.',
-                  ),
-                  const SizedBox(height: 10),
-                  _DiagnosticsCard(
-                    events: widget.store.reliabilityEvents,
-                    busy: widget.store.reliabilityBusy,
-                    error: widget.store.reliabilityError,
-                    onExport: _exportDiagnostics,
-                    onClear: _clearDiagnostics,
                   ),
                   const SizedBox(height: 18),
                   const _FoundationNotice(),
@@ -735,62 +700,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
               ),
             ],
           ),
-    );
-  }
-
-  Future<void> _createSafetyBackup() async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final result = await widget.store.createInternalSafetyBackup();
-      if (!mounted || result == null) {
-        return;
-      }
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Страховочная копия создана. Chronicle хранит пять последних копий.',
-          ),
-        ),
-      );
-    } on Object catch (error) {
-      if (!mounted) {
-        return;
-      }
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Не удалось создать страховочную копию: $error'),
-        ),
-      );
-    }
-  }
-
-  Future<void> _exportDiagnostics() async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final path = await widget.store.exportDiagnosticReport();
-      if (!mounted || path == null) {
-        return;
-      }
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Диагностический отчёт сохранён')),
-      );
-    } on Object catch (error) {
-      if (!mounted) {
-        return;
-      }
-      messenger.showSnackBar(
-        SnackBar(content: Text('Не удалось сохранить отчёт: $error')),
-      );
-    }
-  }
-
-  Future<void> _clearDiagnostics() async {
-    await widget.store.clearDiagnosticLog();
-    if (!mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Диагностический журнал очищен')),
     );
   }
 
@@ -1614,114 +1523,6 @@ class _ChangeTile extends StatelessWidget {
   }
 }
 
-class _DiagnosticsCard extends StatelessWidget {
-  const _DiagnosticsCard({
-    required this.events,
-    required this.busy,
-    required this.error,
-    required this.onExport,
-    required this.onClear,
-  });
-
-  final List<ReliabilityEvent> events;
-  final bool busy;
-  final String? error;
-  final VoidCallback onExport;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          ListTile(
-            leading:
-                busy
-                    ? const SizedBox.square(
-                      dimension: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Icon(Icons.health_and_safety_outlined),
-            title: Text(
-              events.isEmpty
-                  ? 'Диагностических событий пока нет'
-                  : 'Последние технические события',
-            ),
-            subtitle: const Text(
-              'В отчёт не включаются тексты заметок, задач и содержимое Vault.',
-            ),
-          ),
-          if (error != null && error!.trim().isNotEmpty) ...[
-            const Divider(height: 1),
-            ListTile(
-              leading: Icon(Icons.error_outline_rounded, color: colors.error),
-              title: const Text('Последняя ошибка надёжности'),
-              subtitle: Text(error!),
-            ),
-          ],
-          for (var index = 0; index < events.length && index < 8; index++) ...[
-            const Divider(height: 1),
-            _ReliabilityEventTile(event: events[index]),
-          ],
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 8,
-                children: [
-                  FilledButton.tonalIcon(
-                    onPressed: busy ? null : onExport,
-                    icon: const Icon(Icons.file_download_outlined),
-                    label: const Text('Экспортировать отчёт'),
-                  ),
-                  TextButton.icon(
-                    onPressed: busy || events.isEmpty ? null : onClear,
-                    icon: const Icon(Icons.delete_sweep_outlined),
-                    label: const Text('Очистить журнал'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReliabilityEventTile extends StatelessWidget {
-  const _ReliabilityEventTile({required this.event});
-
-  final ReliabilityEvent event;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final color = switch (event.level) {
-      ReliabilityLevel.success => colors.primary,
-      ReliabilityLevel.warning => colors.tertiary,
-      ReliabilityLevel.error => colors.error,
-      ReliabilityLevel.info => colors.onSurfaceVariant,
-    };
-    final peer = event.peerDeviceId;
-    return ListTile(
-      dense: true,
-      leading: Icon(_reliabilityIcon(event.level), color: color),
-      title: Text(event.message),
-      subtitle: Text(
-        '${_reliabilityStageLabel(event.stage)} · '
-        '${_relativeTime(event.occurredAt.toLocal())}'
-        '${peer == null || peer.isEmpty ? '' : ' · устройство ${_compactId(peer)}'}',
-      ),
-    );
-  }
-}
-
 class _FoundationNotice extends StatelessWidget {
   const _FoundationNotice();
 
@@ -1807,42 +1608,4 @@ String _relativeTime(DateTime dateTime) {
     return '${difference.inHours} ч назад';
   }
   return '${difference.inDays} дн назад';
-}
-
-String _automaticBackupSubtitle(DateTime? lastBackupAt) {
-  if (lastBackupAt == null) {
-    return 'Chronicle создаёт копию автоматически раз в сутки и хранит пять последних.';
-  }
-  return 'Последняя копия: ${_relativeTime(lastBackupAt.toLocal())}. '
-      'Хранятся пять последних.';
-}
-
-IconData _reliabilityIcon(ReliabilityLevel level) {
-  return switch (level) {
-    ReliabilityLevel.info => Icons.info_outline_rounded,
-    ReliabilityLevel.success => Icons.check_circle_outline_rounded,
-    ReliabilityLevel.warning => Icons.warning_amber_rounded,
-    ReliabilityLevel.error => Icons.error_outline_rounded,
-  };
-}
-
-String _reliabilityStageLabel(ReliabilityStage stage) {
-  return switch (stage) {
-    ReliabilityStage.startup => 'Запуск',
-    ReliabilityStage.discovery => 'Обнаружение',
-    ReliabilityStage.connection => 'Подключение',
-    ReliabilityStage.authentication => 'Проверка доверия',
-    ReliabilityStage.transfer => 'Передача',
-    ReliabilityStage.apply => 'Применение',
-    ReliabilityStage.backup => 'Резервная копия',
-    ReliabilityStage.restore => 'Восстановление',
-    ReliabilityStage.system => 'Система',
-  };
-}
-
-String _compactId(String value) {
-  if (value.length <= 8) {
-    return value;
-  }
-  return value.substring(0, 8);
 }

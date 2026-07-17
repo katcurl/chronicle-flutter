@@ -235,17 +235,17 @@ class LanAutoSyncNode {
 
       final session = await _startHost(payload.peer.deviceId);
       _activeSessions.add(session);
-      unawaited(() async {
-        try {
-          final report = await session.reports.first;
-          if (!_closed) {
-            _reportController.add(report);
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 500));
-        } finally {
-          await _closeSession(session);
-        }
-      }());
+      unawaited(
+        session.reports.first
+            .then((report) async {
+              if (!_closed) {
+                _reportController.add(report);
+              }
+              await Future<void>.delayed(const Duration(milliseconds: 500));
+              await _closeSession(session);
+            })
+            .catchError((Object _) => _closeSession(session)),
+      );
       final requestedHost = request.requestedUri.host;
       final address =
           requestedHost.isNotEmpty &&

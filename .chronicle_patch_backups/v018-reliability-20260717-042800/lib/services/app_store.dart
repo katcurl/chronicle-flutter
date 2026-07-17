@@ -8,8 +8,6 @@ import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
 import '../features/notes/note_document.dart';
 import '../models/app_models.dart';
-import '../reliability/reliability_models.dart';
-import '../reliability/reliability_service.dart';
 import '../sync/lan_auto_sync_models.dart';
 import '../sync/lan_auto_sync_service.dart';
 import '../sync/lan_auto_sync_transport.dart';
@@ -28,19 +26,15 @@ class AppStore extends ChangeNotifier {
     VaultService? vaultService,
     PairingService? pairingService,
     LanSyncService? lanSyncService,
-    ReliabilityService? reliabilityService,
     bool enableAutomaticLanSync = false,
-    bool enableReliabilityFeatures = false,
   }) : _repository = repository,
        _legacyImporter = legacyImporter,
        _vaultService = vaultService ?? VaultService(),
-       _reliabilityService = reliabilityService ?? ReliabilityService(),
        pairingService =
            pairingService ?? PairingService(repository: repository),
        lanSyncService =
            lanSyncService ?? LanSyncService(repository: repository),
-       _automaticLanSyncEnabled = enableAutomaticLanSync,
-       _reliabilityFeaturesEnabled = enableReliabilityFeatures {
+       _automaticLanSyncEnabled = enableAutomaticLanSync {
     autoSyncService = LanAutoSyncService(
       repository: repository,
       lanSyncService: this.lanSyncService,
@@ -51,17 +45,14 @@ class AppStore extends ChangeNotifier {
     repository: DriftAppRepository(),
     legacyImporter: LegacyPreferencesImporter(),
     enableAutomaticLanSync: true,
-    enableReliabilityFeatures: true,
   );
 
   final AppRepository _repository;
   final LegacyPreferencesImporter? _legacyImporter;
   final VaultService _vaultService;
-  final ReliabilityService _reliabilityService;
   final PairingService pairingService;
   final LanSyncService lanSyncService;
   final bool _automaticLanSyncEnabled;
-  final bool _reliabilityFeaturesEnabled;
   late final LanAutoSyncService autoSyncService;
   final _uuid = const Uuid();
 
@@ -90,12 +81,6 @@ class AppStore extends ChangeNotifier {
   bool vaultBusy = false;
   String? lastEmergencyBackupPath;
 
-  List<ReliabilityEvent> reliabilityEvents = const <ReliabilityEvent>[];
-  DateTime? lastAutomaticBackupAt;
-  String? lastAutomaticBackupPath;
-  bool reliabilityBusy = false;
-  String? reliabilityError;
-
   DateTime? activeStartedAt;
   String activeDescription = '';
   String? activeProjectId;
@@ -117,13 +102,6 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _initializeReliability();
-      await _recordReliability(
-        stage: ReliabilityStage.startup,
-        level: ReliabilityLevel.info,
-        message: 'Запуск Chronicle и открытие локальной базы.',
-        notify: false,
-      );
       final initialized = await _repository.isInitialized();
       if (!initialized) {
         final legacy = await _legacyImporter?.read();
@@ -151,37 +129,13 @@ class AppStore extends ChangeNotifier {
       } else if (activeTimer != null) {
         await _repository.saveActiveTimer(null);
       }
-      await _recordReliability(
-        stage: ReliabilityStage.startup,
-        level: ReliabilityLevel.success,
-        message: 'Локальная база Chronicle успешно открыта.',
-        details: <String, Object?>{
-          'projects': data.projects.length,
-          'tasks': data.tasks.length,
-          'notes': data.notes.length,
-          'timeEntries': data.entries.length,
-        },
-        notify: false,
-      );
     } catch (error) {
       loadError = error;
-      await _recordReliability(
-        stage: ReliabilityStage.startup,
-        level: ReliabilityLevel.error,
-        message: 'Не удалось открыть локальную базу Chronicle.',
-        details: <String, Object?>{'error': error.toString()},
-        notify: false,
-      );
     } finally {
       ready = true;
       notifyListeners();
-      if (loadError == null) {
-        if (_automaticLanSyncEnabled) {
-          unawaited(_restartAutomaticLanSync());
-        }
-        if (_reliabilityFeaturesEnabled) {
-          unawaited(_createAutomaticBackupIfDue());
-        }
+      if (loadError == null && _automaticLanSyncEnabled) {
+        unawaited(_restartAutomaticLanSync());
       }
     }
   }
@@ -725,13 +679,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     lanSyncBusy = true;
     lanSyncPeerDeviceId = expectedPeerDeviceId;
     notifyListeners();
-    await _recordReliability(
-      stage: ReliabilityStage.connection,
-      level: ReliabilityLevel.info,
-      message: 'Запущена ручная LAN-синхронизация по одноразовому коду.',
-      peerDeviceId: expectedPeerDeviceId,
-      notify: false,
-    );
     try {
       final report = await lanSyncService.syncFromOffer(
         rawOffer,
@@ -739,22 +686,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         onRemoteApplied: (_) => refreshAfterLanSync(),
       );
       await refreshAfterLanSync(report: report);
-      await _recordSyncSuccess(
-        report,
-        peerDeviceId: expectedPeerDeviceId,
-        automatic: false,
-      );
       return report;
-    } on Object catch (error) {
-      await _recordReliability(
-        stage: ReliabilityStage.connection,
-        level: ReliabilityLevel.error,
-        message: 'Ручная LAN-синхронизация не выполнена.',
-        peerDeviceId: expectedPeerDeviceId,
-        details: <String, Object?>{'error': _friendlyLanError(error)},
-        notify: false,
-      );
-      rethrow;
     } finally {
       lanSyncBusy = false;
       lanSyncPeerDeviceId = null;
@@ -836,12 +768,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       return;
     }
 
-    await _recordReliability(
-      stage: ReliabilityStage.discovery,
-      level: ReliabilityLevel.info,
-      message: 'Запуск обнаружения доверенных устройств в локальной сети.',
-      notify: false,
-    );
     try {
       final node = await autoSyncService.start(
         onRemoteApplied: (_) => refreshAfterLanSync(),
@@ -852,15 +778,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         onError: (Object error) {
           lanAutoSyncError = error.toString();
           lanDiscoveryStatus = 'Ошибка обнаружения';
-          unawaited(
-            _recordReliability(
-              stage: ReliabilityStage.discovery,
-              level: ReliabilityLevel.error,
-              message: 'Ошибка потока локального обнаружения.',
-              details: <String, Object?>{'error': _friendlyLanError(error)},
-              notify: false,
-            ),
-          );
           notifyListeners();
         },
       );
@@ -876,24 +793,10 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       lanAutoSyncError = null;
       notifyListeners();
       await node.announceNow();
-      await _recordReliability(
-        stage: ReliabilityStage.discovery,
-        level: ReliabilityLevel.success,
-        message: 'Локальное обнаружение запущено.',
-        details: <String, Object?>{'udpPort': 45891},
-        notify: false,
-      );
     } on Object catch (error) {
       lanDiscoveryActive = false;
       lanDiscoveryStatus = 'Не удалось запустить обнаружение';
       lanAutoSyncError = _friendlyLanError(error);
-      await _recordReliability(
-        stage: ReliabilityStage.discovery,
-        level: ReliabilityLevel.error,
-        message: 'Не удалось запустить локальное обнаружение.',
-        details: <String, Object?>{'error': lanAutoSyncError},
-        notify: false,
-      );
       notifyListeners();
     }
   }
@@ -913,16 +816,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     _lanPeerErrors.remove(peer.peer.deviceId);
     lanDiscoveryStatus = 'Доверенное устройство найдено';
     if (!wasOnline || endpointChanged) {
-      unawaited(
-        _recordReliability(
-          stage: ReliabilityStage.discovery,
-          level: ReliabilityLevel.success,
-          message: 'Доверенное устройство обнаружено в локальной сети.',
-          peerDeviceId: peer.peer.deviceId,
-          details: <String, Object?>{'endpoint': peer.endpoint},
-          notify: false,
-        ),
-      );
       notifyListeners();
     }
     _maybeAutoSync(peer);
@@ -985,17 +878,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     lanDiscoveryStatus =
         automatic ? 'Автоматическая синхронизация…' : 'Синхронизация…';
     notifyListeners();
-    await _recordReliability(
-      stage: ReliabilityStage.connection,
-      level: ReliabilityLevel.info,
-      message:
-          automatic
-              ? 'Запущена автоматическая LAN-синхронизация.'
-              : 'Запущена LAN-синхронизация без QR-кода.',
-      peerDeviceId: peer.peer.deviceId,
-      details: <String, Object?>{'endpoint': peer.endpoint},
-      notify: false,
-    );
     try {
       final report = await autoSyncService.syncWithDiscoveredPeer(
         node: node,
@@ -1004,28 +886,12 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       );
       await refreshAfterLanSync(report: report);
       lanDiscoveryStatus = 'Синхронизация завершена';
-      await _recordSyncSuccess(
-        report,
-        peerDeviceId: peer.peer.deviceId,
-        automatic: automatic,
-      );
       return report;
     } on Object catch (error) {
       final message = _friendlyLanError(error);
       lanAutoSyncError = message;
       _lanPeerErrors[peer.peer.deviceId] = message;
       lanDiscoveryStatus = 'Синхронизация не выполнена';
-      await _recordReliability(
-        stage: ReliabilityStage.connection,
-        level: ReliabilityLevel.error,
-        message:
-            automatic
-                ? 'Автоматическая LAN-синхронизация не выполнена.'
-                : 'LAN-синхронизация без QR-кода не выполнена.',
-        peerDeviceId: peer.peer.deviceId,
-        details: <String, Object?>{'endpoint': peer.endpoint, 'error': message},
-        notify: false,
-      );
       rethrow;
     } finally {
       lanSyncBusy = false;
@@ -1374,213 +1240,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     });
   }
 
-  Future<void> _initializeReliability() async {
-    if (!_reliabilityFeaturesEnabled) {
-      return;
-    }
-    try {
-      await _reliabilityService.load();
-      _refreshReliabilityState();
-    } on Object catch (error) {
-      reliabilityError = error.toString();
-    }
-  }
-
-  Future<void> refreshReliabilityStatus({bool notify = true}) async {
-    if (!_reliabilityFeaturesEnabled) {
-      return;
-    }
-    try {
-      await _reliabilityService.load();
-      reliabilityError = null;
-      _refreshReliabilityState();
-    } on Object catch (error) {
-      reliabilityError = error.toString();
-    }
-    if (notify) {
-      notifyListeners();
-    }
-  }
-
-  void _refreshReliabilityState() {
-    reliabilityEvents = _reliabilityService.events;
-    lastAutomaticBackupAt = _reliabilityService.lastAutomaticBackupAt;
-    lastAutomaticBackupPath = _reliabilityService.lastAutomaticBackupPath;
-  }
-
-  Future<void> _recordReliability({
-    required ReliabilityStage stage,
-    required ReliabilityLevel level,
-    required String message,
-    String? peerDeviceId,
-    Map<String, Object?> details = const <String, Object?>{},
-    bool notify = true,
-  }) async {
-    if (!_reliabilityFeaturesEnabled) {
-      return;
-    }
-    try {
-      await _reliabilityService.record(
-        stage: stage,
-        level: level,
-        message: message,
-        peerDeviceId: peerDeviceId,
-        details: details,
-      );
-      reliabilityError = null;
-      _refreshReliabilityState();
-    } on Object catch (error) {
-      reliabilityError = error.toString();
-    }
-    if (notify) {
-      notifyListeners();
-    }
-  }
-
-  Future<void> _recordSyncSuccess(
-    LanSyncReport report, {
-    required String peerDeviceId,
-    required bool automatic,
-  }) {
-    return _recordReliability(
-      stage: ReliabilityStage.transfer,
-      level: ReliabilityLevel.success,
-      message:
-          automatic
-              ? 'Автоматическая LAN-синхронизация завершена.'
-              : 'LAN-синхронизация завершена.',
-      peerDeviceId: peerDeviceId,
-      details: <String, Object?>{
-        'rounds': report.roundCount,
-        'sent': report.sentCount,
-        'received': report.receivedCount,
-        'applied': report.appliedCount,
-        'duplicates': report.duplicateCount,
-        'stale': report.staleCount,
-        'unsupported': report.unsupportedCount,
-        'durationMs':
-            report.completedAt.difference(report.startedAt).inMilliseconds,
-      },
-      notify: false,
-    );
-  }
-
-  Future<BackupExportResult?> createInternalSafetyBackup() async {
-    if (reliabilityBusy || vaultBusy) {
-      return null;
-    }
-    reliabilityBusy = true;
-    reliabilityError = null;
-    notifyListeners();
-    try {
-      final result = await _vaultService.createAutomaticBackup(
-        data: data,
-        identity: deviceIdentity,
-        maxFiles: 5,
-      );
-      await _reliabilityService.markAutomaticBackup(
-        createdAt: result.preview.exportedAt,
-        path: result.path,
-      );
-      _refreshReliabilityState();
-      await _recordReliability(
-        stage: ReliabilityStage.backup,
-        level: ReliabilityLevel.success,
-        message: 'Создана локальная страховочная копия Chronicle.',
-        details: <String, Object?>{
-          'fileName': result.fileName,
-          'projects': result.preview.projectCount,
-          'tasks': result.preview.taskCount,
-          'notes': result.preview.noteCount,
-          'timeEntries': result.preview.entryCount,
-          'attachments': result.preview.attachmentCount,
-          'retention': 5,
-        },
-        notify: false,
-      );
-      return result;
-    } on Object catch (error) {
-      await _recordReliability(
-        stage: ReliabilityStage.backup,
-        level: ReliabilityLevel.error,
-        message: 'Не удалось создать локальную страховочную копию.',
-        details: <String, Object?>{'error': error.toString()},
-        notify: false,
-      );
-      reliabilityError = error.toString();
-      rethrow;
-    } finally {
-      reliabilityBusy = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> _createAutomaticBackupIfDue() async {
-    if (!_reliabilityFeaturesEnabled ||
-        !_reliabilityService.automaticBackupDue()) {
-      return;
-    }
-    try {
-      await createInternalSafetyBackup();
-    } on Object {
-      // Ошибка уже записана в диагностический журнал. Запуск приложения
-      // не должен блокироваться из-за недоступной папки резервных копий.
-    }
-  }
-
-  Future<String?> exportDiagnosticReport() async {
-    if (!_reliabilityFeaturesEnabled || reliabilityBusy) {
-      return null;
-    }
-    reliabilityBusy = true;
-    reliabilityError = null;
-    notifyListeners();
-    try {
-      return await _reliabilityService.exportDiagnosticReport(
-        snapshot: <String, Object?>{
-          'appVersion': '0.18.0+23',
-          'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
-          'deviceId': deviceIdentity?.deviceId,
-          'deviceName': deviceIdentity?.displayName,
-          'trustedDeviceCount': trustedDevices.length,
-          'journalEntryCount': journalEntryCount,
-          'syncCursorCount': syncCursors.length,
-          'discoveryActive': lanDiscoveryActive,
-          'discoveryStatus': lanDiscoveryStatus,
-          'autoSyncEnabled': syncPreferences.autoSyncEnabled,
-          'discoverOnLocalNetwork': syncPreferences.discoverOnLocalNetwork,
-          'lastAutomaticBackupAt': lastAutomaticBackupAt,
-          'projectCount': data.projects.length,
-          'taskCount': data.tasks.length,
-          'noteCount': data.notes.length,
-          'timeEntryCount': data.entries.length,
-        },
-      );
-    } on Object catch (error) {
-      reliabilityError = error.toString();
-      rethrow;
-    } finally {
-      reliabilityBusy = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> clearDiagnosticLog() async {
-    if (!_reliabilityFeaturesEnabled || reliabilityBusy) {
-      return;
-    }
-    reliabilityBusy = true;
-    notifyListeners();
-    try {
-      await _reliabilityService.clearEvents();
-      _refreshReliabilityState();
-      reliabilityError = null;
-    } finally {
-      reliabilityBusy = false;
-      notifyListeners();
-    }
-  }
-
   Future<BackupExportResult?> exportBackupFile() async {
     if (vaultBusy) {
       return null;
@@ -1589,33 +1248,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     notifyListeners();
     try {
       vaultStatus = await _vaultService.writeMirror(data);
-      final result = await _vaultService.exportBackup(
-        data: data,
-        identity: deviceIdentity,
-      );
-      if (result != null) {
-        await _recordReliability(
-          stage: ReliabilityStage.backup,
-          level: ReliabilityLevel.success,
-          message: 'Пользователь экспортировал переносимую копию Chronicle.',
-          details: <String, Object?>{
-            'fileName': result.fileName,
-            'notes': result.preview.noteCount,
-            'attachments': result.preview.attachmentCount,
-          },
-          notify: false,
-        );
-      }
-      return result;
-    } on Object catch (error) {
-      await _recordReliability(
-        stage: ReliabilityStage.backup,
-        level: ReliabilityLevel.error,
-        message: 'Экспорт переносимой копии не выполнен.',
-        details: <String, Object?>{'error': error.toString()},
-        notify: false,
-      );
-      rethrow;
+      return _vaultService.exportBackup(data: data, identity: deviceIdentity);
     } finally {
       vaultBusy = false;
       notifyListeners();
@@ -1633,17 +1266,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     vaultBusy = true;
     notifyListeners();
     try {
-      await _recordReliability(
-        stage: ReliabilityStage.restore,
-        level: ReliabilityLevel.info,
-        message: 'Начато восстановление проверенной резервной копии.',
-        details: <String, Object?>{
-          'sourceName': payload.sourceName,
-          'formatVersion': payload.preview.formatVersion,
-          'checksumsVerified': payload.preview.checksumsVerified,
-        },
-        notify: false,
-      );
       lastEmergencyBackupPath = await _vaultService.createEmergencyBackup(
         data: data,
         identity: deviceIdentity,
@@ -1654,29 +1276,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       pendingVaultScan = await _vaultService.scan(data);
       _mergeVaultScanIntoStatus();
       await refreshSyncFoundation(notify: false);
-      await _recordReliability(
-        stage: ReliabilityStage.restore,
-        level: ReliabilityLevel.success,
-        message: 'Резервная копия успешно восстановлена.',
-        details: <String, Object?>{
-          'projects': payload.preview.projectCount,
-          'tasks': payload.preview.taskCount,
-          'notes': payload.preview.noteCount,
-          'timeEntries': payload.preview.entryCount,
-          'attachments': payload.preview.attachmentCount,
-          'emergencyBackupCreated': lastEmergencyBackupPath != null,
-        },
-        notify: false,
-      );
-    } on Object catch (error) {
-      await _recordReliability(
-        stage: ReliabilityStage.restore,
-        level: ReliabilityLevel.error,
-        message: 'Восстановление резервной копии не выполнено.',
-        details: <String, Object?>{'error': error.toString()},
-        notify: false,
-      );
-      rethrow;
     } finally {
       vaultBusy = false;
       notifyListeners();
