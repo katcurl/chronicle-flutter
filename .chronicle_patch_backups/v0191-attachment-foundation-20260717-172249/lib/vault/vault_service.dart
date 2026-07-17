@@ -16,9 +16,6 @@ class VaultService {
 
   static const int backupFormatVersion = 2;
   static const String _indexPath = '.chronicle/vault-index.json';
-  static const String _attachmentIndexPath =
-      '.chronicle/attachments-index.json';
-  static const int maxAttachmentBytes = 100 * 1024 * 1024;
   static const String _manifestPath = 'manifest.json';
 
   final VaultBackend _backend;
@@ -284,50 +281,16 @@ class VaultService {
         _safeSegment(originalBase).isEmpty
             ? 'attachment'
             : _safeSegment(originalBase);
-    if (picked.bytes.length > maxAttachmentBytes) {
-      throw FormatException(
-        'Вложение больше 100 МБ. Выбери файл меньшего размера.',
-      );
-    }
-
     final contentHash = sha256.convert(picked.bytes).toString();
-    final records = await _readAttachmentRecords(rootPath);
-    VaultAttachmentRecord? duplicate;
-    for (final record in records) {
-      if (!record.isDeleted && record.sha256 == contentHash) {
-        duplicate = record;
-        break;
-      }
-    }
-
-    final generatedFileName =
+    final fileName =
         '$safeBase--${contentHash.substring(0, 8)}'
         '${_safeExtension(originalExtension)}';
-    final relativePath =
-        duplicate?.relativePath ?? 'Attachments/$generatedFileName';
-    final fileName = p.posix.basename(relativePath);
-    final alreadyExisted = await _backend.fileExists(rootPath, relativePath);
+    final relativePath = 'Attachments/$fileName';
 
-    if (!alreadyExisted) {
-      await _backend.writeBinaryFile(
-        rootPath: rootPath,
-        relativePath: relativePath,
-        bytes: picked.bytes,
-      );
-    }
-
-    final mimeType =
-        duplicate?.mimeType ?? _mimeTypeForExtension(originalExtension);
-    await _upsertAttachmentRecord(
-      rootPath,
-      VaultAttachmentRecord(
-        relativePath: relativePath,
-        originalName: duplicate?.originalName ?? picked.name,
-        sha256: contentHash,
-        mimeType: mimeType,
-        byteLength: picked.bytes.length,
-        createdAt: DateTime.now().toUtc(),
-      ),
+    await _backend.writeBinaryFile(
+      rootPath: rootPath,
+      relativePath: relativePath,
+      bytes: picked.bytes,
     );
 
     final folderDepth =
@@ -350,65 +313,6 @@ class VaultService {
       markdown: markdown,
       byteLength: picked.bytes.length,
       isImage: isImage,
-      sha256: contentHash,
-      mimeType: mimeType,
-      alreadyExisted: alreadyExisted,
-    );
-  }
-
-  Future<List<VaultAttachmentRecord>> listAttachmentCatalog({
-    bool includeDeleted = false,
-  }) async {
-    final rootPath = await _backend.resolveRootPath();
-    if (rootPath == null || rootPath.isEmpty) {
-      return const <VaultAttachmentRecord>[];
-    }
-    final records = await _readAttachmentRecords(rootPath);
-    final result =
-        includeDeleted
-            ? records
-            : records.where((record) => !record.isDeleted).toList();
-    result.sort((left, right) => right.createdAt.compareTo(left.createdAt));
-    return List<VaultAttachmentRecord>.unmodifiable(result);
-  }
-
-  Future<AttachmentDeleteResult> deleteManagedAttachment(
-    String relativePath,
-  ) async {
-    if (!_validAttachmentPath(relativePath)) {
-      throw FormatException('Недопустимый путь вложения.');
-    }
-    final rootPath = await _backend.resolveRootPath();
-    if (rootPath == null || rootPath.isEmpty) {
-      throw UnsupportedError('Не удалось определить папку Vault.');
-    }
-
-    final existed = await _backend.fileExists(rootPath, relativePath);
-    if (existed) {
-      await _backend.deleteFiles(
-        rootPath: rootPath,
-        relativePaths: <String>{relativePath},
-      );
-    }
-
-    final records = await _readAttachmentRecords(rootPath);
-    final index = records.indexWhere(
-      (record) => record.relativePath == relativePath,
-    );
-    if (index < 0) {
-      return AttachmentDeleteResult(
-        relativePath: relativePath,
-        deletedFile: existed,
-        tombstoneCreated: false,
-      );
-    }
-
-    records[index] = records[index].copyWith(deletedAt: DateTime.now().toUtc());
-    await _writeAttachmentRecords(rootPath, records);
-    return AttachmentDeleteResult(
-      relativePath: relativePath,
-      deletedFile: existed,
-      tombstoneCreated: true,
     );
   }
 
@@ -618,7 +522,6 @@ class VaultService {
         attachmentCount: attachments.length,
       ),
       attachments: attachments,
-      vaultFiles: vaultFiles,
     );
   }
 
@@ -658,28 +561,6 @@ class VaultService {
         relativePath: entry.key,
         bytes: entry.value,
       );
-    }
-
-    final savedIndex = payload.vaultFiles[_attachmentIndexPath];
-    if (savedIndex != null && savedIndex.trim().isNotEmpty) {
-      await _backend.writeTextFile(
-        rootPath: rootPath,
-        relativePath: _attachmentIndexPath,
-        content: savedIndex,
-      );
-    } else {
-      final restoredRecords = <VaultAttachmentRecord>[
-        for (final entry in payload.attachments.entries)
-          VaultAttachmentRecord(
-            relativePath: entry.key,
-            originalName: p.posix.basename(entry.key),
-            sha256: sha256.convert(entry.value).toString(),
-            mimeType: _mimeTypeForExtension(p.extension(entry.key)),
-            byteLength: entry.value.length,
-            createdAt: DateTime.now().toUtc(),
-          ),
-      ];
-      await _writeAttachmentRecords(rootPath, restoredRecords);
     }
   }
 
@@ -728,21 +609,11 @@ class VaultService {
               rootPath: rootPath,
               directory: 'Attachments',
             );
-    final vaultFiles = Map<String, String>.from(generated.files);
-    if (rootPath != null && rootPath.isNotEmpty) {
-      final attachmentIndex = await _backend.readTextFile(
-        rootPath,
-        _attachmentIndexPath,
-      );
-      if (attachmentIndex != null && attachmentIndex.trim().isNotEmpty) {
-        vaultFiles[_attachmentIndexPath] = attachmentIndex;
-      }
-    }
     final databaseJson = data.encode();
     final exportedAt = DateTime.now().toUtc();
     final checksums = <String, String>{
       'database.json': _sha256Text(databaseJson),
-      for (final entry in vaultFiles.entries)
+      for (final entry in generated.files.entries)
         entry.key: _sha256Text(entry.value),
       for (final entry in attachments.entries)
         entry.key: sha256.convert(entry.value).toString(),
@@ -755,7 +626,7 @@ class VaultService {
       'sourceDeviceId': identity?.deviceId,
       'sourceDeviceName': identity?.displayName,
       'databaseJson': databaseJson,
-      'vaultFiles': vaultFiles,
+      'vaultFiles': generated.files,
       'attachmentsBase64': {
         for (final entry in attachments.entries)
           entry.key: base64Encode(entry.value),
@@ -1087,100 +958,6 @@ class VaultService {
     }
     final normalized = _cleanScalar(value?.toString()).toLowerCase();
     return normalized == 'true' || normalized == '1' || normalized == 'yes';
-  }
-
-  Future<List<VaultAttachmentRecord>> _readAttachmentRecords(
-    String rootPath,
-  ) async {
-    final raw = await _backend.readTextFile(rootPath, _attachmentIndexPath);
-    if (raw == null || raw.trim().isEmpty) {
-      return <VaultAttachmentRecord>[];
-    }
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        return <VaultAttachmentRecord>[];
-      }
-      final rawAttachments = decoded['attachments'];
-      if (rawAttachments is! List) {
-        return <VaultAttachmentRecord>[];
-      }
-      return rawAttachments
-          .whereType<Map>()
-          .map(
-            (item) => VaultAttachmentRecord.fromJson(
-              item.map((key, value) => MapEntry(key.toString(), value)),
-            ),
-          )
-          .where((record) => _validAttachmentPath(record.relativePath))
-          .toList();
-    } on Object {
-      return <VaultAttachmentRecord>[];
-    }
-  }
-
-  Future<void> _writeAttachmentRecords(
-    String rootPath,
-    List<VaultAttachmentRecord> records,
-  ) {
-    final payload = <String, dynamic>{
-      'format': 'chronicle-attachment-index',
-      'version': 1,
-      'updatedAt': DateTime.now().toUtc().toIso8601String(),
-      'attachments': records.map((record) => record.toJson()).toList(),
-    };
-    return _backend.writeTextFile(
-      rootPath: rootPath,
-      relativePath: _attachmentIndexPath,
-      content: const JsonEncoder.withIndent('  ').convert(payload),
-    );
-  }
-
-  Future<void> _upsertAttachmentRecord(
-    String rootPath,
-    VaultAttachmentRecord record,
-  ) async {
-    final records = await _readAttachmentRecords(rootPath);
-    final index = records.indexWhere(
-      (item) => item.relativePath == record.relativePath,
-    );
-    if (index < 0) {
-      records.add(record);
-    } else {
-      records[index] = VaultAttachmentRecord(
-        relativePath: record.relativePath,
-        originalName: record.originalName,
-        sha256: record.sha256,
-        mimeType: record.mimeType,
-        byteLength: record.byteLength,
-        createdAt: records[index].createdAt,
-      );
-    }
-    await _writeAttachmentRecords(rootPath, records);
-  }
-
-  String _mimeTypeForExtension(String extension) {
-    return switch (extension.toLowerCase()) {
-      '.png' => 'image/png',
-      '.jpg' || '.jpeg' => 'image/jpeg',
-      '.gif' => 'image/gif',
-      '.webp' => 'image/webp',
-      '.bmp' => 'image/bmp',
-      '.svg' => 'image/svg+xml',
-      '.pdf' => 'application/pdf',
-      '.txt' => 'text/plain',
-      '.md' => 'text/markdown',
-      '.csv' => 'text/csv',
-      '.json' => 'application/json',
-      '.zip' => 'application/zip',
-      '.docx' =>
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      '.xlsx' =>
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      '.pptx' =>
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      _ => 'application/octet-stream',
-    };
   }
 
   bool _validAttachmentPath(String relativePath) {

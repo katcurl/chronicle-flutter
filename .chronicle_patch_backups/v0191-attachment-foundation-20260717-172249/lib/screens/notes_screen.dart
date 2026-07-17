@@ -850,12 +850,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         selection: TextSelection.collapsed(offset: start + replacement.length),
         composing: TextRange.empty,
       );
-      final status =
-          attachment.alreadyExisted
-              ? 'Вложение уже было в Vault; добавлена ссылка'
-              : 'Вложение добавлено';
       messenger.showSnackBar(
-        SnackBar(content: Text('$status: ${attachment.fileName}')),
+        SnackBar(content: Text('Вложение добавлено: ${attachment.fileName}')),
       );
     } on Object catch (error) {
       if (!mounted) {

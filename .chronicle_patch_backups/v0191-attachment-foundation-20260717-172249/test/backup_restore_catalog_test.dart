@@ -182,7 +182,6 @@ class _CatalogBackend extends VaultBackend {
 }
 
 class _AttachmentBackend extends VaultBackend {
-  final Map<String, String> textFiles = <String, String>{};
   final Map<String, Uint8List> files = <String, Uint8List>{
     'Attachments/old.txt': Uint8List.fromList(utf8.encode('old')),
     'Attachments/obsolete.bin': Uint8List.fromList(<int>[1, 2, 3]),
@@ -214,20 +213,6 @@ class _AttachmentBackend extends VaultBackend {
     required Uint8List bytes,
   }) async {
     files[relativePath] = bytes;
-  }
-
-  @override
-  Future<String?> readTextFile(String rootPath, String relativePath) async {
-    return textFiles[relativePath];
-  }
-
-  @override
-  Future<void> writeTextFile({
-    required String rootPath,
-    required String relativePath,
-    required String content,
-  }) async {
-    textFiles[relativePath] = content;
   }
 }
 

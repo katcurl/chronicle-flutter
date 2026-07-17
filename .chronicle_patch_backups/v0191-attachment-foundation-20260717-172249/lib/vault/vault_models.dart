@@ -162,9 +162,6 @@ class AttachmentImportResult {
     required this.markdown,
     required this.byteLength,
     required this.isImage,
-    required this.sha256,
-    required this.mimeType,
-    required this.alreadyExisted,
   });
 
   final String fileName;
@@ -172,82 +169,6 @@ class AttachmentImportResult {
   final String markdown;
   final int byteLength;
   final bool isImage;
-  final String sha256;
-  final String mimeType;
-  final bool alreadyExisted;
-}
-
-class VaultAttachmentRecord {
-  const VaultAttachmentRecord({
-    required this.relativePath,
-    required this.originalName,
-    required this.sha256,
-    required this.mimeType,
-    required this.byteLength,
-    required this.createdAt,
-    this.deletedAt,
-  });
-
-  final String relativePath;
-  final String originalName;
-  final String sha256;
-  final String mimeType;
-  final int byteLength;
-  final DateTime createdAt;
-  final DateTime? deletedAt;
-
-  bool get isDeleted => deletedAt != null;
-
-  Map<String, dynamic> toJson() => {
-    'path': relativePath,
-    'originalName': originalName,
-    'sha256': sha256,
-    'mimeType': mimeType,
-    'byteLength': byteLength,
-    'createdAt': createdAt.toUtc().toIso8601String(),
-    'deletedAt': deletedAt?.toUtc().toIso8601String(),
-  };
-
-  factory VaultAttachmentRecord.fromJson(Map<String, dynamic> json) {
-    return VaultAttachmentRecord(
-      relativePath: json['path']?.toString() ?? '',
-      originalName: json['originalName']?.toString() ?? '',
-      sha256: json['sha256']?.toString() ?? '',
-      mimeType: json['mimeType']?.toString() ?? 'application/octet-stream',
-      byteLength: _attachmentInt(json['byteLength']),
-      createdAt:
-          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      deletedAt: DateTime.tryParse(json['deletedAt']?.toString() ?? ''),
-    );
-  }
-
-  VaultAttachmentRecord copyWith({
-    DateTime? deletedAt,
-    bool clearDeletedAt = false,
-  }) {
-    return VaultAttachmentRecord(
-      relativePath: relativePath,
-      originalName: originalName,
-      sha256: sha256,
-      mimeType: mimeType,
-      byteLength: byteLength,
-      createdAt: createdAt,
-      deletedAt: clearDeletedAt ? null : deletedAt ?? this.deletedAt,
-    );
-  }
-}
-
-class AttachmentDeleteResult {
-  const AttachmentDeleteResult({
-    required this.relativePath,
-    required this.deletedFile,
-    required this.tombstoneCreated,
-  });
-
-  final String relativePath;
-  final bool deletedFile;
-  final bool tombstoneCreated;
 }
 
 class BackupPreview {
@@ -282,14 +203,12 @@ class BackupImportPayload {
     required this.preview,
     required this.sourceName,
     this.attachments = const {},
-    this.vaultFiles = const {},
   });
 
   final String databaseJson;
   final BackupPreview preview;
   final String sourceName;
   final Map<String, Uint8List> attachments;
-  final Map<String, String> vaultFiles;
 }
 
 class BackupExportResult {
@@ -332,14 +251,4 @@ class EmergencyBackupSnapshot {
 
   final String path;
   final BackupImportPayload payload;
-}
-
-int _attachmentInt(Object? value) {
-  if (value is int) {
-    return value;
-  }
-  if (value is num) {
-    return value.toInt();
-  }
-  return int.tryParse(value?.toString() ?? '') ?? 0;
 }

@@ -93,21 +93,6 @@ class VaultBackend {
     return file.readAsString();
   }
 
-  Future<void> writeTextFile({
-    required String rootPath,
-    required String relativePath,
-    required String content,
-  }) async {
-    final target = File(p.join(rootPath, _native(relativePath)));
-    await target.parent.create(recursive: true);
-    final temporary = File('${target.path}.tmp');
-    await temporary.writeAsString(content, flush: true);
-    if (await target.exists()) {
-      await target.delete();
-    }
-    await temporary.rename(target.path);
-  }
-
   Future<Map<String, String>> listTextFiles({
     required String rootPath,
     required String directory,
@@ -194,8 +179,9 @@ class VaultBackend {
 
   Future<PickedVaultFile?> pickAttachment() async {
     final selected = await FilePicker.pickFile(
-      dialogTitle: 'Добавить вложение в заметку',
-      type: FileType.any,
+      dialogTitle: 'Выбрать резервную копию Chronicle',
+      type: FileType.custom,
+      allowedExtensions: const ['chronicle'],
     );
 
     if (selected == null) {
@@ -203,6 +189,7 @@ class VaultBackend {
     }
 
     final bytes = await selected.readAsBytes();
+
     return PickedVaultFile(name: selected.name, bytes: bytes);
   }
 

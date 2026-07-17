@@ -37,14 +37,6 @@ class VaultBackend {
   Future<String?> readTextFile(String rootPath, String relativePath) async =>
       null;
 
-  Future<void> writeTextFile({
-    required String rootPath,
-    required String relativePath,
-    required String content,
-  }) async {
-    throw UnsupportedError('Markdown Vault is unavailable on this platform.');
-  }
-
   Future<Map<String, String>> listTextFiles({
     required String rootPath,
     required String directory,
