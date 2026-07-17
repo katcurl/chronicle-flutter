@@ -246,10 +246,12 @@ class LanAutoSyncNode {
             })
             .catchError((Object _) => _closeSession(session)),
       );
-      final connectionAddress = request.connectionInfo?.localAddress.address;
+      final requestedHost = request.requestedUri.host;
       final address =
-          connectionAddress != null && connectionAddress != '0.0.0.0'
-              ? connectionAddress
+          requestedHost.isNotEmpty &&
+                  requestedHost != '0.0.0.0' &&
+                  requestedHost != 'localhost'
+              ? requestedHost
               : session.addresses.first;
       final encodedOffer = session.offerFor(address).encode();
       _acceptedRequests[payload.requestId] = DateTime.now();
