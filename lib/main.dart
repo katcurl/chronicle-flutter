@@ -17,18 +17,28 @@ class ChronicleApp extends StatefulWidget {
   State<ChronicleApp> createState() => _ChronicleAppState();
 }
 
-class _ChronicleAppState extends State<ChronicleApp> {
+class _ChronicleAppState extends State<ChronicleApp>
+    with WidgetsBindingObserver {
   late final AppStore store;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     store = widget.store ?? AppStore.production();
     store.load();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      store.handleAppResumed();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     store.dispose();
     super.dispose();
   }

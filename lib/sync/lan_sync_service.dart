@@ -13,6 +13,20 @@ class LanSyncService {
   final AppRepository _repository;
   final PairingCrypto crypto;
 
+  Future<LocalPairingIdentity> ensureLocalIdentity() => _ensureLocalIdentity();
+
+  Future<PairingPeer?> trustedPeerOrNull(String deviceId) async {
+    final devices = await _repository.loadTrustedDevices(includeRevoked: true);
+    for (final device in devices) {
+      if (device.deviceId == deviceId &&
+          device.isActive &&
+          device.publicKey.isNotEmpty) {
+        return _peerFromTrusted(device);
+      }
+    }
+    return null;
+  }
+
   Future<LanSyncHostSession> startHost({
     required String peerDeviceId,
     Future<void> Function(SyncApplyResult result)? onRemoteApplied,

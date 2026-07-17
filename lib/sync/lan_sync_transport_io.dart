@@ -609,20 +609,72 @@ Future<List<String>> _localIpv4Addresses() async {
     includeLoopback: false,
     includeLinkLocal: false,
   );
-  final addresses = <String>{};
+  final candidates = <_AddressCandidate>[];
   for (final interface in interfaces) {
     for (final address in interface.addresses) {
       if (!address.isLoopback && address.type == InternetAddressType.IPv4) {
-        addresses.add(address.address);
+        candidates.add(
+          _AddressCandidate(
+            address: address.address,
+            interfaceName: interface.name,
+          ),
+        );
       }
     }
   }
-  final sorted =
-      addresses.toList()..sort((left, right) {
-        final rank = _addressRank(left).compareTo(_addressRank(right));
-        return rank != 0 ? rank : left.compareTo(right);
-      });
-  return sorted;
+  candidates.sort((left, right) {
+    final interfaceRank = _interfaceRank(
+      left.interfaceName,
+    ).compareTo(_interfaceRank(right.interfaceName));
+    if (interfaceRank != 0) {
+      return interfaceRank;
+    }
+    final addressRank = _addressRank(
+      left.address,
+    ).compareTo(_addressRank(right.address));
+    return addressRank != 0
+        ? addressRank
+        : left.address.compareTo(right.address);
+  });
+  return candidates.map((candidate) => candidate.address).toSet().toList();
+}
+
+class _AddressCandidate {
+  const _AddressCandidate({required this.address, required this.interfaceName});
+
+  final String address;
+  final String interfaceName;
+}
+
+int _interfaceRank(String value) {
+  final name = value.toLowerCase();
+  const virtualMarkers = <String>[
+    'vpn',
+    'tun',
+    'tap',
+    'wireguard',
+    'wsl',
+    'vethernet',
+    'virtualbox',
+    'vmware',
+    'hyper-v',
+    'docker',
+    'tailscale',
+    'zerotier',
+    'hiddify',
+  ];
+  if (virtualMarkers.any(name.contains)) {
+    return 4;
+  }
+  if (name.contains('wi-fi') ||
+      name.contains('wifi') ||
+      name.contains('wlan')) {
+    return 0;
+  }
+  if (name.contains('ethernet') || name == 'eth0' || name.startsWith('en')) {
+    return 1;
+  }
+  return 2;
 }
 
 int _addressRank(String value) {

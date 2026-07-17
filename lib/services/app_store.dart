@@ -8,6 +8,9 @@ import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
 import '../features/notes/note_document.dart';
 import '../models/app_models.dart';
+import '../sync/lan_auto_sync_models.dart';
+import '../sync/lan_auto_sync_service.dart';
+import '../sync/lan_auto_sync_transport.dart';
 import '../sync/lan_sync_models.dart';
 import '../sync/lan_sync_service.dart';
 import '../sync/lan_sync_transport.dart';
@@ -23,17 +26,25 @@ class AppStore extends ChangeNotifier {
     VaultService? vaultService,
     PairingService? pairingService,
     LanSyncService? lanSyncService,
+    bool enableAutomaticLanSync = false,
   }) : _repository = repository,
        _legacyImporter = legacyImporter,
        _vaultService = vaultService ?? VaultService(),
        pairingService =
            pairingService ?? PairingService(repository: repository),
        lanSyncService =
-           lanSyncService ?? LanSyncService(repository: repository);
+           lanSyncService ?? LanSyncService(repository: repository),
+       _automaticLanSyncEnabled = enableAutomaticLanSync {
+    autoSyncService = LanAutoSyncService(
+      repository: repository,
+      lanSyncService: this.lanSyncService,
+    );
+  }
 
   factory AppStore.production() => AppStore(
     repository: DriftAppRepository(),
     legacyImporter: LegacyPreferencesImporter(),
+    enableAutomaticLanSync: true,
   );
 
   final AppRepository _repository;
@@ -41,6 +52,8 @@ class AppStore extends ChangeNotifier {
   final VaultService _vaultService;
   final PairingService pairingService;
   final LanSyncService lanSyncService;
+  final bool _automaticLanSyncEnabled;
+  late final LanAutoSyncService autoSyncService;
   final _uuid = const Uuid();
 
   AppData data = AppData.empty();
@@ -56,6 +69,12 @@ class AppStore extends ChangeNotifier {
   bool lanSyncBusy = false;
   String? lanSyncPeerDeviceId;
   LanSyncReport? lastLanSyncReport;
+  bool lanDiscoveryActive = false;
+  String lanDiscoveryStatus = 'Обнаружение ещё не запущено';
+  String? lanAutoSyncError;
+  final Map<String, LanDiscoveredPeer> _lanPeers = {};
+  final Map<String, DateTime> _lastAutoSyncAttempt = {};
+  final Map<String, String> _lanPeerErrors = {};
 
   VaultStatus vaultStatus = const VaultStatus.unavailable();
   VaultScanResult? pendingVaultScan;
@@ -71,6 +90,10 @@ class AppStore extends ChangeNotifier {
   Timer? _ticker;
   Timer? _syncRefreshDebounce;
   Timer? _vaultMirrorDebounce;
+  Timer? _lanPresenceTimer;
+  LanAutoSyncNode? _autoSyncNode;
+  StreamSubscription<LanDiscoveredPeer>? _autoSyncPeerSubscription;
+  StreamSubscription<LanSyncReport>? _autoSyncHostReportSubscription;
   int nowTick = 0;
 
   Future<void> load() async {
@@ -111,6 +134,9 @@ class AppStore extends ChangeNotifier {
     } finally {
       ready = true;
       notifyListeners();
+      if (loadError == null && _automaticLanSyncEnabled) {
+        unawaited(_restartAutomaticLanSync());
+      }
     }
   }
 
@@ -559,6 +585,13 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     journalEntryCount = await _repository.countJournalEntries();
     recentChanges = await _repository.loadRecentChanges(limit: 20);
     syncCursors = await _repository.loadSyncCursors();
+    if (_automaticLanSyncEnabled &&
+        ready &&
+        _autoSyncNode == null &&
+        syncPreferences.discoverOnLocalNetwork &&
+        trustedDevices.isNotEmpty) {
+      unawaited(_restartAutomaticLanSync());
+    }
     if (notify) {
       notifyListeners();
     }
@@ -674,6 +707,247 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     notifyListeners();
   }
 
+  bool isLanPeerOnline(String deviceId) {
+    final peer = _lanPeers[deviceId];
+    return peer != null && peer.isOnlineAt(DateTime.now());
+  }
+
+  String? lanPeerEndpoint(String deviceId) => _lanPeers[deviceId]?.endpoint;
+
+  String? lanPeerError(String deviceId) => _lanPeerErrors[deviceId];
+
+  Future<void> handleAppResumed() async {
+    if (!_automaticLanSyncEnabled || loadError != null || !ready) {
+      return;
+    }
+    final node = _autoSyncNode;
+    if (node == null) {
+      await _restartAutomaticLanSync();
+      return;
+    }
+    await node.announceNow();
+  }
+
+  Future<void> refreshLanDiscovery() async {
+    final node = _autoSyncNode;
+    if (node == null) {
+      await _restartAutomaticLanSync();
+      return;
+    }
+    lanDiscoveryStatus = 'Ищем доверенные устройства…';
+    lanAutoSyncError = null;
+    notifyListeners();
+    await node.announceNow();
+  }
+
+  Future<LanSyncReport> syncWithTrustedDevice(String peerDeviceId) async {
+    final discovered = _lanPeers[peerDeviceId];
+    if (discovered == null || !discovered.isOnlineAt(DateTime.now())) {
+      throw StateError(
+        'Устройство не найдено в локальной сети. Открой Chronicle на обоих '
+        'устройствах, проверь общий Wi-Fi и доступ VPN к локальной сети.',
+      );
+    }
+    return _syncDiscoveredPeer(discovered, automatic: false);
+  }
+
+  Future<void> _restartAutomaticLanSync() async {
+    await _stopAutomaticLanSync(notify: false);
+    if (!_automaticLanSyncEnabled ||
+        kIsWeb ||
+        loadError != null ||
+        !ready ||
+        !syncPreferences.discoverOnLocalNetwork ||
+        trustedDevices.isEmpty) {
+      lanDiscoveryActive = false;
+      lanDiscoveryStatus =
+          trustedDevices.isEmpty
+              ? 'Сначала подключи доверенное устройство'
+              : 'Обнаружение в локальной сети выключено';
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final node = await autoSyncService.start(
+        onRemoteApplied: (_) => refreshAfterLanSync(),
+      );
+      _autoSyncNode = node;
+      _autoSyncPeerSubscription = node.peers.listen(
+        _rememberDiscoveredPeer,
+        onError: (Object error) {
+          lanAutoSyncError = error.toString();
+          lanDiscoveryStatus = 'Ошибка обнаружения';
+          notifyListeners();
+        },
+      );
+      _autoSyncHostReportSubscription = node.reports.listen((report) {
+        unawaited(refreshAfterLanSync(report: report));
+      });
+      _lanPresenceTimer = Timer.periodic(
+        const Duration(seconds: 5),
+        (_) => _expireLanPeers(),
+      );
+      lanDiscoveryActive = true;
+      lanDiscoveryStatus = 'Ищем доверенные устройства…';
+      lanAutoSyncError = null;
+      notifyListeners();
+      await node.announceNow();
+    } on Object catch (error) {
+      lanDiscoveryActive = false;
+      lanDiscoveryStatus = 'Не удалось запустить обнаружение';
+      lanAutoSyncError = _friendlyLanError(error);
+      notifyListeners();
+    }
+  }
+
+  void _rememberDiscoveredPeer(LanDiscoveredPeer peer) {
+    final trusted = trustedDevices.where(
+      (device) => device.deviceId == peer.peer.deviceId && device.isActive,
+    );
+    if (trusted.isEmpty) {
+      return;
+    }
+    final previous = _lanPeers[peer.peer.deviceId];
+    final now = DateTime.now();
+    final wasOnline = previous?.isOnlineAt(now) ?? false;
+    final endpointChanged = previous?.endpoint != peer.endpoint;
+    _lanPeers[peer.peer.deviceId] = peer;
+    _lanPeerErrors.remove(peer.peer.deviceId);
+    lanDiscoveryStatus = 'Доверенное устройство найдено';
+    if (!wasOnline || endpointChanged) {
+      notifyListeners();
+    }
+    _maybeAutoSync(peer);
+  }
+
+  void _maybeAutoSync(LanDiscoveredPeer peer) {
+    if (!syncPreferences.autoSyncEnabled || lanSyncBusy) {
+      return;
+    }
+    final identity = deviceIdentity;
+    if (identity == null ||
+        identity.deviceId.compareTo(peer.peer.deviceId) >= 0) {
+      return;
+    }
+    TrustedDevice? trusted;
+    for (final device in trustedDevices) {
+      if (device.deviceId == peer.peer.deviceId) {
+        trusted = device;
+        break;
+      }
+    }
+    if (trusted == null || !trusted.autoSyncEnabled) {
+      return;
+    }
+    final now = DateTime.now();
+    final lastAttempt = _lastAutoSyncAttempt[peer.peer.deviceId];
+    if (lastAttempt != null &&
+        now.difference(lastAttempt) < const Duration(seconds: 20)) {
+      return;
+    }
+    _lastAutoSyncAttempt[peer.peer.deviceId] = now;
+    unawaited(_runAutomaticSync(peer));
+  }
+
+  Future<void> _runAutomaticSync(LanDiscoveredPeer peer) async {
+    try {
+      await _syncDiscoveredPeer(peer, automatic: true);
+    } on Object {
+      // The error is stored for the devices screen. Automatic retries are
+      // driven by later discovery announcements.
+    }
+  }
+
+  Future<LanSyncReport> _syncDiscoveredPeer(
+    LanDiscoveredPeer peer, {
+    required bool automatic,
+  }) async {
+    if (lanSyncBusy) {
+      throw StateError('Синхронизация уже выполняется.');
+    }
+    final node = _autoSyncNode;
+    if (node == null) {
+      throw StateError('Обнаружение в локальной сети ещё не запущено.');
+    }
+
+    lanSyncBusy = true;
+    lanSyncPeerDeviceId = peer.peer.deviceId;
+    lanAutoSyncError = null;
+    _lanPeerErrors.remove(peer.peer.deviceId);
+    lanDiscoveryStatus =
+        automatic ? 'Автоматическая синхронизация…' : 'Синхронизация…';
+    notifyListeners();
+    try {
+      final report = await autoSyncService.syncWithDiscoveredPeer(
+        node: node,
+        discoveredPeer: peer,
+        onRemoteApplied: (_) => refreshAfterLanSync(),
+      );
+      await refreshAfterLanSync(report: report);
+      lanDiscoveryStatus = 'Синхронизация завершена';
+      return report;
+    } on Object catch (error) {
+      final message = _friendlyLanError(error);
+      lanAutoSyncError = message;
+      _lanPeerErrors[peer.peer.deviceId] = message;
+      lanDiscoveryStatus = 'Синхронизация не выполнена';
+      rethrow;
+    } finally {
+      lanSyncBusy = false;
+      lanSyncPeerDeviceId = null;
+      notifyListeners();
+    }
+  }
+
+  void _expireLanPeers() {
+    final now = DateTime.now();
+    final before = _lanPeers.length;
+    _lanPeers.removeWhere(
+      (_, peer) =>
+          now.difference(peer.lastSeenAt) > const Duration(seconds: 20),
+    );
+    if (_lanPeers.length != before) {
+      lanDiscoveryStatus =
+          _lanPeers.isEmpty
+              ? 'Доверенные устройства не найдены'
+              : 'Доверенное устройство найдено';
+      notifyListeners();
+    }
+  }
+
+  Future<void> _stopAutomaticLanSync({bool notify = true}) async {
+    _lanPresenceTimer?.cancel();
+    _lanPresenceTimer = null;
+    await _autoSyncPeerSubscription?.cancel();
+    _autoSyncPeerSubscription = null;
+    await _autoSyncHostReportSubscription?.cancel();
+    _autoSyncHostReportSubscription = null;
+    final node = _autoSyncNode;
+    _autoSyncNode = null;
+    if (node != null) {
+      await node.close();
+    }
+    _lanPeers.clear();
+    lanDiscoveryActive = false;
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  String _friendlyLanError(Object error) {
+    final raw = error.toString().replaceFirst('Bad state: ', '');
+    if (raw.contains('Address already in use')) {
+      return 'Порт локального обнаружения уже занят. Полностью закрой вторую '
+          'копию Chronicle и запусти приложение снова.';
+    }
+    if (raw.contains('Permission denied')) {
+      return 'Система запретила доступ к локальной сети. Проверь разрешения '
+          'Chronicle и правила брандмауэра.';
+    }
+    return raw;
+  }
+
   Future<void> renameLocalDevice(String displayName) async {
     final identity = deviceIdentity ?? await _repository.ensureDeviceIdentity();
     final trimmed = displayName.trim();
@@ -687,14 +961,27 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
   }
 
   Future<void> updateSyncPreferences(SyncPreferences preferences) async {
+    final discoveryChanged =
+        syncPreferences.discoverOnLocalNetwork !=
+        preferences.discoverOnLocalNetwork;
     syncPreferences = preferences;
     await _repository.saveSyncPreferences(preferences);
     notifyListeners();
+    if (discoveryChanged && _automaticLanSyncEnabled) {
+      unawaited(_restartAutomaticLanSync());
+    } else if (preferences.autoSyncEnabled) {
+      unawaited(_autoSyncNode?.announceNow());
+    }
   }
 
   Future<void> revokeTrustedDevice(String deviceId) async {
     await _repository.revokeTrustedDevice(deviceId, DateTime.now());
+    _lanPeers.remove(deviceId);
+    _lanPeerErrors.remove(deviceId);
     await refreshSyncFoundation();
+    if (_automaticLanSyncEnabled) {
+      unawaited(_restartAutomaticLanSync());
+    }
   }
 
   void _scheduleSyncOverviewRefresh() {
@@ -1030,6 +1317,13 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     _ticker?.cancel();
     _syncRefreshDebounce?.cancel();
     _vaultMirrorDebounce?.cancel();
+    _lanPresenceTimer?.cancel();
+    unawaited(_autoSyncPeerSubscription?.cancel());
+    unawaited(_autoSyncHostReportSubscription?.cancel());
+    final node = _autoSyncNode;
+    if (node != null) {
+      unawaited(node.close());
+    }
     unawaited(_repository.close());
     super.dispose();
   }

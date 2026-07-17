@@ -136,6 +136,29 @@ class _DevicesScreenState extends State<DevicesScreen> {
                           },
                         ),
                         const Divider(height: 1),
+                        ListTile(
+                          leading: Icon(
+                            widget.store.lanDiscoveryActive
+                                ? Icons.wifi_tethering_rounded
+                                : Icons.wifi_tethering_off_rounded,
+                          ),
+                          title: Text(widget.store.lanDiscoveryStatus),
+                          subtitle:
+                              widget.store.lanAutoSyncError == null
+                                  ? const Text(
+                                    'Chronicle использует только подписанные объявления доверенных устройств.',
+                                  )
+                                  : Text(widget.store.lanAutoSyncError!),
+                          trailing: IconButton(
+                            tooltip: 'Повторить поиск',
+                            onPressed:
+                                preferences.discoverOnLocalNetwork
+                                    ? widget.store.refreshLanDiscovery
+                                    : null,
+                            icon: const Icon(Icons.refresh_rounded),
+                          ),
+                        ),
+                        const Divider(height: 1),
                         const ListTile(
                           leading: Icon(Icons.lock_outline_rounded),
                           title: Text('Только доверенные устройства'),
@@ -169,7 +192,13 @@ class _DevicesScreenState extends State<DevicesScreen> {
                               widget.store.lanSyncBusy &&
                               widget.store.lanSyncPeerDeviceId ==
                                   device.deviceId,
-                          onSync: () => _syncDevice(device),
+                          online: widget.store.isLanPeerOnline(device.deviceId),
+                          endpoint: widget.store.lanPeerEndpoint(
+                            device.deviceId,
+                          ),
+                          error: widget.store.lanPeerError(device.deviceId),
+                          onSync: () => _syncDeviceDirect(device),
+                          onQrSync: () => _syncDevice(device),
                           onRevoke: () => _confirmRevoke(device),
                         ),
                       ),
@@ -376,6 +405,54 @@ class _DevicesScreenState extends State<DevicesScreen> {
       MaterialPageRoute(builder: (_) => PairingHostScreen(store: widget.store)),
     );
     await widget.store.refreshSyncFoundation();
+  }
+
+  Future<void> _syncDeviceDirect(TrustedDevice device) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final report = await widget.store.syncWithTrustedDevice(device.deviceId);
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Синхронизация завершена: отправлено ${report.sentCount}, '
+            'получено ${report.receivedCount}, применено ${report.appliedCount}.',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final useQr = await showDialog<bool>(
+        context: context,
+        builder:
+            (dialogContext) => AlertDialog(
+              title: const Text('Устройство не отвечает напрямую'),
+              content: Text(
+                '${error.toString().replaceFirst('Bad state: ', '')}\n\n'
+                'Можно повторить после проверки VPN или использовать QR-код '
+                'как резервный способ.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Закрыть'),
+                ),
+                FilledButton.icon(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  icon: const Icon(Icons.qr_code_2_rounded),
+                  label: const Text('Использовать QR'),
+                ),
+              ],
+            ),
+      );
+      if (useQr == true && mounted) {
+        await _syncDevice(device);
+      }
+    }
   }
 
   Future<void> _syncDevice(TrustedDevice device) async {
@@ -1185,13 +1262,21 @@ class _TrustedDeviceCard extends StatelessWidget {
   const _TrustedDeviceCard({
     required this.device,
     required this.syncing,
+    required this.online,
+    required this.endpoint,
+    required this.error,
     required this.onSync,
+    required this.onQrSync,
     required this.onRevoke,
   });
 
   final TrustedDevice device;
   final bool syncing;
+  final bool online;
+  final String? endpoint;
+  final String? error;
   final VoidCallback onSync;
+  final VoidCallback onQrSync;
   final VoidCallback onRevoke;
 
   @override
@@ -1231,7 +1316,9 @@ class _TrustedDeviceCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    '${platformDisplayName(device.platform)} · локальное доверие',
+                    online && endpoint != null
+                        ? '${platformDisplayName(device.platform)} · $endpoint'
+                        : '${platformDisplayName(device.platform)} · локальное доверие',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: colors.onSurfaceVariant,
                     ),
@@ -1242,6 +1329,14 @@ class _TrustedDeviceCard extends StatelessWidget {
                     runSpacing: 6,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
+                      _DeviceStatusPill(
+                        active: online,
+                        label: online ? 'В сети' : 'Не найдено',
+                        icon:
+                            online
+                                ? Icons.wifi_rounded
+                                : Icons.wifi_off_rounded,
+                      ),
                       _DeviceStatusPill(
                         active: hasSynced,
                         label:
@@ -1271,22 +1366,41 @@ class _TrustedDeviceCard extends StatelessWidget {
                               )
                               : const Icon(Icons.sync_rounded),
                       label: Text(
-                        syncing ? 'Синхронизация…' : 'Синхронизировать',
+                        syncing ? 'Синхронизация…' : 'Синхронизировать сейчас',
                       ),
                     ),
                   ),
+                  if (error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      error!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.error,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
             PopupMenuButton<String>(
               tooltip: 'Действия с устройством',
               onSelected: (value) {
-                if (value == 'revoke') {
+                if (value == 'qr') {
+                  onQrSync();
+                } else if (value == 'revoke') {
                   onRevoke();
                 }
               },
               itemBuilder:
                   (_) => const [
+                    PopupMenuItem(
+                      value: 'qr',
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.qr_code_2_rounded),
+                        title: Text('Синхронизация через QR'),
+                      ),
+                    ),
                     PopupMenuItem(
                       value: 'revoke',
                       child: ListTile(
@@ -1428,10 +1542,10 @@ class _FoundationNotice extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Chronicle связывает устройства одноразовым QR-кодом и хранит '
-              'доверие локально. Кнопка «Синхронизировать» запускает '
-              'подписанный двусторонний обмен проектами, задачами, заметками '
-              'и записями времени в локальной сети.',
+              'После однократного QR-сопряжения Chronicle обнаруживает '
+              'доверенные устройства в локальной сети и запускает подписанный '
+              'двусторонний обмен без повторного сканирования. QR-код остаётся '
+              'резервным способом при VPN или ограничениях брандмауэра.',
               style: TextStyle(color: colors.onTertiaryContainer),
             ),
           ),
