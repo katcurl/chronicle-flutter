@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import '../features/notes/note_document.dart';
+import '../features/notes/note_image_editor_dialog.dart';
+import '../features/notes/note_image_syntax.dart';
 import '../features/notes/note_markdown_view.dart';
 import '../features/notes/note_templates.dart';
 import '../features/tasks/task_editor_sheet.dart';
@@ -577,7 +579,11 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
             ),
           ),
         ),
-        _EditorToolbar(controller: contentController, onAttach: _attachFile),
+        _EditorToolbar(
+          controller: contentController,
+          onAttach: _attachFile,
+          onConfigureImage: _editImageAtCursor,
+        ),
         const Divider(height: 1),
         Expanded(
           child: TextField(
@@ -607,6 +613,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     return NoteMarkdownView(
       markdown: contentController.text,
       onWikiLink: _openWikiLink,
+      onEditImage: _editImageReference,
+      onResizeImage: _replaceImagePresentation,
       vaultRootPath: widget.store.vaultStatus.rootPath,
     );
   }
@@ -832,24 +840,26 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       if (attachment == null || !mounted) {
         return;
       }
-      final value = contentController.value;
-      final selection = value.selection;
-      final start = selection.isValid ? selection.start : value.text.length;
-      final end = selection.isValid ? selection.end : value.text.length;
-      final before =
-          start > 0 && !value.text.substring(0, start).endsWith('\n')
-              ? '\n'
-              : '';
-      final after =
-          end < value.text.length && !value.text.substring(end).startsWith('\n')
-              ? '\n'
-              : '';
-      final replacement = '$before${attachment.markdown}$after';
-      contentController.value = value.copyWith(
-        text: value.text.replaceRange(start, end, replacement),
-        selection: TextSelection.collapsed(offset: start + replacement.length),
-        composing: TextRange.empty,
-      );
+
+      var markdown = attachment.markdown;
+      if (attachment.isImage) {
+        final reference = NoteImageSyntax.first(markdown);
+        if (reference != null) {
+          final configured = await NoteImageEditorDialog.show(
+            context,
+            initial: reference.presentation,
+            imageLabel: reference.alt,
+          );
+          if (!mounted) {
+            return;
+          }
+          if (configured != null) {
+            markdown = reference.toMarkdown(presentation: configured);
+          }
+        }
+      }
+
+      _insertMarkdownAtSelection(markdown);
       final status =
           attachment.alreadyExisted
               ? 'Вложение уже было в Vault; добавлена ссылка'
@@ -865,6 +875,103 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         SnackBar(content: Text('Не удалось добавить вложение: $error')),
       );
     }
+  }
+
+  void _insertMarkdownAtSelection(String markdown) {
+    final value = contentController.value;
+    final selection = value.selection;
+    final start = selection.isValid ? selection.start : value.text.length;
+    final end = selection.isValid ? selection.end : value.text.length;
+    final before =
+        start > 0 && !value.text.substring(0, start).endsWith('\n') ? '\n' : '';
+    final after =
+        end < value.text.length && !value.text.substring(end).startsWith('\n')
+            ? '\n'
+            : '';
+    final replacement = '$before$markdown$after';
+    contentController.value = value.copyWith(
+      text: value.text.replaceRange(start, end, replacement),
+      selection: TextSelection.collapsed(offset: start + replacement.length),
+      composing: TextRange.empty,
+    );
+  }
+
+  Future<void> _editImageAtCursor() async {
+    final value = contentController.value;
+    final offset =
+        value.selection.isValid
+            ? value.selection.extentOffset
+            : value.text.length;
+    final reference = NoteImageSyntax.findAtOffset(value.text, offset);
+    if (reference == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Поставь курсор на строку с изображением и повтори команду.',
+          ),
+        ),
+      );
+      return;
+    }
+    await _editImageReference(reference);
+  }
+
+  Future<void> _editImageReference(NoteImageReference reference) async {
+    final current = NoteImageSyntax.relocate(contentController.text, reference);
+    if (current == null) {
+      return;
+    }
+    final result = await NoteImageEditorDialog.show(
+      context,
+      initial: current.presentation,
+      imageLabel: current.alt,
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    _replaceImagePresentation(current, result);
+  }
+
+  void _replaceImagePresentation(
+    NoteImageReference reference,
+    NoteImagePresentation presentation,
+  ) {
+    final value = contentController.value;
+    final current = NoteImageSyntax.relocate(value.text, reference);
+    if (current == null) {
+      return;
+    }
+    final replacement = current.toMarkdown(presentation: presentation);
+    final delta = replacement.length - (current.end - current.start);
+
+    int moveOffset(int offset) {
+      if (offset <= current.start) {
+        return offset;
+      }
+      if (offset >= current.end) {
+        return offset + delta;
+      }
+      return current.start + replacement.length;
+    }
+
+    final selection = value.selection;
+    final updatedSelection =
+        selection.isValid
+            ? TextSelection(
+              baseOffset: moveOffset(selection.baseOffset),
+              extentOffset: moveOffset(selection.extentOffset),
+              affinity: selection.affinity,
+              isDirectional: selection.isDirectional,
+            )
+            : TextSelection.collapsed(
+              offset: current.start + replacement.length,
+            );
+
+    contentController.value = value.copyWith(
+      text: value.text.replaceRange(current.start, current.end, replacement),
+      selection: updatedSelection,
+      composing: TextRange.empty,
+    );
   }
 
   Future<void> _createTask() async {
@@ -962,10 +1069,15 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
 }
 
 class _EditorToolbar extends StatelessWidget {
-  const _EditorToolbar({required this.controller, required this.onAttach});
+  const _EditorToolbar({
+    required this.controller,
+    required this.onAttach,
+    required this.onConfigureImage,
+  });
 
   final TextEditingController controller;
   final VoidCallback onAttach;
+  final VoidCallback onConfigureImage;
 
   @override
   Widget build(BuildContext context) {
@@ -987,6 +1099,11 @@ class _EditorToolbar extends StatelessWidget {
             tooltip: 'Добавить локальное вложение',
             onPressed: onAttach,
             icon: const Icon(Icons.attach_file_rounded),
+          ),
+          IconButton(
+            tooltip: 'Размер, выравнивание и подпись изображения',
+            onPressed: onConfigureImage,
+            icon: const Icon(Icons.photo_size_select_large_rounded),
           ),
           _button(Icons.image_outlined, '![описание](', ')'),
           _button(Icons.code_rounded, '```\n', '\n```'),

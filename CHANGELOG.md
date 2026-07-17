@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.3
+
+- added responsive image sizing from 20% to 100%;
+- added quick image sizes at 25%, 50%, 75% and 100%;
+- added left, center and right image alignment;
+- added optional captions below images;
+- added direct mouse resizing in note preview;
+- kept original attachment binaries unchanged and stored only presentation metadata in Markdown.
+
 ## 0.19.2
 
 - added signed attachment manifests to trusted LAN sync;

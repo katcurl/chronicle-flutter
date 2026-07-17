@@ -1,4 +1,5 @@
 import '../../models/app_models.dart';
+import 'note_image_syntax.dart';
 
 class ParsedNoteDocument {
   const ParsedNoteDocument({required this.content, required this.frontMatter});
@@ -90,7 +91,7 @@ class NoteDocument {
   }
 
   static int wordCount(String markdown) {
-    final withoutSyntax = markdown
+    final withoutSyntax = _replaceImagesWithReadableText(markdown)
         .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
         .replaceAll(RegExp(r'\$\$[\s\S]*?\$\$'), ' ')
         .replaceAll(RegExp(r'\\\[[\s\S]*?\\\]'), ' ')
@@ -102,6 +103,19 @@ class NoteDocument {
     final words = wordCount(markdown);
     if (words == 0) return 0;
     return (words / 180).ceil();
+  }
+
+  static String _replaceImagesWithReadableText(String markdown) {
+    var result = markdown;
+    final images = NoteImageSyntax.all(markdown).toList().reversed;
+    for (final image in images) {
+      final readable = [
+        image.alt,
+        image.presentation.caption,
+      ].where((value) => value.trim().isNotEmpty).join(' ');
+      result = result.replaceRange(image.start, image.end, ' $readable ');
+    }
+    return result;
   }
 
   static String _unquote(String value) {
