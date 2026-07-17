@@ -617,14 +617,13 @@ class _DevicesScreenState extends State<DevicesScreen> {
         );
         return;
       }
-      final decision = await _showVaultChanges(scan);
-      if (decision == null || !mounted) {
+      final resolution = await _showVaultChanges(scan);
+      if (resolution == null || !mounted) {
         return;
       }
       final result = await widget.store.applyVaultChanges(
         scan,
-        conflictResolution: decision.conflictResolution,
-        missingFileResolution: decision.missingFileResolution,
+        conflictResolution: resolution,
       );
       if (!mounted) {
         return;
@@ -634,9 +633,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
           content: Text(
             'Vault применён: ${result.createdCount} новых, '
             '${result.updatedCount} обновлено, '
-            '${result.duplicatedCount} сохранено отдельно, '
-            '${result.deletedCount} удалено, '
-            '${result.restoredFileCount} файлов восстановлено.',
+            '${result.duplicatedCount} сохранено отдельно.',
           ),
         ),
       );
@@ -650,16 +647,104 @@ class _DevicesScreenState extends State<DevicesScreen> {
     }
   }
 
-  Future<_VaultApplyDecision?> _showVaultChanges(VaultScanResult scan) {
+  Future<VaultConflictResolution?> _showVaultChanges(VaultScanResult scan) {
     final safe = scan.safeChanges;
     final conflicts = scan.conflicts;
-    return showDialog<_VaultApplyDecision>(
+    return showDialog<VaultConflictResolution>(
       context: context,
       builder:
-          (dialogContext) => _VaultChangesDialog(
-            scan: scan,
-            safeChangeCount: safe.length,
-            conflictCount: conflicts.length,
+          (dialogContext) => AlertDialog(
+            icon: Icon(
+              conflicts.isEmpty
+                  ? Icons.sync_alt_rounded
+                  : Icons.merge_type_rounded,
+              size: 42,
+            ),
+            title: Text(
+              conflicts.isEmpty
+                  ? 'Импортировать изменения Vault?'
+                  : 'Обнаружены конфликты Vault',
+            ),
+            content: SizedBox(
+              width: 620,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Безопасные изменения: ${safe.length}'),
+                    Text('Конфликты: ${conflicts.length}'),
+                    Text('Отсутствующие файлы: ${scan.missingFiles.length}'),
+                    const SizedBox(height: 14),
+                    for (final change in scan.changes.take(10))
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          change.isConflict
+                              ? Icons.warning_amber_rounded
+                              : change.isNew
+                              ? Icons.note_add_outlined
+                              : Icons.edit_note_rounded,
+                        ),
+                        title: Text(change.proposedNote.title),
+                        subtitle: Text(change.relativePath),
+                      ),
+                    if (scan.changes.length > 10)
+                      Text('И ещё ${scan.changes.length - 10} изменений…'),
+                    if (scan.missingFiles.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Удалённые с диска управляемые файлы будут восстановлены. '
+                        'Заметки из базы не удаляются автоматически.',
+                      ),
+                    ],
+                    if (conflicts.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Выбранное решение будет применено ко всем конфликтам. '
+                        'Перед импортом Chronicle сохранит внутреннюю версию каждой '
+                        'заметки в истории.',
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Отмена'),
+              ),
+              if (conflicts.isNotEmpty)
+                TextButton(
+                  onPressed:
+                      () => Navigator.pop(
+                        dialogContext,
+                        VaultConflictResolution.keepChronicle,
+                      ),
+                  child: const Text('Оставить Chronicle'),
+                ),
+              if (conflicts.isNotEmpty)
+                OutlinedButton(
+                  onPressed:
+                      () => Navigator.pop(
+                        dialogContext,
+                        VaultConflictResolution.keepBoth,
+                      ),
+                  child: const Text('Сохранить обе'),
+                ),
+              FilledButton(
+                onPressed:
+                    () => Navigator.pop(
+                      dialogContext,
+                      VaultConflictResolution.importFile,
+                    ),
+                child: Text(
+                  conflicts.isEmpty ? 'Импортировать' : 'Взять версию файла',
+                ),
+              ),
+            ],
           ),
     );
   }
@@ -1026,160 +1111,6 @@ class _OverviewMetric extends StatelessWidget {
           const SizedBox(width: 5),
           Text(label),
         ],
-      ),
-    );
-  }
-}
-
-class _VaultApplyDecision {
-  const _VaultApplyDecision({
-    required this.conflictResolution,
-    required this.missingFileResolution,
-  });
-
-  final VaultConflictResolution conflictResolution;
-  final VaultMissingFileResolution missingFileResolution;
-}
-
-class _VaultChangesDialog extends StatefulWidget {
-  const _VaultChangesDialog({
-    required this.scan,
-    required this.safeChangeCount,
-    required this.conflictCount,
-  });
-
-  final VaultScanResult scan;
-  final int safeChangeCount;
-  final int conflictCount;
-
-  @override
-  State<_VaultChangesDialog> createState() => _VaultChangesDialogState();
-}
-
-class _VaultChangesDialogState extends State<_VaultChangesDialog> {
-  VaultMissingFileResolution missingFileResolution =
-      VaultMissingFileResolution.restoreFiles;
-
-  @override
-  Widget build(BuildContext context) {
-    final scan = widget.scan;
-    final conflicts = scan.conflicts;
-    return AlertDialog(
-      icon: Icon(
-        conflicts.isEmpty ? Icons.sync_alt_rounded : Icons.merge_type_rounded,
-        size: 42,
-      ),
-      title: Text(
-        conflicts.isEmpty
-            ? 'Импортировать изменения Vault?'
-            : 'Обнаружены конфликты Vault',
-      ),
-      content: SizedBox(
-        width: 660,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Безопасные изменения: ${widget.safeChangeCount}'),
-              Text('Конфликты: ${widget.conflictCount}'),
-              Text('Отсутствующие файлы: ${scan.missingFiles.length}'),
-              const SizedBox(height: 14),
-              for (final change in scan.changes.take(10))
-                ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    change.isConflict
-                        ? Icons.warning_amber_rounded
-                        : change.isNew
-                        ? Icons.note_add_outlined
-                        : Icons.edit_note_rounded,
-                  ),
-                  title: Text(change.proposedNote.title),
-                  subtitle: Text(change.relativePath),
-                ),
-              if (scan.changes.length > 10)
-                Text('И ещё ${scan.changes.length - 10} изменений…'),
-              if (scan.missingFiles.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text(
-                  'Что делать с управляемыми Markdown-файлами, '
-                  'которые были удалены с диска?',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                RadioGroup<VaultMissingFileResolution>(
-                  groupValue: missingFileResolution,
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => missingFileResolution = value);
-                    }
-                  },
-                  child: const Column(
-                    children: [
-                      RadioListTile<VaultMissingFileResolution>(
-                        value: VaultMissingFileResolution.restoreFiles,
-                        title: Text('Восстановить файлы из Chronicle'),
-                        subtitle: Text(
-                          'Безопасный вариант: заметки останутся в базе, '
-                          'а Markdown-файлы будут созданы заново.',
-                        ),
-                      ),
-                      RadioListTile<VaultMissingFileResolution>(
-                        value: VaultMissingFileResolution.deleteNotes,
-                        title: Text('Удалить соответствующие заметки'),
-                        subtitle: Text(
-                          'Chronicle сначала создаст страховочную копию, '
-                          'затем запишет tombstone для синхронизации удаления.',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              if (conflicts.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                const Text(
-                  'Выбранное решение будет применено ко всем конфликтам. '
-                  'Перед импортом Chronicle сохранит внутреннюю версию каждой '
-                  'заметки в истории.',
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
-        ),
-        if (conflicts.isNotEmpty)
-          TextButton(
-            onPressed: () => _finish(VaultConflictResolution.keepChronicle),
-            child: const Text('Оставить Chronicle'),
-          ),
-        if (conflicts.isNotEmpty)
-          OutlinedButton(
-            onPressed: () => _finish(VaultConflictResolution.keepBoth),
-            child: const Text('Сохранить обе'),
-          ),
-        FilledButton(
-          onPressed: () => _finish(VaultConflictResolution.importFile),
-          child: Text(conflicts.isEmpty ? 'Применить' : 'Взять версию файла'),
-        ),
-      ],
-    );
-  }
-
-  void _finish(VaultConflictResolution conflictResolution) {
-    Navigator.pop(
-      context,
-      _VaultApplyDecision(
-        conflictResolution: conflictResolution,
-        missingFileResolution: missingFileResolution,
       ),
     );
   }

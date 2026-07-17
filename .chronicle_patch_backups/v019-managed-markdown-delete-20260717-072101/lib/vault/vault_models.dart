@@ -125,8 +125,6 @@ class VaultScanResult {
 
 enum VaultConflictResolution { keepChronicle, importFile, keepBoth }
 
-enum VaultMissingFileResolution { restoreFiles, deleteNotes }
-
 class VaultApplyResult {
   const VaultApplyResult({
     required this.createdCount,
@@ -134,8 +132,6 @@ class VaultApplyResult {
     required this.duplicatedCount,
     required this.keptChronicleCount,
     required this.restoredFileCount,
-    this.deletedCount = 0,
-    this.safetyBackupPath,
   });
 
   final int createdCount;
@@ -143,11 +139,8 @@ class VaultApplyResult {
   final int duplicatedCount;
   final int keptChronicleCount;
   final int restoredFileCount;
-  final int deletedCount;
-  final String? safetyBackupPath;
 
-  int get appliedCount =>
-      createdCount + updatedCount + duplicatedCount + deletedCount;
+  int get appliedCount => createdCount + updatedCount + duplicatedCount;
 }
 
 class AttachmentImportResult {

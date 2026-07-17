@@ -1230,8 +1230,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
   Future<VaultApplyResult> applyVaultChanges(
     VaultScanResult scan, {
     required VaultConflictResolution conflictResolution,
-    VaultMissingFileResolution missingFileResolution =
-        VaultMissingFileResolution.restoreFiles,
   }) async {
     if (vaultBusy) {
       throw StateError('Vault уже занят другой операцией.');
@@ -1243,19 +1241,8 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     var updatedCount = 0;
     var duplicatedCount = 0;
     var keptChronicleCount = 0;
-    var deletedCount = 0;
-    String? safetyBackupPath;
 
     try {
-      if (missingFileResolution == VaultMissingFileResolution.deleteNotes &&
-          scan.missingFiles.isNotEmpty) {
-        final snapshot = await _vaultService.createEmergencyBackupSnapshot(
-          data: data,
-          identity: deviceIdentity,
-        );
-        safetyBackupPath = snapshot.path;
-        lastEmergencyBackupPath = snapshot.path;
-      }
       for (final change in scan.safeChanges) {
         if (change.isNew || noteById(change.currentNoteId ?? '') == null) {
           await _createNoteFromVault(change.proposedNote);
@@ -1295,16 +1282,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         }
       }
 
-      if (missingFileResolution == VaultMissingFileResolution.deleteNotes) {
-        for (final missing in scan.missingFiles) {
-          if (noteById(missing.noteId) == null) {
-            continue;
-          }
-          await _deleteNoteFromVault(missing.noteId);
-          deletedCount++;
-        }
-      }
-
       await rebuildAllNoteLinks();
       await refreshSyncFoundation(notify: false);
       vaultStatus = await _vaultService.rewriteAfterApply(data, scan);
@@ -1316,12 +1293,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         updatedCount: updatedCount,
         duplicatedCount: duplicatedCount,
         keptChronicleCount: keptChronicleCount,
-        restoredFileCount:
-            missingFileResolution == VaultMissingFileResolution.restoreFiles
-                ? scan.missingFiles.length
-                : 0,
-        deletedCount: deletedCount,
-        safetyBackupPath: safetyBackupPath,
+        restoredFileCount: scan.missingFiles.length,
       );
     } finally {
       vaultBusy = false;
@@ -1362,26 +1334,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     );
     data.notes.add(imported);
     await _repository.saveNote(imported);
-  }
-
-  Future<void> _deleteNoteFromVault(String noteId) async {
-    final deletedAt = DateTime.now();
-    final noteIndex = data.notes.indexWhere((note) => note.id == noteId);
-    if (noteIndex < 0) {
-      return;
-    }
-
-    data.notes.removeAt(noteIndex);
-    data.noteLinks.removeWhere(
-      (link) => link.sourceNoteId == noteId || link.targetNoteId == noteId,
-    );
-    for (final task in data.tasks.where((task) => task.noteId == noteId)) {
-      task.noteId = null;
-      task.updatedAt = deletedAt;
-      await _repository.saveTask(task);
-    }
-    await _repository.replaceNoteLinks(noteId, const []);
-    await _repository.softDeleteNote(noteId, deletedAt);
   }
 
   Future<void> _overwriteNoteFromVault(Note current, Note source) async {
