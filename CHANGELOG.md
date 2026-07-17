@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.20.0+34
+
+- fixed the Windows build failure in the three-column layout editor;
+- declared the right-column width before redistributing space between columns;
+- restored GitHub Actions analysis, tests and Windows packaging for note columns.
+
 ## 0.20.0+33
 
 - added portable two- and three-column blocks to Markdown notes;

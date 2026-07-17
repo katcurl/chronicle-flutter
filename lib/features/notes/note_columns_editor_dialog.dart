@@ -175,6 +175,7 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
   Widget _threeColumnControls() {
     final left = widths[0];
     final middle = widths[1];
+    final right = widths[2];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
