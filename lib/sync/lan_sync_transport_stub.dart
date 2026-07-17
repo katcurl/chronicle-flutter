@@ -1,3 +1,4 @@
+import 'attachment_sync_models.dart';
 import 'lan_sync_models.dart';
 import 'pairing_crypto.dart';
 import 'pairing_models.dart';
@@ -29,6 +30,7 @@ class LanSyncHostSession {
     required LoadPeerCursor loadCursor,
     required SavePeerCursor saveCursor,
     required MarkPeerSyncSuccess markSuccess,
+    required BuildAttachmentSyncManifest buildAttachmentManifest,
     RemoteAppliedCallback? onRemoteApplied,
   }) {
     throw UnsupportedError(
@@ -55,6 +57,7 @@ class LanSyncClient {
     required LoadPeerCursor loadCursor,
     required SavePeerCursor saveCursor,
     required MarkPeerSyncSuccess markSuccess,
+    required BuildAttachmentSyncManifest buildAttachmentManifest,
     RemoteAppliedCallback? onRemoteApplied,
   }) {
     throw UnsupportedError(

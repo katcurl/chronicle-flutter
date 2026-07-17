@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.19.2
+
+- added signed attachment manifests to trusted LAN sync;
+- added deterministic plans for missing binaries, metadata-only records,
+  tombstones and path conflicts;
+- prevented missing local binaries from being advertised to peers;
+- added attachment work counters to sync reports and reliability events;
+- updated the signed journal protocol to `chronicle-sync-v2`;
+- kept binary transfer disabled until atomic write and checksum verification
+  are implemented.
+
 ## 0.7.0
 
 - migrated structured data from SharedPreferences to SQLite;

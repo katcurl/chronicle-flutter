@@ -1,9 +1,10 @@
 import 'dart:convert';
 
+import 'attachment_sync_models.dart';
 import 'pairing_models.dart';
 import 'sync_models.dart';
 
-const lanSyncProtocol = 'chronicle-sync-v1';
+const lanSyncProtocol = 'chronicle-sync-v2';
 
 class LanSyncOffer {
   const LanSyncOffer({
@@ -98,6 +99,7 @@ class LanSyncExchangeRequest {
     required this.peer,
     required this.batch,
     required this.signature,
+    this.attachmentManifest = const AttachmentSyncManifest.empty(),
   });
 
   final String sessionId;
@@ -105,6 +107,7 @@ class LanSyncExchangeRequest {
   final String roundId;
   final PairingPeer peer;
   final SyncJournalBatch batch;
+  final AttachmentSyncManifest attachmentManifest;
   final String signature;
 
   String get signingPayload => jsonEncode({
@@ -115,6 +118,7 @@ class LanSyncExchangeRequest {
     'roundId': roundId,
     'peer': peer.toJson(),
     'batch': batch.toJson(),
+    'attachmentManifest': attachmentManifest.toJson(),
   });
 
   Map<String, dynamic> toJson() => {
@@ -123,6 +127,7 @@ class LanSyncExchangeRequest {
     'roundId': roundId,
     'peer': peer.toJson(),
     'batch': batch.toJson(),
+    'attachmentManifest': attachmentManifest.toJson(),
     'signature': signature,
   };
 
@@ -137,6 +142,7 @@ class LanSyncExchangeRequest {
       batch: SyncJournalBatch.fromJson(
         Map<String, dynamic>.from(json['batch']! as Map),
       ),
+      attachmentManifest: _readAttachmentManifest(json['attachmentManifest']),
       signature: json['signature']! as String,
     );
   }
@@ -150,6 +156,9 @@ class LanSyncExchangeResponse {
     required this.batch,
     required this.remoteApplyResult,
     required this.signature,
+    this.attachmentManifest = const AttachmentSyncManifest.empty(),
+    this.requesterAttachmentPlan = const AttachmentSyncPlan.empty(),
+    this.responderAttachmentPlan = const AttachmentSyncPlan.empty(),
   });
 
   final String sessionId;
@@ -157,6 +166,9 @@ class LanSyncExchangeResponse {
   final PairingPeer hostPeer;
   final SyncJournalBatch batch;
   final SyncApplyResult remoteApplyResult;
+  final AttachmentSyncManifest attachmentManifest;
+  final AttachmentSyncPlan requesterAttachmentPlan;
+  final AttachmentSyncPlan responderAttachmentPlan;
   final String signature;
 
   String get signingPayload => jsonEncode({
@@ -167,6 +179,9 @@ class LanSyncExchangeResponse {
     'hostPeer': hostPeer.toJson(),
     'batch': batch.toJson(),
     'remoteApplyResult': remoteApplyResult.toJson(),
+    'attachmentManifest': attachmentManifest.toJson(),
+    'requesterAttachmentPlan': requesterAttachmentPlan.toJson(),
+    'responderAttachmentPlan': responderAttachmentPlan.toJson(),
   });
 
   Map<String, dynamic> toJson() => {
@@ -175,6 +190,9 @@ class LanSyncExchangeResponse {
     'hostPeer': hostPeer.toJson(),
     'batch': batch.toJson(),
     'remoteApplyResult': remoteApplyResult.toJson(),
+    'attachmentManifest': attachmentManifest.toJson(),
+    'requesterAttachmentPlan': requesterAttachmentPlan.toJson(),
+    'responderAttachmentPlan': responderAttachmentPlan.toJson(),
     'signature': signature,
   };
 
@@ -190,6 +208,13 @@ class LanSyncExchangeResponse {
       ),
       remoteApplyResult: SyncApplyResult.fromJson(
         Map<String, dynamic>.from(json['remoteApplyResult']! as Map),
+      ),
+      attachmentManifest: _readAttachmentManifest(json['attachmentManifest']),
+      requesterAttachmentPlan: _readAttachmentPlan(
+        json['requesterAttachmentPlan'],
+      ),
+      responderAttachmentPlan: _readAttachmentPlan(
+        json['responderAttachmentPlan'],
       ),
       signature: json['signature']! as String,
     );
@@ -250,6 +275,8 @@ class LanSyncReport {
     required this.staleCount,
     required this.unsupportedCount,
     required this.hasMore,
+    this.attachmentPlanFromPeer = const AttachmentSyncPlan.empty(),
+    this.attachmentPlanByPeer = const AttachmentSyncPlan.empty(),
   });
 
   final PairingPeer peer;
@@ -263,8 +290,12 @@ class LanSyncReport {
   final int staleCount;
   final int unsupportedCount;
   final bool hasMore;
+  final AttachmentSyncPlan attachmentPlanFromPeer;
+  final AttachmentSyncPlan attachmentPlanByPeer;
 
   bool get changedData => appliedCount > 0;
+  bool get hasPendingAttachmentWork =>
+      attachmentPlanFromPeer.hasWork || attachmentPlanByPeer.hasWork;
 
   LanSyncReport merge(LanSyncReport other) {
     if (peer.deviceId != other.peer.deviceId) {
@@ -286,6 +317,30 @@ class LanSyncReport {
       staleCount: staleCount + other.staleCount,
       unsupportedCount: unsupportedCount + other.unsupportedCount,
       hasMore: other.hasMore,
+      attachmentPlanFromPeer: other.attachmentPlanFromPeer,
+      attachmentPlanByPeer: other.attachmentPlanByPeer,
     );
   }
+}
+
+AttachmentSyncManifest _readAttachmentManifest(Object? value) {
+  if (value is! Map) {
+    return const AttachmentSyncManifest.empty();
+  }
+  return AttachmentSyncManifest.fromJson(
+    value.map(
+      (key, item) => MapEntry<String, dynamic>(key.toString(), item),
+    ),
+  );
+}
+
+AttachmentSyncPlan _readAttachmentPlan(Object? value) {
+  if (value is! Map) {
+    return const AttachmentSyncPlan.empty();
+  }
+  return AttachmentSyncPlan.fromJson(
+    value.map(
+      (key, item) => MapEntry<String, dynamic>(key.toString(), item),
+    ),
+  );
 }

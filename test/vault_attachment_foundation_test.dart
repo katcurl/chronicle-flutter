@@ -42,6 +42,11 @@ void main() {
     expect(catalog, hasLength(1));
     expect(catalog.single.relativePath, first.relativePath);
     expect(catalog.single.byteLength, utf8.encode('same-content').length);
+
+    final manifest = await service.buildAttachmentSyncManifest();
+    expect(manifest.activeCount, 1);
+    expect(manifest.tombstoneCount, 0);
+    expect(manifest.entries.single.sha256, first.sha256);
   });
 
   test('managed delete removes file and preserves tombstone', () async {
@@ -74,7 +79,34 @@ void main() {
     );
     expect(withDeleted, hasLength(1));
     expect(withDeleted.single.isDeleted, isTrue);
+
+    final manifest = await service.buildAttachmentSyncManifest();
+    expect(manifest.activeCount, 0);
+    expect(manifest.tombstoneCount, 1);
   });
+
+  test('missing indexed binary is not advertised to peers', () async {
+    final backend = _AttachmentBackend(<PickedVaultFile>[
+      PickedVaultFile(
+        name: 'missing.pdf',
+        bytes: Uint8List.fromList(utf8.encode('content')),
+      ),
+    ]);
+    final service = VaultService(backend: backend);
+    final note = Note(
+      id: 'note-1',
+      title: 'Missing attachment',
+      projectId: 'project-1',
+      body: '# Missing attachment',
+    );
+
+    final imported = await service.pickAndStoreAttachment(note);
+    backend.binaryFiles.remove(imported!.relativePath);
+
+    final manifest = await service.buildAttachmentSyncManifest();
+    expect(manifest.entries, isEmpty);
+  });
+
 }
 
 class _AttachmentBackend extends VaultBackend {

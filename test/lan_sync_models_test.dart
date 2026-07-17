@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:chronicle/sync/attachment_sync_models.dart';
 import 'package:chronicle/sync/lan_sync_models.dart';
 import 'package:chronicle/sync/pairing_models.dart';
 import 'package:chronicle/sync/sync_models.dart';
@@ -65,6 +66,33 @@ void main() {
         staleCount: 1,
         unsupportedCount: 0,
       ),
+      attachmentManifest: AttachmentSyncManifest(
+        generatedAt: DateTime.utc(2026, 7, 16, 12),
+        entries: <AttachmentSyncEntry>[
+          AttachmentSyncEntry(
+            relativePath: 'Attachments/protocol--aaaaaaaa.pdf',
+            originalName: 'protocol.pdf',
+            sha256:
+                'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            mimeType: 'application/pdf',
+            byteLength: 42,
+            createdAt: DateTime.utc(2026, 7, 16, 10),
+          ),
+        ],
+      ),
+      requesterAttachmentPlan: AttachmentSyncPlan(
+        files: <AttachmentSyncEntry>[
+          AttachmentSyncEntry(
+            relativePath: 'Attachments/protocol--aaaaaaaa.pdf',
+            originalName: 'protocol.pdf',
+            sha256:
+                'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            mimeType: 'application/pdf',
+            byteLength: 42,
+            createdAt: DateTime.utc(2026, 7, 16, 10),
+          ),
+        ],
+      ),
       signature: 'signature',
     );
 
@@ -78,5 +106,7 @@ void main() {
     expect(restored.batch.changes.single.changeId, 'change-7');
     expect(restored.remoteApplyResult.appliedCount, 1);
     expect(restored.remoteApplyResult.staleCount, 1);
+    expect(restored.attachmentManifest.activeCount, 1);
+    expect(restored.requesterAttachmentPlan.fileCount, 1);
   });
 }

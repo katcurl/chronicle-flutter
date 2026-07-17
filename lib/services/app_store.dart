@@ -37,10 +37,14 @@ class AppStore extends ChangeNotifier {
        _reliabilityService = reliabilityService ?? ReliabilityService(),
        pairingService =
            pairingService ?? PairingService(repository: repository),
-       lanSyncService =
-           lanSyncService ?? LanSyncService(repository: repository),
        _automaticLanSyncEnabled = enableAutomaticLanSync,
        _reliabilityFeaturesEnabled = enableReliabilityFeatures {
+    this.lanSyncService =
+        lanSyncService ??
+        LanSyncService(
+          repository: repository,
+          buildAttachmentManifest: _vaultService.buildAttachmentSyncManifest,
+        );
     autoSyncService = LanAutoSyncService(
       repository: repository,
       lanSyncService: this.lanSyncService,
@@ -59,7 +63,7 @@ class AppStore extends ChangeNotifier {
   final VaultService _vaultService;
   final ReliabilityService _reliabilityService;
   final PairingService pairingService;
-  final LanSyncService lanSyncService;
+  late final LanSyncService lanSyncService;
   final bool _automaticLanSyncEnabled;
   final bool _reliabilityFeaturesEnabled;
   late final LanAutoSyncService autoSyncService;
@@ -129,9 +133,12 @@ class AppStore extends ChangeNotifier {
         notify: false,
       );
       final initialized = await _repository.isInitialized();
+      var protectExistingVault = false;
       if (!initialized) {
         final legacy = await _legacyImporter?.read();
-        data = legacy ?? _seed();
+        final vaultHasNotes = await _vaultService.hasExistingNoteContent();
+        protectExistingVault = vaultHasNotes;
+        data = legacy ?? (vaultHasNotes ? AppData.empty() : _seed());
         await _repository.replaceAll(data);
         await _repository.markInitialized();
       } else {
@@ -141,7 +148,9 @@ class AppStore extends ChangeNotifier {
       await _hydrateNoteMetadata();
       await rebuildAllNoteLinks();
       await refreshSyncFoundation(notify: false);
-      await _initializeVaultFoundation();
+      await _initializeVaultFoundation(
+        allowAutomaticWrite: !protectExistingVault,
+      );
       await refreshBackupCatalog(notify: false);
 
       final activeTimer = await _repository.loadActiveTimer();
@@ -1130,13 +1139,27 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     });
   }
 
-  Future<void> _initializeVaultFoundation() async {
+  Future<void> _initializeVaultFoundation({
+    required bool allowAutomaticWrite,
+  }) async {
     try {
       vaultStatus = await _vaultService.inspect();
       if (vaultStatus.supported) {
-        vaultStatus = await _vaultService.writeMirror(data);
         pendingVaultScan = await _vaultService.scan(data);
-        _mergeVaultScanIntoStatus();
+        if (allowAutomaticWrite && !pendingVaultScan!.hasChanges) {
+          vaultStatus = await _vaultService.writeMirror(data);
+          pendingVaultScan = await _vaultService.scan(data);
+        }
+        _mergeVaultScanIntoStatus(
+          messageOverride:
+              !allowAutomaticWrite
+                  ? pendingVaultScan!.hasChanges
+                      ? 'Найдены данные Vault. Автоматическая запись отключена '
+                          'до просмотра изменений.'
+                      : 'Новая локальная база создана. Автоматическая запись '
+                          'в Vault пропущена для защиты существующих файлов.'
+                  : null,
+        );
       }
     } on Object catch (error) {
       vaultStatus = VaultStatus.unavailable(message: error.toString());
@@ -1170,7 +1193,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     return scan;
   }
 
-  void _mergeVaultScanIntoStatus() {
+  void _mergeVaultScanIntoStatus({String? messageOverride}) {
     final scan = pendingVaultScan;
     if (scan == null) {
       return;
@@ -1180,9 +1203,10 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       conflictCount: scan.conflicts.length,
       missingFileCount: scan.missingFiles.length,
       message:
-          scan.hasChanges
+          messageOverride ??
+          (scan.hasChanges
               ? 'Найдены внешние изменения. Просмотри их перед импортом.'
-              : 'Chronicle и Markdown Vault синхронизированы.',
+              : 'Chronicle и Markdown Vault синхронизированы.'),
     );
   }
 
@@ -1517,6 +1541,15 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         'duplicates': report.duplicateCount,
         'stale': report.staleCount,
         'unsupported': report.unsupportedCount,
+        'attachmentFilesFromPeer': report.attachmentPlanFromPeer.fileCount,
+        'attachmentFilesByPeer': report.attachmentPlanByPeer.fileCount,
+        'attachmentTombstonesFromPeer':
+            report.attachmentPlanFromPeer.tombstoneCount,
+        'attachmentTombstonesByPeer':
+            report.attachmentPlanByPeer.tombstoneCount,
+        'attachmentConflicts':
+            report.attachmentPlanFromPeer.conflictCount +
+            report.attachmentPlanByPeer.conflictCount,
         'durationMs':
             report.completedAt.difference(report.startedAt).inMilliseconds,
       },

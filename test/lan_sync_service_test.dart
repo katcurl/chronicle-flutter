@@ -1,5 +1,6 @@
 import 'package:chronicle/data/repositories/in_memory_app_repository.dart';
 import 'package:chronicle/models/app_models.dart';
+import 'package:chronicle/sync/attachment_sync_models.dart';
 import 'package:chronicle/sync/lan_sync_service.dart';
 import 'package:chronicle/sync/pairing_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -103,4 +104,79 @@ void main() {
     expect(second.appliedCount, 0);
     expect((await phoneRepository.load()).projects, hasLength(1));
   });
+
+  test('trusted LAN exchange discovers pending attachment work', () async {
+    final desktopRepository = InMemoryAppRepository();
+    final phoneRepository = InMemoryAppRepository();
+    final desktopPairing = PairingService(repository: desktopRepository);
+    final phonePairing = PairingService(repository: phoneRepository);
+    final desktopIdentity = await desktopPairing.ensureLocalIdentity();
+    final phoneIdentity = await phonePairing.ensureLocalIdentity();
+
+    await desktopPairing.trustPeer(phoneIdentity.peer);
+    await phonePairing.trustPeer(desktopIdentity.peer);
+
+    final desktopManifest = AttachmentSyncManifest(
+      generatedAt: DateTime.utc(2026, 7, 17, 14),
+      entries: <AttachmentSyncEntry>[
+        AttachmentSyncEntry(
+          relativePath: 'Attachments/protocol--aaaaaaaa.pdf',
+          originalName: 'protocol.pdf',
+          sha256:
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          mimeType: 'application/pdf',
+          byteLength: 42,
+          createdAt: DateTime.utc(2026, 7, 17, 10),
+        ),
+        AttachmentSyncEntry(
+          relativePath: 'Attachments/old--bbbbbbbb.pdf',
+          originalName: 'old.pdf',
+          sha256:
+              'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          mimeType: 'application/pdf',
+          byteLength: 10,
+          createdAt: DateTime.utc(2026, 7, 16, 10),
+        ),
+      ],
+    );
+    final phoneManifest = AttachmentSyncManifest(
+      generatedAt: DateTime.utc(2026, 7, 17, 14),
+      entries: <AttachmentSyncEntry>[
+        AttachmentSyncEntry(
+          relativePath: 'Attachments/old--bbbbbbbb.pdf',
+          originalName: 'old.pdf',
+          sha256:
+              'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          mimeType: 'application/pdf',
+          byteLength: 10,
+          createdAt: DateTime.utc(2026, 7, 16, 10),
+          deletedAt: DateTime.utc(2026, 7, 17, 13),
+        ),
+      ],
+    );
+
+    final desktopSync = LanSyncService(
+      repository: desktopRepository,
+      buildAttachmentManifest: () async => desktopManifest,
+    );
+    final phoneSync = LanSyncService(
+      repository: phoneRepository,
+      buildAttachmentManifest: () async => phoneManifest,
+    );
+    final host = await desktopSync.startHost(
+      peerDeviceId: phoneIdentity.peer.deviceId,
+    );
+    addTearDown(host.close);
+
+    final report = await phoneSync.syncFromOffer(
+      host.offerFor('127.0.0.1').encode(),
+      expectedPeerDeviceId: desktopIdentity.peer.deviceId,
+    );
+
+    expect(report.attachmentPlanFromPeer.fileCount, 1);
+    expect(report.attachmentPlanFromPeer.files.single.originalName, 'protocol.pdf');
+    expect(report.attachmentPlanByPeer.tombstoneCount, 1);
+    expect(report.hasPendingAttachmentWork, isTrue);
+  });
+
 }

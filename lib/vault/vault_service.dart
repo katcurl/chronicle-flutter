@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 
 import '../features/notes/note_document.dart';
 import '../models/app_models.dart';
+import '../sync/attachment_sync_models.dart';
 import '../sync/sync_models.dart';
 import 'vault_backend.dart';
 import 'vault_models.dart';
@@ -23,6 +24,29 @@ class VaultService {
 
   final VaultBackend _backend;
   final Uuid _uuid = const Uuid();
+
+  Future<bool> hasExistingNoteContent() async {
+    try {
+      final rootPath = await _backend.resolveRootPath();
+      if (rootPath == null || rootPath.isEmpty) {
+        return false;
+      }
+      final indexRaw = await _backend.readTextFile(rootPath, _indexPath);
+      if (_managedPathsFromIndex(indexRaw).isNotEmpty) {
+        return true;
+      }
+      final files = await _backend.listTextFiles(
+        rootPath: rootPath,
+        directory: 'Notes',
+        extension: '.md',
+      );
+      return files.isNotEmpty;
+    } on Object {
+      // When the Vault cannot be inspected, fail closed: do not let a new
+      // database overwrite files whose state is unknown.
+      return true;
+    }
+  }
 
   Future<VaultStatus> writeMirror(AppData data, {bool force = false}) async {
     final rootPath = await _backend.resolveRootPath();
@@ -370,6 +394,51 @@ class VaultService {
             : records.where((record) => !record.isDeleted).toList();
     result.sort((left, right) => right.createdAt.compareTo(left.createdAt));
     return List<VaultAttachmentRecord>.unmodifiable(result);
+  }
+
+  Future<AttachmentSyncManifest> buildAttachmentSyncManifest() async {
+    final rootPath = await _backend.resolveRootPath();
+    if (rootPath == null || rootPath.isEmpty) {
+      return AttachmentSyncManifest(generatedAt: DateTime.now().toUtc());
+    }
+
+    final records = await _readAttachmentRecords(rootPath);
+    records.sort(
+      (left, right) => left.relativePath.compareTo(right.relativePath),
+    );
+    final entries = <AttachmentSyncEntry>[];
+    for (final record in records) {
+      if (entries.length >= maxAttachmentSyncManifestEntries) {
+        break;
+      }
+      if (!_validAttachmentPath(record.relativePath) ||
+          !RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(record.sha256) ||
+          record.byteLength < 0 ||
+          record.byteLength > maxAttachmentBytes) {
+        continue;
+      }
+      if (!record.isDeleted &&
+          !await _backend.fileExists(rootPath, record.relativePath)) {
+        // A missing local binary must not be advertised to another device.
+        // Omitting it lets a healthy peer offer the content back later.
+        continue;
+      }
+      entries.add(
+        AttachmentSyncEntry(
+          relativePath: record.relativePath,
+          originalName: record.originalName,
+          sha256: record.sha256.toLowerCase(),
+          mimeType: record.mimeType,
+          byteLength: record.byteLength,
+          createdAt: record.createdAt.toUtc(),
+          deletedAt: record.deletedAt?.toUtc(),
+        ),
+      );
+    }
+    return AttachmentSyncManifest(
+      generatedAt: DateTime.now().toUtc(),
+      entries: List<AttachmentSyncEntry>.unmodifiable(entries),
+    );
   }
 
   Future<AttachmentDeleteResult> deleteManagedAttachment(

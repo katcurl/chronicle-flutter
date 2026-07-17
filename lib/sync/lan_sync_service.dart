@@ -1,4 +1,5 @@
 import '../data/repositories/app_repository.dart';
+import 'attachment_sync_models.dart';
 import 'lan_sync_models.dart';
 import 'lan_sync_transport.dart';
 import 'pairing_crypto.dart';
@@ -6,12 +7,18 @@ import 'pairing_models.dart';
 import 'sync_models.dart';
 
 class LanSyncService {
-  LanSyncService({required AppRepository repository, PairingCrypto? crypto})
-    : _repository = repository,
-      crypto = crypto ?? PairingCrypto();
+  LanSyncService({
+    required AppRepository repository,
+    PairingCrypto? crypto,
+    BuildAttachmentSyncManifest? buildAttachmentManifest,
+  }) : _repository = repository,
+       crypto = crypto ?? PairingCrypto(),
+       _buildAttachmentManifest =
+           buildAttachmentManifest ?? _emptyAttachmentManifest;
 
   final AppRepository _repository;
   final PairingCrypto crypto;
+  final BuildAttachmentSyncManifest _buildAttachmentManifest;
 
   Future<LocalPairingIdentity> ensureLocalIdentity() => _ensureLocalIdentity();
 
@@ -43,6 +50,7 @@ class LanSyncService {
       loadCursor: _loadCursor,
       saveCursor: _repository.saveSyncCursor,
       markSuccess: _markSuccess,
+      buildAttachmentManifest: _buildAttachmentManifest,
       onRemoteApplied: onRemoteApplied,
     );
   }
@@ -68,6 +76,7 @@ class LanSyncService {
       loadCursor: _loadCursor,
       saveCursor: _repository.saveSyncCursor,
       markSuccess: _markSuccess,
+      buildAttachmentManifest: _buildAttachmentManifest,
       onRemoteApplied: onRemoteApplied,
     );
   }
@@ -136,4 +145,8 @@ class LanSyncService {
     trusted.lastSyncAt = completedAt;
     await _repository.saveTrustedDevice(trusted);
   }
+}
+
+Future<AttachmentSyncManifest> _emptyAttachmentManifest() async {
+  return AttachmentSyncManifest(generatedAt: DateTime.now().toUtc());
 }

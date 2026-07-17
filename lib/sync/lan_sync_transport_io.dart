@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:uuid/uuid.dart';
 
+import 'attachment_sync_models.dart';
 import 'lan_sync_models.dart';
 import 'pairing_crypto.dart';
 import 'pairing_models.dart';
@@ -38,6 +39,7 @@ class LanSyncHostSession {
     required LoadPeerCursor loadCursor,
     required SavePeerCursor saveCursor,
     required MarkPeerSyncSuccess markSuccess,
+    required BuildAttachmentSyncManifest buildAttachmentManifest,
     RemoteAppliedCallback? onRemoteApplied,
   }) : _server = server,
        _buildOutgoing = buildOutgoing,
@@ -45,6 +47,7 @@ class LanSyncHostSession {
        _loadCursor = loadCursor,
        _saveCursor = saveCursor,
        _markSuccess = markSuccess,
+       _buildAttachmentManifest = buildAttachmentManifest,
        _onRemoteApplied = onRemoteApplied;
 
   static Future<LanSyncHostSession> start({
@@ -56,6 +59,7 @@ class LanSyncHostSession {
     required LoadPeerCursor loadCursor,
     required SavePeerCursor saveCursor,
     required MarkPeerSyncSuccess markSuccess,
+    required BuildAttachmentSyncManifest buildAttachmentManifest,
     RemoteAppliedCallback? onRemoteApplied,
   }) async {
     final server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
@@ -80,6 +84,7 @@ class LanSyncHostSession {
       loadCursor: loadCursor,
       saveCursor: saveCursor,
       markSuccess: markSuccess,
+      buildAttachmentManifest: buildAttachmentManifest,
       onRemoteApplied: onRemoteApplied,
     );
     session._subscription = server.listen(session._handleRequest);
@@ -103,6 +108,7 @@ class LanSyncHostSession {
   final LoadPeerCursor _loadCursor;
   final SavePeerCursor _saveCursor;
   final MarkPeerSyncSuccess _markSuccess;
+  final BuildAttachmentSyncManifest _buildAttachmentManifest;
   final RemoteAppliedCallback? _onRemoteApplied;
   final StreamController<LanSyncReport> _reportController =
       StreamController<LanSyncReport>.broadcast();
@@ -195,12 +201,24 @@ class LanSyncHostSession {
       cursor.lastSentSequence,
       1000,
     );
+    final attachmentManifest = await _buildAttachmentManifest();
+    final requesterAttachmentPlan = buildAttachmentSyncPlan(
+      local: payload.attachmentManifest,
+      remote: attachmentManifest,
+    );
+    final responderAttachmentPlan = buildAttachmentSyncPlan(
+      local: attachmentManifest,
+      remote: payload.attachmentManifest,
+    );
     final unsigned = LanSyncExchangeResponse(
       sessionId: sessionId,
       roundId: payload.roundId,
       hostPeer: local.peer,
       batch: outgoing,
       remoteApplyResult: applied,
+      attachmentManifest: attachmentManifest,
+      requesterAttachmentPlan: requesterAttachmentPlan,
+      responderAttachmentPlan: responderAttachmentPlan,
       signature: '',
     );
     final signature = await crypto.sign(
@@ -213,6 +231,9 @@ class LanSyncHostSession {
       hostPeer: local.peer,
       batch: outgoing,
       remoteApplyResult: applied,
+      attachmentManifest: attachmentManifest,
+      requesterAttachmentPlan: requesterAttachmentPlan,
+      responderAttachmentPlan: responderAttachmentPlan,
       signature: signature,
     );
     _pendingRounds[payload.roundId] = _PendingSyncRound(
@@ -284,6 +305,8 @@ class LanSyncHostSession {
       staleCount: pending.response.remoteApplyResult.staleCount,
       unsupportedCount: pending.response.remoteApplyResult.unsupportedCount,
       hasMore: pending.response.batch.hasMore || pending.request.batch.hasMore,
+      attachmentPlanFromPeer: pending.response.responderAttachmentPlan,
+      attachmentPlanByPeer: pending.response.requesterAttachmentPlan,
     );
     _pendingRounds.remove(ack.roundId);
     _reportController.add(report);
@@ -330,6 +353,7 @@ class LanSyncClient {
     required LoadPeerCursor loadCursor,
     required SavePeerCursor saveCursor,
     required MarkPeerSyncSuccess markSuccess,
+    required BuildAttachmentSyncManifest buildAttachmentManifest,
     RemoteAppliedCallback? onRemoteApplied,
   }) async {
     if (offer.isExpired) {
@@ -353,6 +377,9 @@ class LanSyncClient {
     var staleCount = 0;
     var unsupportedCount = 0;
     var hasMore = false;
+    var attachmentPlanFromPeer = const AttachmentSyncPlan.empty();
+    var attachmentPlanByPeer = const AttachmentSyncPlan.empty();
+    final attachmentManifest = await buildAttachmentManifest();
 
     try {
       do {
@@ -375,6 +402,7 @@ class LanSyncClient {
           roundId: roundId,
           peer: local.peer,
           batch: outgoing,
+          attachmentManifest: attachmentManifest,
           signature: '',
         );
         final requestSignature = await crypto.sign(
@@ -387,6 +415,7 @@ class LanSyncClient {
           roundId: roundId,
           peer: local.peer,
           batch: outgoing,
+          attachmentManifest: attachmentManifest,
           signature: requestSignature,
         );
         final rawResponse = await _postJson(
@@ -406,6 +435,22 @@ class LanSyncClient {
           trustedHost: trustedHost,
           crypto: crypto,
         );
+        final expectedPlanFromPeer = buildAttachmentSyncPlan(
+          local: attachmentManifest,
+          remote: response.attachmentManifest,
+        );
+        final expectedPlanByPeer = buildAttachmentSyncPlan(
+          local: response.attachmentManifest,
+          remote: attachmentManifest,
+        );
+        if (jsonEncode(expectedPlanFromPeer.toJson()) !=
+                jsonEncode(response.requesterAttachmentPlan.toJson()) ||
+            jsonEncode(expectedPlanByPeer.toJson()) !=
+                jsonEncode(response.responderAttachmentPlan.toJson())) {
+          throw StateError('План синхронизации вложений не прошёл проверку.');
+        }
+        attachmentPlanFromPeer = expectedPlanFromPeer;
+        attachmentPlanByPeer = expectedPlanByPeer;
         final applied = await applyIncoming(response.batch.changes);
         if (applied.insertedCount > 0 && onRemoteApplied != null) {
           try {
@@ -481,6 +526,8 @@ class LanSyncClient {
       staleCount: staleCount,
       unsupportedCount: unsupportedCount,
       hasMore: hasMore,
+      attachmentPlanFromPeer: attachmentPlanFromPeer,
+      attachmentPlanByPeer: attachmentPlanByPeer,
     );
   }
 
