@@ -1,5 +1,6 @@
 import 'package:chronicle/features/notes/note_document.dart';
 import 'package:chronicle/features/notes/note_image_syntax.dart';
+import 'package:chronicle/models/app_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -71,6 +72,33 @@ void main() {
     );
 
     expect(NoteDocument.wordCount(markdown), 4);
+  });
+
+  test('image presentation survives note save and reload', () {
+    final image = NoteImageSyntax.first(
+      '![Orf9b](../../Attachments/orf9b.png)',
+    )!;
+    final configured = image.toMarkdown(
+      presentation: const NoteImagePresentation(
+        widthPercent: 45,
+        alignment: NoteImageAlignment.left,
+        caption: 'Кадр после МД',
+      ),
+    );
+    final note = Note(
+      id: 'note-1',
+      title: 'Orf9b',
+      projectId: 'project-1',
+      body: '',
+    );
+
+    final serialized = NoteDocument.serialize(note, configured);
+    final restoredDocument = NoteDocument.parse(serialized);
+    final restored = NoteImageSyntax.first(restoredDocument.content)!;
+
+    expect(restored.presentation.widthPercent, 45);
+    expect(restored.presentation.alignment, NoteImageAlignment.left);
+    expect(restored.presentation.caption, 'Кадр после МД');
   });
 
   test('width is restricted to the supported responsive range', () {

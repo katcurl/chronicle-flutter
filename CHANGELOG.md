@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.19.3+32
+
+- fixed image size, alignment and caption settings being lost after switching between editor and preview;
+- image presentation metadata is now persisted immediately after attachment, resizing or configuration;
+- switching editor modes now safely flushes the current note buffer without creating a history version.
+
 ## 0.19.3
 
 - added responsive image sizing from 20% to 100%;

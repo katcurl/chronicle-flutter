@@ -450,14 +450,14 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                 ),
                 IconButton(
                   tooltip: 'Редактор',
-                  onPressed: () => setState(() => mode = 0),
+                  onPressed: () => _switchMode(0),
                   icon: Icon(
                     mode == 0 ? Icons.edit_rounded : Icons.edit_outlined,
                   ),
                 ),
                 IconButton(
                   tooltip: 'Предпросмотр',
-                  onPressed: () => setState(() => mode = 1),
+                  onPressed: () => _switchMode(1),
                   icon: Icon(
                     mode == 1
                         ? Icons.visibility_rounded
@@ -467,7 +467,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                 if (split)
                   IconButton(
                     tooltip: 'Разделить редактор',
-                    onPressed: () => setState(() => mode = 2),
+                    onPressed: () => _switchMode(2),
                     icon: Icon(
                       mode == 2
                           ? Icons.vertical_split_rounded
@@ -560,6 +560,19 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         },
       ),
     );
+  }
+
+  void _switchMode(int nextMode) {
+    if (nextMode == mode) {
+      return;
+    }
+    if (dirty) {
+      _save(createVersion: false);
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() => mode = nextMode);
   }
 
   Widget _editorPane() {
@@ -860,6 +873,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       }
 
       _insertMarkdownAtSelection(markdown);
+      _save(createVersion: false);
       final status =
           attachment.alreadyExisted
               ? 'Вложение уже было в Vault; добавлена ссылка'
@@ -972,6 +986,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       selection: updatedSelection,
       composing: TextRange.empty,
     );
+    _save(createVersion: false);
   }
 
   Future<void> _createTask() async {

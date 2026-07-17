@@ -23,3 +23,9 @@ in preview mode.
 Existing Markdown images without Chronicle metadata remain compatible and are
 shown at 100% width, centered. Their display settings can be added later from
 the editor toolbar or by clicking the image in preview mode.
+## Persistence
+
+Chronicle saves image presentation metadata immediately after an image is
+inserted, configured or resized. Switching between editor, preview and split
+mode also flushes the current editor buffer, so width, alignment and caption
+remain stable across repeated mode changes and after reopening the note.
