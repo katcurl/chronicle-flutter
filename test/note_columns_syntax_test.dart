@@ -1,0 +1,96 @@
+import 'package:chronicle/features/notes/note_columns_syntax.dart';
+import 'package:chronicle/features/notes/note_document.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('two-column block is parsed with widths and content', () {
+    const source = '''Введение
+
+<!-- chronicle-columns widths=40,60 -->
+![Orf9b](../../Attachments/orf9b.png)
+<!-- chronicle-column -->
+## Интерпретация
+
+Текст справа.
+<!-- /chronicle-columns -->
+
+Вывод
+''';
+
+    final block = NoteColumnsSyntax.first(source);
+
+    expect(block, isNotNull);
+    expect(block!.columnCount, 2);
+    expect(block.widths, [40, 60]);
+    expect(block.columns[0].markdown, contains('orf9b.png'));
+    expect(block.columns[1].markdown, contains('Текст справа'));
+    expect(source.substring(block.start, block.end), block.raw);
+  });
+
+  test('column layout survives Markdown round-trip', () {
+    final markdown = NoteColumnsSyntax.build(
+      widths: const [35, 65],
+      contents: const [
+        '![Схема](../../Attachments/schema.png)',
+        'Подробное объяснение справа.',
+      ],
+    );
+    final restored = NoteColumnsSyntax.first(markdown)!;
+
+    expect(restored.widths, [35, 65]);
+    expect(restored.columnCount, 2);
+    expect(restored.columns[0].markdown, contains('Схема'));
+    expect(restored.columns[1].markdown, 'Подробное объяснение справа.');
+  });
+
+  test('three columns normalize to one hundred percent', () {
+    final markdown = NoteColumnsSyntax.build(
+      widths: const [25, 50, 25],
+      contents: const ['A', 'B', 'C'],
+    );
+    final restored = NoteColumnsSyntax.first(markdown)!;
+
+    expect(restored.columnCount, 3);
+    expect(restored.widths, [25, 50, 25]);
+    expect(restored.widths.reduce((a, b) => a + b), 100);
+  });
+
+  test('column block can be found at cursor and relocated', () {
+    final blockMarkdown = NoteColumnsSyntax.build(
+      widths: const [50, 50],
+      contents: const ['Левая', 'Правая'],
+    );
+    final source = 'До\n\n$blockMarkdown\n\nПосле';
+    final cursor = source.indexOf('Правая');
+    final block = NoteColumnsSyntax.findAtOffset(source, cursor)!;
+
+    final shifted = 'Префикс\n$source';
+    final relocated = NoteColumnsSyntax.relocate(shifted, block);
+
+    expect(relocated, isNotNull);
+    expect(relocated!.start, block.start + 'Префикс\n'.length);
+    expect(relocated.widths, [50, 50]);
+  });
+
+  test('column control markers do not inflate word count', () {
+    final markdown = NoteColumnsSyntax.build(
+      widths: const [40, 60],
+      contents: const ['Фото белка', 'Описание метастабильного состояния'],
+    );
+
+    expect(NoteDocument.wordCount(markdown), 5);
+  });
+
+  test('column-like markers inside code fence are ignored', () {
+    const source = '''```markdown
+<!-- chronicle-columns widths=50,50 -->
+A
+<!-- chronicle-column -->
+B
+<!-- /chronicle-columns -->
+```
+''';
+
+    expect(NoteColumnsSyntax.first(source), isNull);
+  });
+}

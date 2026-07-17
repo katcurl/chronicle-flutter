@@ -100,6 +100,20 @@ class NoteImageReference {
   final String target;
   final NoteImagePresentation presentation;
 
+  NoteImageReference shifted(int delta) {
+    if (delta == 0) {
+      return this;
+    }
+    return NoteImageReference(
+      start: start + delta,
+      end: end + delta,
+      raw: raw,
+      alt: alt,
+      target: target,
+      presentation: presentation,
+    );
+  }
+
   String toMarkdown({NoteImagePresentation? presentation}) {
     final effective = presentation ?? this.presentation;
     final escapedAlt = alt.replaceAll('\\', '\\\\').replaceAll(']', '\\]');

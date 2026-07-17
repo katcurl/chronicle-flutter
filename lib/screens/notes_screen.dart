@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
+import '../features/notes/note_columns_editor_dialog.dart';
+import '../features/notes/note_columns_syntax.dart';
 import '../features/notes/note_document.dart';
 import '../features/notes/note_image_editor_dialog.dart';
 import '../features/notes/note_image_syntax.dart';
@@ -596,6 +598,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           controller: contentController,
           onAttach: _attachFile,
           onConfigureImage: _editImageAtCursor,
+          onConfigureColumns: _configureColumnsAtCursor,
         ),
         const Divider(height: 1),
         Expanded(
@@ -628,6 +631,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       onWikiLink: _openWikiLink,
       onEditImage: _editImageReference,
       onResizeImage: _replaceImagePresentation,
+      onEditColumns: _editColumnsReference,
+      onResizeColumns: _replaceColumnsWidths,
       vaultRootPath: widget.store.vaultStatus.rootPath,
     );
   }
@@ -989,6 +994,162 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     _save(createVersion: false);
   }
 
+  Future<void> _configureColumnsAtCursor() async {
+    final value = contentController.value;
+    final selection = value.selection;
+    final offset =
+        selection.isValid ? selection.extentOffset : value.text.length;
+    final existing = NoteColumnsSyntax.findAtOffset(value.text, offset);
+    if (existing != null) {
+      await _editColumnsReference(existing);
+      return;
+    }
+
+    final result = await NoteColumnsEditorDialog.show(
+      context,
+      initial: const NoteColumnsLayout(
+        columnCount: 2,
+        widths: [40, 60],
+      ),
+      editingExisting: false,
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+
+    final selected =
+        selection.isValid && !selection.isCollapsed
+            ? value.text.substring(selection.start, selection.end).trim()
+            : '';
+    final contents = <String>[
+      'Изображение или текст',
+      selected.isEmpty ? 'Текст правой колонки' : selected,
+      if (result.columnCount == 3) 'Текст третьей колонки',
+    ];
+    final markdown = NoteColumnsSyntax.build(
+      widths: result.widths,
+      contents: contents,
+    );
+    _insertMarkdownAtSelection(markdown);
+    _save(createVersion: false);
+  }
+
+  Future<void> _editColumnsReference(NoteColumnsReference reference) async {
+    final current = NoteColumnsSyntax.relocate(
+      contentController.text,
+      reference,
+    );
+    if (current == null) {
+      return;
+    }
+    final result = await NoteColumnsEditorDialog.show(
+      context,
+      initial: NoteColumnsLayout(
+        columnCount: current.columnCount,
+        widths: current.widths,
+      ),
+      editingExisting: true,
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    _replaceColumnsLayout(current, result);
+  }
+
+  void _replaceColumnsWidths(
+    NoteColumnsReference reference,
+    List<int> widths,
+  ) {
+    final current = NoteColumnsSyntax.relocate(
+      contentController.text,
+      reference,
+    );
+    if (current == null) {
+      return;
+    }
+    _replaceColumnsBlock(
+      current,
+      widths: widths,
+      contents: [for (final column in current.columns) column.markdown],
+    );
+  }
+
+  void _replaceColumnsLayout(
+    NoteColumnsReference reference,
+    NoteColumnsLayout layout,
+  ) {
+    final current = NoteColumnsSyntax.relocate(
+      contentController.text,
+      reference,
+    );
+    if (current == null) {
+      return;
+    }
+    final contents = [for (final column in current.columns) column.markdown];
+    if (layout.columnCount > contents.length) {
+      while (contents.length < layout.columnCount) {
+        contents.add('Новая колонка');
+      }
+    } else if (layout.columnCount < contents.length) {
+      final merged = contents.sublist(layout.columnCount - 1).join('\n\n');
+      contents
+        ..removeRange(layout.columnCount - 1, contents.length)
+        ..add(merged);
+    }
+    _replaceColumnsBlock(
+      current,
+      widths: layout.widths,
+      contents: contents,
+    );
+  }
+
+  void _replaceColumnsBlock(
+    NoteColumnsReference reference, {
+    required List<int> widths,
+    required List<String> contents,
+  }) {
+    final value = contentController.value;
+    final current = NoteColumnsSyntax.relocate(value.text, reference);
+    if (current == null) {
+      return;
+    }
+    final replacement = current.toMarkdown(
+      widths: widths,
+      contents: contents,
+    );
+    final delta = replacement.length - (current.end - current.start);
+
+    int moveOffset(int offset) {
+      if (offset <= current.start) {
+        return offset;
+      }
+      if (offset >= current.end) {
+        return offset + delta;
+      }
+      return current.start + replacement.length;
+    }
+
+    final selection = value.selection;
+    final updatedSelection =
+        selection.isValid
+            ? TextSelection(
+              baseOffset: moveOffset(selection.baseOffset),
+              extentOffset: moveOffset(selection.extentOffset),
+              affinity: selection.affinity,
+              isDirectional: selection.isDirectional,
+            )
+            : TextSelection.collapsed(
+              offset: current.start + replacement.length,
+            );
+
+    contentController.value = value.copyWith(
+      text: value.text.replaceRange(current.start, current.end, replacement),
+      selection: updatedSelection,
+      composing: TextRange.empty,
+    );
+    _save(createVersion: false);
+  }
+
   Future<void> _createTask() async {
     final task = await TaskEditorSheet.show(
       context,
@@ -1088,11 +1249,13 @@ class _EditorToolbar extends StatelessWidget {
     required this.controller,
     required this.onAttach,
     required this.onConfigureImage,
+    required this.onConfigureColumns,
   });
 
   final TextEditingController controller;
   final VoidCallback onAttach;
   final VoidCallback onConfigureImage;
+  final VoidCallback onConfigureColumns;
 
   @override
   Widget build(BuildContext context) {
@@ -1119,6 +1282,11 @@ class _EditorToolbar extends StatelessWidget {
             tooltip: 'Размер, выравнивание и подпись изображения',
             onPressed: onConfigureImage,
             icon: const Icon(Icons.photo_size_select_large_rounded),
+          ),
+          IconButton(
+            tooltip: 'Вставить или настроить колонки',
+            onPressed: onConfigureColumns,
+            icon: const Icon(Icons.view_column_outlined),
           ),
           _button(Icons.image_outlined, '![описание](', ')'),
           _button(Icons.code_rounded, '```\n', '\n```'),

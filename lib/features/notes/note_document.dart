@@ -1,4 +1,5 @@
 import '../../models/app_models.dart';
+import 'note_columns_syntax.dart';
 import 'note_image_syntax.dart';
 
 class ParsedNoteDocument {
@@ -91,7 +92,9 @@ class NoteDocument {
   }
 
   static int wordCount(String markdown) {
-    final withoutSyntax = _replaceImagesWithReadableText(markdown)
+    final withoutSyntax = _replaceImagesWithReadableText(
+      NoteColumnsSyntax.stripMarkers(markdown),
+    )
         .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
         .replaceAll(RegExp(r'\$\$[\s\S]*?\$\$'), ' ')
         .replaceAll(RegExp(r'\\\[[\s\S]*?\\\]'), ' ')

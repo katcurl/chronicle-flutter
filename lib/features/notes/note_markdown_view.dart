@@ -7,6 +7,7 @@ import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown/markdown.dart' as md;
 
 import '../../vault/vault_asset_loader.dart';
+import 'note_columns_syntax.dart';
 import 'note_document.dart';
 import 'note_image_syntax.dart';
 
@@ -16,6 +17,10 @@ typedef NoteImageResizeCallback =
       NoteImageReference reference,
       NoteImagePresentation presentation,
     );
+typedef NoteColumnsEditCallback =
+    void Function(NoteColumnsReference reference);
+typedef NoteColumnsResizeCallback =
+    void Function(NoteColumnsReference reference, List<int> widths);
 
 class NoteMarkdownView extends StatelessWidget {
   const NoteMarkdownView({
@@ -24,6 +29,8 @@ class NoteMarkdownView extends StatelessWidget {
     this.onWikiLink,
     this.onEditImage,
     this.onResizeImage,
+    this.onEditColumns,
+    this.onResizeColumns,
     this.vaultRootPath = '',
     this.padding = const EdgeInsets.fromLTRB(20, 18, 20, 120),
   });
@@ -32,48 +39,91 @@ class NoteMarkdownView extends StatelessWidget {
   final ValueChanged<String>? onWikiLink;
   final NoteImageEditCallback? onEditImage;
   final NoteImageResizeCallback? onResizeImage;
+  final NoteColumnsEditCallback? onEditColumns;
+  final NoteColumnsResizeCallback? onResizeColumns;
   final String vaultRootPath;
   final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
-    final chunks = _splitDocument(markdown);
     return ListView(
       padding: padding,
+      children: _buildContentChunks(context, markdown, baseOffset: 0),
+    );
+  }
+
+  List<Widget> _buildContentChunks(
+    BuildContext context,
+    String source, {
+    required int baseOffset,
+  }) {
+    final chunks = _splitDocument(source, baseOffset: baseOffset);
+    return [
+      for (final chunk in chunks)
+        switch (chunk.kind) {
+          _DocumentChunkKind.math => _DisplayMath(source: chunk.value),
+          _DocumentChunkKind.image => _buildManagedImage(
+            context,
+            chunk.image!,
+          ),
+          _DocumentChunkKind.columns => _buildManagedColumns(
+            context,
+            chunk.columns!,
+          ),
+          _DocumentChunkKind.markdown =>
+            chunk.value.trim().isEmpty
+                ? const SizedBox.shrink()
+                : _buildMarkdownBody(chunk.value),
+        },
+    ];
+  }
+
+  Widget _buildMarkdownBody(String value) {
+    return MarkdownBody(
+      data: NoteDocument.convertWikiLinksToMarkdown(value),
+      selectable: true,
+      extensionSet: md.ExtensionSet.gitHubFlavored,
+      inlineSyntaxes: [InlineMathSyntax()],
+      builders: {'math': InlineMathBuilder()},
+      imageBuilder:
+          (uri, _, alt) => ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: _loadImage(uri.toString(), alt ?? ''),
+          ),
+      onTapLink: (_, href, __) {
+        if (href == null || !href.startsWith('chronicle://note/')) {
+          return;
+        }
+        final encoded = href.substring('chronicle://note/'.length);
+        onWikiLink?.call(Uri.decodeComponent(encoded));
+      },
+    );
+  }
+
+  Widget _buildManagedColumns(
+    BuildContext context,
+    NoteColumnsReference reference,
+  ) {
+    return _ManagedNoteColumns(
+      reference: reference,
+      onEdit:
+          reference.raw.isEmpty || onEditColumns == null
+              ? null
+              : () => onEditColumns!(reference),
+      onResize:
+          reference.raw.isEmpty || onResizeColumns == null
+              ? null
+              : (widths) => onResizeColumns!(reference, widths),
       children: [
-        for (final chunk in chunks)
-          switch (chunk.kind) {
-            _DocumentChunkKind.math => _DisplayMath(source: chunk.value),
-            _DocumentChunkKind.image => _buildManagedImage(
+        for (final column in reference.columns)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _buildContentChunks(
               context,
-              chunk.image!,
+              column.markdown,
+              baseOffset: column.start,
             ),
-            _DocumentChunkKind.markdown =>
-              chunk.value.trim().isEmpty
-                  ? const SizedBox.shrink()
-                  : MarkdownBody(
-                    data: NoteDocument.convertWikiLinksToMarkdown(chunk.value),
-                    selectable: true,
-                    extensionSet: md.ExtensionSet.gitHubFlavored,
-                    inlineSyntaxes: [InlineMathSyntax()],
-                    builders: {'math': InlineMathBuilder()},
-                    imageBuilder:
-                        (uri, _, alt) => ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: _loadImage(uri.toString(), alt ?? ''),
-                        ),
-                    onTapLink: (_, href, __) {
-                      if (href == null ||
-                          !href.startsWith('chronicle://note/')) {
-                        return;
-                      }
-                      final encoded = href.substring(
-                        'chronicle://note/'.length,
-                      );
-                      onWikiLink?.call(Uri.decodeComponent(encoded));
-                    },
-                  ),
-          },
+          ),
       ],
     );
   }
@@ -153,6 +203,238 @@ class NoteMarkdownView extends StatelessWidget {
       );
     }
     return _ImageFallback(label: alt.isEmpty ? target : alt);
+  }
+}
+
+class _ManagedNoteColumns extends StatefulWidget {
+  const _ManagedNoteColumns({
+    required this.reference,
+    required this.children,
+    this.onEdit,
+    this.onResize,
+  });
+
+  final NoteColumnsReference reference;
+  final List<Widget> children;
+  final VoidCallback? onEdit;
+  final ValueChanged<List<int>>? onResize;
+
+  @override
+  State<_ManagedNoteColumns> createState() => _ManagedNoteColumnsState();
+}
+
+class _ManagedNoteColumnsState extends State<_ManagedNoteColumns> {
+  bool hovering = false;
+  List<double>? dragWidths;
+  double availableWidth = 1;
+
+  bool get editable => widget.onEdit != null || widget.onResize != null;
+
+  @override
+  void didUpdateWidget(covariant _ManagedNoteColumns oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reference.raw != widget.reference.raw) {
+      dragWidths = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final widths =
+        dragWidths ??
+        [for (final width in widget.reference.widths) width.toDouble()];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          availableWidth =
+              constraints.hasBoundedWidth
+                  ? constraints.maxWidth
+                  : MediaQuery.sizeOf(context).width;
+          final stacked = availableWidth < 620;
+
+          return MouseRegion(
+            onEnter: (_) => setState(() => hovering = true),
+            onExit: (_) => setState(() => hovering = false),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color:
+                          hovering && editable
+                              ? Theme.of(context).colorScheme.outlineVariant
+                              : Colors.transparent,
+                    ),
+                  ),
+                  child:
+                      stacked
+                          ? _buildStacked(context)
+                          : _buildHorizontal(context, widths),
+                ),
+                if (widget.onEdit != null && hovering)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Material(
+                      color:
+                          Theme.of(context).colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(999),
+                      elevation: 2,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: widget.onEdit,
+                        child: const Padding(
+                          padding: EdgeInsets.all(7),
+                          child: Icon(Icons.view_column_rounded, size: 18),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildStacked(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < widget.children.length; index += 1) ...[
+          widget.children[index],
+          if (index < widget.children.length - 1)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Divider(
+                height: 1,
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildHorizontal(BuildContext context, List<double> widths) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var index = 0; index < widget.children.length; index += 1) ...[
+          Expanded(
+            flex: widths[index].round().clamp(1, 100).toInt(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: widget.children[index],
+            ),
+          ),
+          if (index < widget.children.length - 1)
+            _ColumnResizeHandle(
+              enabled: widget.onResize != null,
+              active: dragWidths != null,
+              onUpdate: (delta) => _updateDivider(index, delta),
+              onEnd: _finishResize,
+              onCancel: _cancelResize,
+            ),
+        ],
+      ],
+    );
+  }
+
+  void _updateDivider(int index, double deltaX) {
+    if (widget.onResize == null || availableWidth <= 0) {
+      return;
+    }
+    final current = List<double>.from(
+      dragWidths ??
+          [for (final width in widget.reference.widths) width.toDouble()],
+    );
+    final minimum = current.length == 2 ? 20.0 : 15.0;
+    final delta = deltaX / availableWidth * 100;
+    final nextLeft = current[index] + delta;
+    final nextRight = current[index + 1] - delta;
+    if (nextLeft < minimum || nextRight < minimum) {
+      return;
+    }
+    current[index] = nextLeft;
+    current[index + 1] = nextRight;
+    setState(() => dragWidths = current);
+  }
+
+  void _finishResize() {
+    final current = dragWidths;
+    if (current == null) {
+      return;
+    }
+    final normalized = NoteColumnsSyntax.normalizeWidths(
+      [for (final width in current) width.round()],
+      current.length,
+    );
+    setState(() => dragWidths = null);
+    widget.onResize?.call(normalized);
+  }
+
+  void _cancelResize() {
+    if (dragWidths != null) {
+      setState(() => dragWidths = null);
+    }
+  }
+}
+
+class _ColumnResizeHandle extends StatelessWidget {
+  const _ColumnResizeHandle({
+    required this.enabled,
+    required this.active,
+    required this.onUpdate,
+    required this.onEnd,
+    required this.onCancel,
+  });
+
+  final bool enabled;
+  final bool active;
+  final ValueChanged<double> onUpdate;
+  final VoidCallback onEnd;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor:
+          enabled
+              ? SystemMouseCursors.resizeLeftRight
+              : SystemMouseCursors.basic,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragUpdate:
+            enabled ? (details) => onUpdate(details.delta.dx) : null,
+        onHorizontalDragEnd: enabled ? (_) => onEnd() : null,
+        onHorizontalDragCancel: enabled ? onCancel : null,
+        child: SizedBox(
+          width: 18,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: active ? 4 : 2,
+              height: 54,
+              decoration: BoxDecoration(
+                color:
+                    active
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -469,25 +751,35 @@ class _ImageFallback extends StatelessWidget {
   }
 }
 
-enum _DocumentChunkKind { markdown, math, image }
+enum _DocumentChunkKind { markdown, math, image, columns }
 
 class _DocumentChunk {
   const _DocumentChunk.markdown(this.value)
     : kind = _DocumentChunkKind.markdown,
-      image = null;
+      image = null,
+      columns = null;
 
   const _DocumentChunk.math(this.value)
     : kind = _DocumentChunkKind.math,
-      image = null;
+      image = null,
+      columns = null;
 
   const _DocumentChunk.image(NoteImageReference reference)
     : kind = _DocumentChunkKind.image,
       value = '',
-      image = reference;
+      image = reference,
+      columns = null;
+
+  const _DocumentChunk.columns(NoteColumnsReference reference)
+    : kind = _DocumentChunkKind.columns,
+      value = '',
+      image = null,
+      columns = reference;
 
   final _DocumentChunkKind kind;
   final String value;
   final NoteImageReference? image;
+  final NoteColumnsReference? columns;
 }
 
 class _DocumentToken {
@@ -497,6 +789,7 @@ class _DocumentToken {
     required this.kind,
     this.value = '',
     this.image,
+    this.columns,
   });
 
   final int start;
@@ -504,12 +797,26 @@ class _DocumentToken {
   final _DocumentChunkKind kind;
   final String value;
   final NoteImageReference? image;
+  final NoteColumnsReference? columns;
 }
 
-List<_DocumentChunk> _splitDocument(String source) {
+List<_DocumentChunk> _splitDocument(
+  String source, {
+  required int baseOffset,
+}) {
   final tokens = <_DocumentToken>[];
   final mathPattern = RegExp(r'(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$)');
 
+  for (final columns in NoteColumnsSyntax.all(source)) {
+    tokens.add(
+      _DocumentToken(
+        start: columns.start,
+        end: columns.end,
+        kind: _DocumentChunkKind.columns,
+        columns: columns.shifted(baseOffset),
+      ),
+    );
+  }
   for (final match in mathPattern.allMatches(source)) {
     if (_isInsideMarkdownCode(source, match.start)) {
       continue;
@@ -534,7 +841,7 @@ List<_DocumentChunk> _splitDocument(String source) {
         start: image.start,
         end: image.end,
         kind: _DocumentChunkKind.image,
-        image: image,
+        image: image.shifted(baseOffset),
       ),
     );
   }
@@ -558,10 +865,19 @@ List<_DocumentChunk> _splitDocument(String source) {
         _DocumentChunk.markdown(source.substring(cursor, token.start)),
       );
     }
-    if (token.kind == _DocumentChunkKind.math) {
-      result.add(_DocumentChunk.math(token.value));
-    } else {
-      result.add(_DocumentChunk.image(token.image!));
+    switch (token.kind) {
+      case _DocumentChunkKind.math:
+        result.add(_DocumentChunk.math(token.value));
+        break;
+      case _DocumentChunkKind.image:
+        result.add(_DocumentChunk.image(token.image!));
+        break;
+      case _DocumentChunkKind.columns:
+        result.add(_DocumentChunk.columns(token.columns!));
+        break;
+      case _DocumentChunkKind.markdown:
+        result.add(_DocumentChunk.markdown(token.value));
+        break;
     }
     cursor = token.end;
   }

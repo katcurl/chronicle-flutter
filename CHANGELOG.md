@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20.0+33
+
+- added portable two- and three-column blocks to Markdown notes;
+- added column insertion and layout controls to the editor toolbar;
+- added draggable column dividers in note preview;
+- preserved images, captions, formulas, links and Markdown inside columns;
+- stacked columns vertically on narrow windows;
+- kept column syntax readable outside Chronicle through HTML comments.
+
 ## 0.19.3+32
 
 - fixed image size, alignment and caption settings being lost after switching between editor and preview;
