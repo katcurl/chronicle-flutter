@@ -360,56 +360,6 @@ class VaultService {
     );
   }
 
-  Future<List<BackupCatalogEntry>> listAutomaticBackups() async {
-    final rootPath = await _backend.resolveRootPath();
-    if (rootPath == null || rootPath.isEmpty) {
-      return const <BackupCatalogEntry>[];
-    }
-    final files = await _backend.listAutomaticBackups(rootPath: rootPath);
-    final entries = <BackupCatalogEntry>[];
-    for (final file in files) {
-      try {
-        final picked = await _backend.readBackupPath(file.path);
-        if (picked == null) {
-          throw const FormatException('Файл резервной копии недоступен.');
-        }
-        final raw = utf8.decode(picked.bytes, allowMalformed: false);
-        final payload = inspectBackup(raw, sourceName: file.name);
-        entries.add(
-          BackupCatalogEntry(
-            path: file.path,
-            fileName: file.name,
-            modifiedAt: file.modifiedAt,
-            byteLength: file.byteLength,
-            preview: payload.preview,
-          ),
-        );
-      } on Object catch (error) {
-        entries.add(
-          BackupCatalogEntry(
-            path: file.path,
-            fileName: file.name,
-            modifiedAt: file.modifiedAt,
-            byteLength: file.byteLength,
-            validationError: _backupValidationMessage(error),
-          ),
-        );
-      }
-    }
-    return entries;
-  }
-
-  Future<BackupImportPayload> loadAutomaticBackup(
-    BackupCatalogEntry entry,
-  ) async {
-    final picked = await _backend.readBackupPath(entry.path);
-    if (picked == null) {
-      throw const FormatException('Файл резервной копии больше недоступен.');
-    }
-    final raw = utf8.decode(picked.bytes, allowMalformed: false);
-    return inspectBackup(raw, sourceName: entry.fileName);
-  }
-
   Future<BackupImportPayload?> pickBackup() async {
     final selected = await _backend.pickBackup();
     if (selected == null) {
@@ -525,37 +475,18 @@ class VaultService {
     );
   }
 
-  Future<void> restoreAttachments(BackupImportPayload payload) {
-    return replaceAttachments(payload);
-  }
-
-  Future<void> replaceAttachments(BackupImportPayload payload) async {
+  Future<void> restoreAttachments(BackupImportPayload payload) async {
+    if (payload.attachments.isEmpty) {
+      return;
+    }
     final rootPath = await _backend.resolveRootPath();
     if (rootPath == null || rootPath.isEmpty) {
-      if (payload.attachments.isEmpty) {
-        return;
-      }
       throw UnsupportedError('Не удалось определить папку Vault.');
     }
-
-    for (final relativePath in payload.attachments.keys) {
-      if (!_validAttachmentPath(relativePath)) {
-        throw FormatException('Некорректный путь вложения: $relativePath');
-      }
-    }
-
-    final existing = await _backend.listBinaryFiles(
-      rootPath: rootPath,
-      directory: 'Attachments',
-    );
-    if (existing.isNotEmpty) {
-      await _backend.deleteFiles(
-        rootPath: rootPath,
-        relativePaths: existing.keys.toSet(),
-      );
-    }
-
     for (final entry in payload.attachments.entries) {
+      if (!_validAttachmentPath(entry.key)) {
+        throw FormatException('Некорректный путь вложения: ${entry.key}');
+      }
       await _backend.writeBinaryFile(
         rootPath: rootPath,
         relativePath: entry.key,
@@ -564,7 +495,7 @@ class VaultService {
     }
   }
 
-  Future<EmergencyBackupSnapshot> createEmergencyBackupSnapshot({
+  Future<String> createEmergencyBackup({
     required AppData data,
     DeviceIdentity? identity,
   }) async {
@@ -574,26 +505,11 @@ class VaultService {
     }
     final package = await _buildBackupPackage(data: data, identity: identity);
     final fileName = _backupFileName('pre-import-backup');
-    final path = await _backend.writeEmergencyBackup(
+    return _backend.writeEmergencyBackup(
       rootPath: rootPath,
       fileName: fileName,
       bytes: Uint8List.fromList(utf8.encode(package.raw)),
     );
-    return EmergencyBackupSnapshot(
-      path: path,
-      payload: inspectBackup(package.raw, sourceName: fileName),
-    );
-  }
-
-  Future<String> createEmergencyBackup({
-    required AppData data,
-    DeviceIdentity? identity,
-  }) async {
-    final snapshot = await createEmergencyBackupSnapshot(
-      data: data,
-      identity: identity,
-    );
-    return snapshot.path;
   }
 
   Future<_BuiltBackup> _buildBackupPackage({
@@ -1032,11 +948,6 @@ class VaultService {
   String _sha256Text(String value) {
     final normalized = value.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     return sha256.convert(utf8.encode(normalized)).toString();
-  }
-
-  String _backupValidationMessage(Object error) {
-    final message = error.toString().trim();
-    return message.replaceFirst(RegExp(r'^FormatException:\s*'), '');
   }
 
   int _readInt(Object? value, {int fallback = 0}) {

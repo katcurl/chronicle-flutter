@@ -7,20 +7,6 @@ class PickedVaultFile {
   final Uint8List bytes;
 }
 
-class VaultBackupFileInfo {
-  const VaultBackupFileInfo({
-    required this.path,
-    required this.name,
-    required this.modifiedAt,
-    required this.byteLength,
-  });
-
-  final String path;
-  final String name;
-  final DateTime modifiedAt;
-  final int byteLength;
-}
-
 class VaultBackend {
   Future<String?> resolveRootPath() async => null;
 
@@ -71,12 +57,6 @@ class VaultBackend {
   }) async => null;
 
   Future<PickedVaultFile?> pickBackup() async => null;
-
-  Future<List<VaultBackupFileInfo>> listAutomaticBackups({
-    required String rootPath,
-  }) async => const <VaultBackupFileInfo>[];
-
-  Future<PickedVaultFile?> readBackupPath(String path) async => null;
 
   Future<String> writeEmergencyBackup({
     required String rootPath,

@@ -41,7 +41,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
       await widget.store.refreshSyncFoundation();
       await widget.store.refreshVaultStatus();
       await widget.store.refreshReliabilityStatus();
-      await widget.store.refreshBackupCatalog();
     } finally {
       if (mounted) {
         setState(() => refreshing = false);
@@ -266,16 +265,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
                                       widget.store.reliabilityBusy
                                   ? null
                                   : _createSafetyBackup,
-                        ),
-                        const Divider(height: 1),
-                        _AutomaticBackupsSection(
-                          entries: widget.store.automaticBackups,
-                          busy:
-                              widget.store.backupCatalogBusy ||
-                              widget.store.vaultBusy,
-                          error: widget.store.backupCatalogError,
-                          onRefresh: widget.store.refreshBackupCatalog,
-                          onRestore: _restoreAutomaticBackup,
                         ),
                         const Divider(height: 1),
                         ListTile(
@@ -826,65 +815,38 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 
   Future<void> _restoreBackup() async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final payload = await widget.store.pickBackupFile();
       if (!mounted || payload == null) {
         return;
       }
-      await _restorePayload(payload);
-    } on Object catch (error) {
-      _showRestoreError(error);
-    }
-  }
-
-  Future<void> _restoreAutomaticBackup(BackupCatalogEntry entry) async {
-    try {
-      final payload = await widget.store.loadAutomaticBackup(entry);
+      final confirmed = await _confirmRestore(payload);
+      if (confirmed != true || !mounted) {
+        return;
+      }
+      await widget.store.restoreBackupFile(payload);
       if (!mounted) {
         return;
       }
-      await _restorePayload(payload);
+      final emergencyPath = widget.store.lastEmergencyBackupPath;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            emergencyPath == null
+                ? 'Данные восстановлены'
+                : 'Данные восстановлены. Страховочная копия создана.',
+          ),
+        ),
+      );
     } on Object catch (error) {
-      _showRestoreError(error);
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось восстановить: $error')),
+      );
     }
-  }
-
-  Future<void> _restorePayload(BackupImportPayload payload) async {
-    final confirmed = await _confirmRestore(payload);
-    if (confirmed != true || !mounted) {
-      return;
-    }
-    await widget.store.restoreBackupFile(payload);
-    if (!mounted) {
-      return;
-    }
-    final emergencyPath = widget.store.lastEmergencyBackupPath;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          emergencyPath == null
-              ? 'Данные восстановлены'
-              : 'Данные восстановлены. Страховочная копия создана.',
-        ),
-      ),
-    );
-  }
-
-  void _showRestoreError(Object error) {
-    if (!mounted) {
-      return;
-    }
-    final rolledBack = widget.store.lastRestoreRolledBack;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          rolledBack
-              ? 'Восстановление не выполнено: $error. '
-                  'Исходные данные автоматически возвращены.'
-              : 'Не удалось восстановить: $error',
-        ),
-      ),
-    );
   }
 
   Future<bool?> _confirmRestore(BackupImportPayload payload) {
@@ -1652,92 +1614,6 @@ class _ChangeTile extends StatelessWidget {
   }
 }
 
-class _AutomaticBackupsSection extends StatelessWidget {
-  const _AutomaticBackupsSection({
-    required this.entries,
-    required this.busy,
-    required this.error,
-    required this.onRefresh,
-    required this.onRestore,
-  });
-
-  final List<BackupCatalogEntry> entries;
-  final bool busy;
-  final String? error;
-  final VoidCallback onRefresh;
-  final ValueChanged<BackupCatalogEntry> onRestore;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Column(
-      children: [
-        ListTile(
-          leading:
-              busy
-                  ? const SizedBox.square(
-                    dimension: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                  : const Icon(Icons.history_rounded),
-          title: const Text('Последние автоматические копии'),
-          subtitle: const Text(
-            'Каждая копия повторно проверяется перед восстановлением.',
-          ),
-          trailing: IconButton(
-            tooltip: 'Обновить список копий',
-            onPressed: busy ? null : onRefresh,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ),
-        if (error != null && error!.trim().isNotEmpty)
-          ListTile(
-            dense: true,
-            leading: Icon(Icons.error_outline_rounded, color: colors.error),
-            title: const Text('Не удалось прочитать резервные копии'),
-            subtitle: Text(error!),
-          )
-        else if (!busy && entries.isEmpty)
-          const ListTile(
-            dense: true,
-            leading: Icon(Icons.inventory_2_outlined),
-            title: Text('Автоматических копий пока нет'),
-            subtitle: Text(
-              'Создай копию вручную или дождись следующего ежедневного снимка.',
-            ),
-          )
-        else
-          for (final entry in entries.take(5)) ...[
-            const Divider(height: 1, indent: 56),
-            ListTile(
-              dense: true,
-              leading: Icon(
-                entry.isValid
-                    ? Icons.verified_rounded
-                    : Icons.warning_amber_rounded,
-                color: entry.isValid ? colors.primary : colors.error,
-              ),
-              title: Text(
-                'Копия от ${_backupDate(entry.preview?.exportedAt ?? entry.modifiedAt)}',
-              ),
-              subtitle: Text(
-                entry.isValid
-                    ? _backupSummary(entry)
-                    : '${_fileSize(entry.byteLength)} · '
-                        '${entry.validationError ?? 'Копия не прошла проверку'}',
-              ),
-              trailing: TextButton(
-                onPressed:
-                    busy || !entry.isValid ? null : () => onRestore(entry),
-                child: const Text('Восстановить'),
-              ),
-            ),
-          ],
-      ],
-    );
-  }
-}
-
 class _DiagnosticsCard extends StatelessWidget {
   const _DiagnosticsCard({
     required this.events,
@@ -1931,34 +1807,6 @@ String _relativeTime(DateTime dateTime) {
     return '${difference.inHours} ч назад';
   }
   return '${difference.inDays} дн назад';
-}
-
-String _backupDate(DateTime dateTime) {
-  final local = dateTime.toLocal();
-  String two(int value) => value.toString().padLeft(2, '0');
-  return '${two(local.day)}.${two(local.month)}.${local.year} '
-      '${two(local.hour)}:${two(local.minute)}';
-}
-
-String _fileSize(int bytes) {
-  if (bytes < 1024) {
-    return '$bytes Б';
-  }
-  final kilobytes = bytes / 1024;
-  if (kilobytes < 1024) {
-    return '${kilobytes.toStringAsFixed(kilobytes < 10 ? 1 : 0)} КБ';
-  }
-  final megabytes = kilobytes / 1024;
-  return '${megabytes.toStringAsFixed(megabytes < 10 ? 1 : 0)} МБ';
-}
-
-String _backupSummary(BackupCatalogEntry entry) {
-  final preview = entry.preview!;
-  return '${_fileSize(entry.byteLength)} · '
-      '${preview.projectCount} проектов · '
-      '${preview.taskCount} задач · '
-      '${preview.noteCount} заметок · '
-      '${preview.attachmentCount} вложений';
 }
 
 String _automaticBackupSubtitle(DateTime? lastBackupAt) {

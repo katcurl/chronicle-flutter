@@ -51,7 +51,6 @@ void main() {
     expect(find.text('Экспортировать Chronicle'), findsOneWidget);
     expect(find.text('Восстановить из файла'), findsOneWidget);
     expect(find.text('Создать локальную страховочную копию'), findsOneWidget);
-    expect(find.text('Последние автоматические копии'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Диагностика и надёжность'),
       400,

@@ -210,33 +210,3 @@ class BackupExportResult {
   final String fileName;
   final BackupPreview preview;
 }
-
-class BackupCatalogEntry {
-  const BackupCatalogEntry({
-    required this.path,
-    required this.fileName,
-    required this.modifiedAt,
-    required this.byteLength,
-    this.preview,
-    this.validationError,
-  });
-
-  final String path;
-  final String fileName;
-  final DateTime modifiedAt;
-  final int byteLength;
-  final BackupPreview? preview;
-  final String? validationError;
-
-  bool get isValid =>
-      preview != null &&
-      preview!.checksumsVerified &&
-      (validationError == null || validationError!.isEmpty);
-}
-
-class EmergencyBackupSnapshot {
-  const EmergencyBackupSnapshot({required this.path, required this.payload});
-
-  final String path;
-  final BackupImportPayload payload;
-}

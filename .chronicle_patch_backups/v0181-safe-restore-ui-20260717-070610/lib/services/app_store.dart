@@ -89,10 +89,6 @@ class AppStore extends ChangeNotifier {
   VaultScanResult? pendingVaultScan;
   bool vaultBusy = false;
   String? lastEmergencyBackupPath;
-  bool lastRestoreRolledBack = false;
-  List<BackupCatalogEntry> automaticBackups = const <BackupCatalogEntry>[];
-  bool backupCatalogBusy = false;
-  String? backupCatalogError;
 
   List<ReliabilityEvent> reliabilityEvents = const <ReliabilityEvent>[];
   DateTime? lastAutomaticBackupAt;
@@ -142,7 +138,6 @@ class AppStore extends ChangeNotifier {
       await rebuildAllNoteLinks();
       await refreshSyncFoundation(notify: false);
       await _initializeVaultFoundation();
-      await refreshBackupCatalog(notify: false);
 
       final activeTimer = await _repository.loadActiveTimer();
       if (activeTimer != null &&
@@ -1503,7 +1498,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         },
         notify: false,
       );
-      await refreshBackupCatalog(notify: false);
       return result;
     } on Object catch (error) {
       await _recordReliability(
@@ -1544,7 +1538,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     try {
       return await _reliabilityService.exportDiagnosticReport(
         snapshot: <String, Object?>{
-          'appVersion': '0.18.1+26',
+          'appVersion': '0.18.0+23',
           'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
           'deviceId': deviceIdentity?.deviceId,
           'deviceName': deviceIdentity?.displayName,
@@ -1585,32 +1579,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       reliabilityBusy = false;
       notifyListeners();
     }
-  }
-
-  Future<void> refreshBackupCatalog({bool notify = true}) async {
-    if (backupCatalogBusy) {
-      return;
-    }
-    backupCatalogBusy = true;
-    backupCatalogError = null;
-    if (notify) {
-      notifyListeners();
-    }
-    try {
-      automaticBackups = await _vaultService.listAutomaticBackups();
-    } on Object catch (error) {
-      automaticBackups = const <BackupCatalogEntry>[];
-      backupCatalogError = error.toString();
-    } finally {
-      backupCatalogBusy = false;
-      if (notify) {
-        notifyListeners();
-      }
-    }
-  }
-
-  Future<BackupImportPayload> loadAutomaticBackup(BackupCatalogEntry entry) {
-    return _vaultService.loadAutomaticBackup(entry);
   }
 
   Future<BackupExportResult?> exportBackupFile() async {
@@ -1663,9 +1631,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       return;
     }
     vaultBusy = true;
-    lastRestoreRolledBack = false;
     notifyListeners();
-    EmergencyBackupSnapshot? emergencySnapshot;
     try {
       await _recordReliability(
         stage: ReliabilityStage.restore,
@@ -1678,57 +1644,16 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         },
         notify: false,
       );
-      final snapshot = await _vaultService.createEmergencyBackupSnapshot(
+      lastEmergencyBackupPath = await _vaultService.createEmergencyBackup(
         data: data,
         identity: deviceIdentity,
       );
-      emergencySnapshot = snapshot;
-      lastEmergencyBackupPath = snapshot.path;
-
-      try {
-        await _applyBackupPayload(payload);
-      } on Object catch (restoreError, restoreStack) {
-        try {
-          await _applyBackupPayload(snapshot.payload);
-          lastRestoreRolledBack = true;
-          await _recordReliability(
-            stage: ReliabilityStage.restore,
-            level: ReliabilityLevel.warning,
-            message:
-                'Восстановление прервано; исходные данные автоматически возвращены.',
-            details: <String, Object?>{
-              'sourceName': payload.sourceName,
-              'error': restoreError.toString(),
-              'emergencyBackupPath': snapshot.path,
-            },
-            notify: false,
-          );
-        } on Object catch (rollbackError, rollbackStack) {
-          await _recordReliability(
-            stage: ReliabilityStage.restore,
-            level: ReliabilityLevel.error,
-            message:
-                'Восстановление и автоматический откат завершились ошибкой.',
-            details: <String, Object?>{
-              'restoreError': restoreError.toString(),
-              'rollbackError': rollbackError.toString(),
-              'emergencyBackupPath': snapshot.path,
-            },
-            notify: false,
-          );
-          Error.throwWithStackTrace(
-            StateError(
-              'Не удалось восстановить копию и автоматически вернуть '
-              'предыдущее состояние. Аварийная копия сохранена: '
-              '${snapshot.path}',
-            ),
-            rollbackStack,
-          );
-        }
-        Error.throwWithStackTrace(restoreError, restoreStack);
-      }
-
-      await refreshBackupCatalog(notify: false);
+      await _replaceDataFromBackup(payload.databaseJson);
+      await _vaultService.restoreAttachments(payload);
+      vaultStatus = await _vaultService.writeMirror(data, force: true);
+      pendingVaultScan = await _vaultService.scan(data);
+      _mergeVaultScanIntoStatus();
+      await refreshSyncFoundation(notify: false);
       await _recordReliability(
         stage: ReliabilityStage.restore,
         level: ReliabilityLevel.success,
@@ -1748,11 +1673,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         stage: ReliabilityStage.restore,
         level: ReliabilityLevel.error,
         message: 'Восстановление резервной копии не выполнено.',
-        details: <String, Object?>{
-          'error': error.toString(),
-          'rolledBack': lastRestoreRolledBack,
-          'emergencyBackupPath': emergencySnapshot?.path,
-        },
+        details: <String, Object?>{'error': error.toString()},
         notify: false,
       );
       rethrow;
@@ -1760,15 +1681,6 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       vaultBusy = false;
       notifyListeners();
     }
-  }
-
-  Future<void> _applyBackupPayload(BackupImportPayload payload) async {
-    await _replaceDataFromBackup(payload.databaseJson);
-    await _vaultService.replaceAttachments(payload);
-    vaultStatus = await _vaultService.writeMirror(data, force: true);
-    pendingVaultScan = await _vaultService.scan(data);
-    _mergeVaultScanIntoStatus();
-    await refreshSyncFoundation(notify: false);
   }
 
   Future<String> exportBackupJson() => _repository.exportJson();

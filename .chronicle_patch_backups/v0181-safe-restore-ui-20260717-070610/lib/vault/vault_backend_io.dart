@@ -13,20 +13,6 @@ class PickedVaultFile {
   final Uint8List bytes;
 }
 
-class VaultBackupFileInfo {
-  const VaultBackupFileInfo({
-    required this.path,
-    required this.name,
-    required this.modifiedAt,
-    required this.byteLength,
-  });
-
-  final String path;
-  final String name;
-  final DateTime modifiedAt;
-  final int byteLength;
-}
-
 class VaultBackend {
   static const _vaultPathKey = 'chronicle_vault_path';
 
@@ -220,46 +206,6 @@ class VaultBackend {
     final bytes = await selected.readAsBytes();
 
     return PickedVaultFile(name: selected.name, bytes: bytes);
-  }
-
-  Future<List<VaultBackupFileInfo>> listAutomaticBackups({
-    required String rootPath,
-  }) async {
-    final directory = Directory(
-      p.join(rootPath, '.chronicle', 'Backups', 'Automatic'),
-    );
-    if (!await directory.exists()) {
-      return const <VaultBackupFileInfo>[];
-    }
-
-    final result = <VaultBackupFileInfo>[];
-    await for (final entity in directory.list(followLinks: false)) {
-      if (entity is! File || !entity.path.endsWith('.chronicle')) {
-        continue;
-      }
-      final stat = await entity.stat();
-      result.add(
-        VaultBackupFileInfo(
-          path: entity.path,
-          name: p.basename(entity.path),
-          modifiedAt: stat.modified,
-          byteLength: stat.size,
-        ),
-      );
-    }
-    result.sort((left, right) => right.modifiedAt.compareTo(left.modifiedAt));
-    return result;
-  }
-
-  Future<PickedVaultFile?> readBackupPath(String path) async {
-    final file = File(path);
-    if (!path.endsWith('.chronicle') || !await file.exists()) {
-      return null;
-    }
-    return PickedVaultFile(
-      name: p.basename(path),
-      bytes: await file.readAsBytes(),
-    );
   }
 
   Future<String> writeEmergencyBackup({
