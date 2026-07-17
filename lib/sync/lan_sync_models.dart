@@ -4,7 +4,7 @@ import 'attachment_sync_models.dart';
 import 'pairing_models.dart';
 import 'sync_models.dart';
 
-const lanSyncProtocol = 'chronicle-sync-v2';
+const lanSyncProtocol = 'chronicle-sync-v3';
 
 class LanSyncOffer {
   const LanSyncOffer({
@@ -221,6 +221,149 @@ class LanSyncExchangeResponse {
   }
 }
 
+enum LanAttachmentCommandKind {
+  download,
+  upload,
+  record,
+  tombstone,
+}
+
+class LanAttachmentCommand {
+  const LanAttachmentCommand({
+    required this.sessionId,
+    required this.token,
+    required this.transferId,
+    required this.peer,
+    required this.kind,
+    required this.entry,
+    required this.signature,
+    this.dataBase64,
+  });
+
+  final String sessionId;
+  final String token;
+  final String transferId;
+  final PairingPeer peer;
+  final LanAttachmentCommandKind kind;
+  final AttachmentSyncEntry entry;
+  final String? dataBase64;
+  final String signature;
+
+  String get signingPayload => jsonEncode({
+    'protocol': lanSyncProtocol,
+    'kind': 'attachment-command',
+    'sessionId': sessionId,
+    'token': token,
+    'transferId': transferId,
+    'peer': peer.toJson(),
+    'action': kind.name,
+    'entry': entry.toJson(),
+  });
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'sessionId': sessionId,
+    'token': token,
+    'transferId': transferId,
+    'peer': peer.toJson(),
+    'action': kind.name,
+    'entry': entry.toJson(),
+    if (dataBase64 != null) 'dataBase64': dataBase64,
+    'signature': signature,
+  };
+
+  factory LanAttachmentCommand.fromJson(Map<String, dynamic> json) {
+    final rawAction = json['action']?.toString() ?? '';
+    final kind = LanAttachmentCommandKind.values.where(
+      (candidate) => candidate.name == rawAction,
+    );
+    if (kind.isEmpty) {
+      throw const FormatException('Unsupported attachment command.');
+    }
+    return LanAttachmentCommand(
+      sessionId: json['sessionId']! as String,
+      token: json['token']! as String,
+      transferId: json['transferId']! as String,
+      peer: PairingPeer.fromJson(
+        Map<String, dynamic>.from(json['peer']! as Map),
+      ),
+      kind: kind.first,
+      entry: AttachmentSyncEntry.fromJson(
+        Map<String, dynamic>.from(json['entry']! as Map),
+      ),
+      dataBase64: json['dataBase64'] as String?,
+      signature: json['signature']! as String,
+    );
+  }
+}
+
+class LanAttachmentCommandResponse {
+  const LanAttachmentCommandResponse({
+    required this.sessionId,
+    required this.transferId,
+    required this.hostPeer,
+    required this.kind,
+    required this.entry,
+    required this.changed,
+    required this.signature,
+    this.dataBase64,
+  });
+
+  final String sessionId;
+  final String transferId;
+  final PairingPeer hostPeer;
+  final LanAttachmentCommandKind kind;
+  final AttachmentSyncEntry entry;
+  final bool changed;
+  final String? dataBase64;
+  final String signature;
+
+  String get signingPayload => jsonEncode({
+    'protocol': lanSyncProtocol,
+    'kind': 'attachment-response',
+    'sessionId': sessionId,
+    'transferId': transferId,
+    'hostPeer': hostPeer.toJson(),
+    'action': kind.name,
+    'entry': entry.toJson(),
+    'changed': changed,
+  });
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'sessionId': sessionId,
+    'transferId': transferId,
+    'hostPeer': hostPeer.toJson(),
+    'action': kind.name,
+    'entry': entry.toJson(),
+    'changed': changed,
+    if (dataBase64 != null) 'dataBase64': dataBase64,
+    'signature': signature,
+  };
+
+  factory LanAttachmentCommandResponse.fromJson(Map<String, dynamic> json) {
+    final rawAction = json['action']?.toString() ?? '';
+    final kind = LanAttachmentCommandKind.values.where(
+      (candidate) => candidate.name == rawAction,
+    );
+    if (kind.isEmpty) {
+      throw const FormatException('Unsupported attachment response.');
+    }
+    return LanAttachmentCommandResponse(
+      sessionId: json['sessionId']! as String,
+      transferId: json['transferId']! as String,
+      hostPeer: PairingPeer.fromJson(
+        Map<String, dynamic>.from(json['hostPeer']! as Map),
+      ),
+      kind: kind.first,
+      entry: AttachmentSyncEntry.fromJson(
+        Map<String, dynamic>.from(json['entry']! as Map),
+      ),
+      changed: json['changed'] == true,
+      dataBase64: json['dataBase64'] as String?,
+      signature: json['signature']! as String,
+    );
+  }
+}
+
 class LanSyncAck {
   const LanSyncAck({
     required this.sessionId,
@@ -277,6 +420,12 @@ class LanSyncReport {
     required this.hasMore,
     this.attachmentPlanFromPeer = const AttachmentSyncPlan.empty(),
     this.attachmentPlanByPeer = const AttachmentSyncPlan.empty(),
+    this.attachmentFilesReceived = 0,
+    this.attachmentFilesSent = 0,
+    this.attachmentBytesReceived = 0,
+    this.attachmentBytesSent = 0,
+    this.attachmentRecordsApplied = 0,
+    this.attachmentTombstonesApplied = 0,
   });
 
   final PairingPeer peer;
@@ -292,10 +441,24 @@ class LanSyncReport {
   final bool hasMore;
   final AttachmentSyncPlan attachmentPlanFromPeer;
   final AttachmentSyncPlan attachmentPlanByPeer;
+  final int attachmentFilesReceived;
+  final int attachmentFilesSent;
+  final int attachmentBytesReceived;
+  final int attachmentBytesSent;
+  final int attachmentRecordsApplied;
+  final int attachmentTombstonesApplied;
 
-  bool get changedData => appliedCount > 0;
-  bool get hasPendingAttachmentWork =>
-      attachmentPlanFromPeer.hasWork || attachmentPlanByPeer.hasWork;
+  int get attachmentConflictCount =>
+      attachmentPlanFromPeer.conflictCount +
+      attachmentPlanByPeer.conflictCount;
+
+  bool get changedData =>
+      appliedCount > 0 ||
+      attachmentFilesReceived > 0 ||
+      attachmentRecordsApplied > 0 ||
+      attachmentTombstonesApplied > 0;
+
+  bool get hasPendingAttachmentWork => attachmentConflictCount > 0;
 
   LanSyncReport merge(LanSyncReport other) {
     if (peer.deviceId != other.peer.deviceId) {
@@ -319,6 +482,16 @@ class LanSyncReport {
       hasMore: other.hasMore,
       attachmentPlanFromPeer: other.attachmentPlanFromPeer,
       attachmentPlanByPeer: other.attachmentPlanByPeer,
+      attachmentFilesReceived:
+          attachmentFilesReceived + other.attachmentFilesReceived,
+      attachmentFilesSent: attachmentFilesSent + other.attachmentFilesSent,
+      attachmentBytesReceived:
+          attachmentBytesReceived + other.attachmentBytesReceived,
+      attachmentBytesSent: attachmentBytesSent + other.attachmentBytesSent,
+      attachmentRecordsApplied:
+          attachmentRecordsApplied + other.attachmentRecordsApplied,
+      attachmentTombstonesApplied:
+          attachmentTombstonesApplied + other.attachmentTombstonesApplied,
     );
   }
 }

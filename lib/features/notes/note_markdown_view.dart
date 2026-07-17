@@ -31,6 +31,7 @@ class NoteMarkdownView extends StatelessWidget {
     this.onResizeImage,
     this.onEditColumns,
     this.onResizeColumns,
+    this.assetListenable,
     this.vaultRootPath = '',
     this.padding = const EdgeInsets.fromLTRB(20, 18, 20, 120),
   });
@@ -41,14 +42,24 @@ class NoteMarkdownView extends StatelessWidget {
   final NoteImageResizeCallback? onResizeImage;
   final NoteColumnsEditCallback? onEditColumns;
   final NoteColumnsResizeCallback? onResizeColumns;
+  final Listenable? assetListenable;
   final String vaultRootPath;
   final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    Widget buildView() => ListView(
       padding: padding,
       children: _buildContentChunks(context, markdown, baseOffset: 0),
+    );
+
+    final listenable = assetListenable;
+    if (listenable == null) {
+      return buildView();
+    }
+    return ListenableBuilder(
+      listenable: listenable,
+      builder: (context, child) => buildView(),
     );
   }
 

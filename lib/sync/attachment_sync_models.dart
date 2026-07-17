@@ -1,9 +1,37 @@
+import 'dart:typed_data';
+
 const attachmentSyncManifestVersion = 1;
 const maxAttachmentSyncManifestEntries = 10000;
 const maxAttachmentSyncEntryBytes = 100 * 1024 * 1024;
 
 typedef BuildAttachmentSyncManifest =
     Future<AttachmentSyncManifest> Function();
+
+typedef ReadAttachmentForSync =
+    Future<Uint8List?> Function(AttachmentSyncEntry entry);
+typedef StoreAttachmentFromSync =
+    Future<AttachmentSyncApplyResult> Function(
+      AttachmentSyncEntry entry,
+      Uint8List bytes,
+    );
+typedef ApplyAttachmentRecordFromSync =
+    Future<AttachmentSyncApplyResult> Function(AttachmentSyncEntry entry);
+typedef ApplyAttachmentTombstoneFromSync =
+    Future<AttachmentSyncApplyResult> Function(AttachmentSyncEntry entry);
+
+class AttachmentSyncApplyResult {
+  const AttachmentSyncApplyResult({
+    required this.changed,
+    this.byteLength = 0,
+  });
+
+  const AttachmentSyncApplyResult.unchanged()
+    : changed = false,
+      byteLength = 0;
+
+  final bool changed;
+  final int byteLength;
+}
 
 class AttachmentSyncEntry {
   const AttachmentSyncEntry({

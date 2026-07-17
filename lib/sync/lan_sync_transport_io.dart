@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:uuid/uuid.dart';
 
 import 'attachment_sync_models.dart';
+import 'lan_address_selector.dart';
 import 'lan_sync_models.dart';
 import 'pairing_crypto.dart';
 import 'pairing_models.dart';
@@ -40,6 +43,10 @@ class LanSyncHostSession {
     required SavePeerCursor saveCursor,
     required MarkPeerSyncSuccess markSuccess,
     required BuildAttachmentSyncManifest buildAttachmentManifest,
+    required ReadAttachmentForSync readAttachment,
+    required StoreAttachmentFromSync storeAttachment,
+    required ApplyAttachmentRecordFromSync applyAttachmentRecord,
+    required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
     RemoteAppliedCallback? onRemoteApplied,
   }) : _server = server,
        _buildOutgoing = buildOutgoing,
@@ -48,6 +55,10 @@ class LanSyncHostSession {
        _saveCursor = saveCursor,
        _markSuccess = markSuccess,
        _buildAttachmentManifest = buildAttachmentManifest,
+       _readAttachment = readAttachment,
+       _storeAttachment = storeAttachment,
+       _applyAttachmentRecord = applyAttachmentRecord,
+       _applyAttachmentTombstone = applyAttachmentTombstone,
        _onRemoteApplied = onRemoteApplied;
 
   static Future<LanSyncHostSession> start({
@@ -60,10 +71,14 @@ class LanSyncHostSession {
     required SavePeerCursor saveCursor,
     required MarkPeerSyncSuccess markSuccess,
     required BuildAttachmentSyncManifest buildAttachmentManifest,
+    required ReadAttachmentForSync readAttachment,
+    required StoreAttachmentFromSync storeAttachment,
+    required ApplyAttachmentRecordFromSync applyAttachmentRecord,
+    required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
     RemoteAppliedCallback? onRemoteApplied,
   }) async {
     final server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
-    final addresses = await _localIpv4Addresses();
+    final addresses = await localLanIpv4Addresses();
     if (addresses.isEmpty) {
       await server.close(force: true);
       throw StateError(
@@ -85,6 +100,10 @@ class LanSyncHostSession {
       saveCursor: saveCursor,
       markSuccess: markSuccess,
       buildAttachmentManifest: buildAttachmentManifest,
+      readAttachment: readAttachment,
+      storeAttachment: storeAttachment,
+      applyAttachmentRecord: applyAttachmentRecord,
+      applyAttachmentTombstone: applyAttachmentTombstone,
       onRemoteApplied: onRemoteApplied,
     );
     session._subscription = server.listen(session._handleRequest);
@@ -109,10 +128,20 @@ class LanSyncHostSession {
   final SavePeerCursor _saveCursor;
   final MarkPeerSyncSuccess _markSuccess;
   final BuildAttachmentSyncManifest _buildAttachmentManifest;
+  final ReadAttachmentForSync _readAttachment;
+  final StoreAttachmentFromSync _storeAttachment;
+  final ApplyAttachmentRecordFromSync _applyAttachmentRecord;
+  final ApplyAttachmentTombstoneFromSync _applyAttachmentTombstone;
   final RemoteAppliedCallback? _onRemoteApplied;
   final StreamController<LanSyncReport> _reportController =
       StreamController<LanSyncReport>.broadcast();
   final Map<String, _PendingSyncRound> _pendingRounds = {};
+  int _attachmentFilesReceived = 0;
+  int _attachmentFilesSent = 0;
+  int _attachmentBytesReceived = 0;
+  int _attachmentBytesSent = 0;
+  int _attachmentRecordsApplied = 0;
+  int _attachmentTombstonesApplied = 0;
 
   StreamSubscription<HttpRequest>? _subscription;
   Timer? _expiryTimer;
@@ -146,6 +175,11 @@ class LanSyncHostSession {
       }
       if (request.method == 'POST' && request.uri.path == '/v1/sync/exchange') {
         await _handleExchange(request);
+        return;
+      }
+      if (request.method == 'POST' &&
+          request.uri.path == '/v1/sync/attachment') {
+        await _handleAttachmentCommand(request);
         return;
       }
       if (request.method == 'POST' && request.uri.path == '/v1/sync/ack') {
@@ -245,6 +279,111 @@ class LanSyncHostSession {
     await _jsonResponse(request.response, HttpStatus.ok, response.toJson());
   }
 
+  Future<void> _handleAttachmentCommand(HttpRequest request) async {
+    final command = LanAttachmentCommand.fromJson(await _readJson(request));
+    _validateSession(command.sessionId, command.token);
+    _validatePeer(command.peer);
+    final valid = await crypto.verify(
+      message: command.signingPayload,
+      signatureBase64: command.signature,
+      publicKeyBase64: targetPeer.publicKey,
+    );
+    if (!valid) {
+      await _jsonResponse(request.response, HttpStatus.forbidden, {
+        'error': 'invalid_signature',
+      });
+      return;
+    }
+
+    Uint8List? responseBytes;
+    var changed = false;
+    switch (command.kind) {
+      case LanAttachmentCommandKind.download:
+        _requireManifestEntry(
+          await _buildAttachmentManifest(),
+          command.entry,
+        );
+        responseBytes = await _readAttachment(command.entry);
+        if (responseBytes == null) {
+          throw StateError('attachment_not_found');
+        }
+        _validateTransferredBytes(command.entry, responseBytes);
+        _attachmentFilesSent += 1;
+        _attachmentBytesSent += responseBytes.length;
+        break;
+      case LanAttachmentCommandKind.upload:
+        _requirePlannedAction(
+          local: await _buildAttachmentManifest(),
+          remoteEntry: command.entry,
+          expected: LanAttachmentCommandKind.upload,
+        );
+        final raw = command.dataBase64;
+        if (raw == null || raw.isEmpty) {
+          throw const FormatException('Attachment payload is missing.');
+        }
+        final bytes = base64Decode(raw);
+        _validateTransferredBytes(command.entry, bytes);
+        final uploadResult = await _storeAttachment(command.entry, bytes);
+        changed = uploadResult.changed;
+        _attachmentFilesReceived += 1;
+        _attachmentBytesReceived += bytes.length;
+        break;
+      case LanAttachmentCommandKind.record:
+        _requirePlannedAction(
+          local: await _buildAttachmentManifest(),
+          remoteEntry: command.entry,
+          expected: LanAttachmentCommandKind.record,
+        );
+        final recordResult = await _applyAttachmentRecord(command.entry);
+        changed = recordResult.changed;
+        if (recordResult.changed) {
+          _attachmentRecordsApplied += 1;
+        }
+        break;
+      case LanAttachmentCommandKind.tombstone:
+        _requirePlannedAction(
+          local: await _buildAttachmentManifest(),
+          remoteEntry: command.entry,
+          expected: LanAttachmentCommandKind.tombstone,
+        );
+        final tombstoneResult = await _applyAttachmentTombstone(
+          command.entry,
+        );
+        changed = tombstoneResult.changed;
+        if (tombstoneResult.changed) {
+          _attachmentTombstonesApplied += 1;
+        }
+        break;
+    }
+
+    final unsigned = LanAttachmentCommandResponse(
+      sessionId: sessionId,
+      transferId: command.transferId,
+      hostPeer: local.peer,
+      kind: command.kind,
+      entry: command.entry,
+      changed: changed,
+      dataBase64:
+          responseBytes == null ? null : base64Encode(responseBytes),
+      signature: '',
+    );
+    final signature = await crypto.sign(
+      unsigned.signingPayload,
+      local.keyMaterial,
+    );
+    final response = LanAttachmentCommandResponse(
+      sessionId: sessionId,
+      transferId: command.transferId,
+      hostPeer: local.peer,
+      kind: command.kind,
+      entry: command.entry,
+      changed: changed,
+      dataBase64: unsigned.dataBase64,
+      signature: signature,
+    );
+    await _jsonResponse(request.response, HttpStatus.ok, response.toJson());
+  }
+
   Future<void> _handleAck(HttpRequest request) async {
     final ack = LanSyncAck.fromJson(await _readJson(request));
     if (ack.sessionId != sessionId ||
@@ -307,7 +446,19 @@ class LanSyncHostSession {
       hasMore: pending.response.batch.hasMore || pending.request.batch.hasMore,
       attachmentPlanFromPeer: pending.response.responderAttachmentPlan,
       attachmentPlanByPeer: pending.response.requesterAttachmentPlan,
+      attachmentFilesReceived: _attachmentFilesReceived,
+      attachmentFilesSent: _attachmentFilesSent,
+      attachmentBytesReceived: _attachmentBytesReceived,
+      attachmentBytesSent: _attachmentBytesSent,
+      attachmentRecordsApplied: _attachmentRecordsApplied,
+      attachmentTombstonesApplied: _attachmentTombstonesApplied,
     );
+    _attachmentFilesReceived = 0;
+    _attachmentFilesSent = 0;
+    _attachmentBytesReceived = 0;
+    _attachmentBytesSent = 0;
+    _attachmentRecordsApplied = 0;
+    _attachmentTombstonesApplied = 0;
     _pendingRounds.remove(ack.roundId);
     _reportController.add(report);
     await _jsonResponse(request.response, HttpStatus.ok, {
@@ -354,6 +505,10 @@ class LanSyncClient {
     required SavePeerCursor saveCursor,
     required MarkPeerSyncSuccess markSuccess,
     required BuildAttachmentSyncManifest buildAttachmentManifest,
+    required ReadAttachmentForSync readAttachment,
+    required StoreAttachmentFromSync storeAttachment,
+    required ApplyAttachmentRecordFromSync applyAttachmentRecord,
+    required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
     RemoteAppliedCallback? onRemoteApplied,
   }) async {
     if (offer.isExpired) {
@@ -379,7 +534,13 @@ class LanSyncClient {
     var hasMore = false;
     var attachmentPlanFromPeer = const AttachmentSyncPlan.empty();
     var attachmentPlanByPeer = const AttachmentSyncPlan.empty();
-    final attachmentManifest = await buildAttachmentManifest();
+    var attachmentFilesReceived = 0;
+    var attachmentFilesSent = 0;
+    var attachmentBytesReceived = 0;
+    var attachmentBytesSent = 0;
+    var attachmentRecordsApplied = 0;
+    var attachmentTombstonesApplied = 0;
+    var attachmentManifest = await buildAttachmentManifest();
 
     try {
       do {
@@ -460,6 +621,84 @@ class LanSyncClient {
           }
         }
 
+        for (final entry in expectedPlanFromPeer.files) {
+          final response = await _sendAttachmentCommand(
+            client: client,
+            offer: offer,
+            local: local,
+            trustedHost: trustedHost,
+            crypto: crypto,
+            kind: LanAttachmentCommandKind.download,
+            entry: entry,
+          );
+          final raw = response.dataBase64;
+          if (raw == null || raw.isEmpty) {
+            throw StateError('Устройство не передало запрошенное вложение.');
+          }
+          final bytes = base64Decode(raw);
+          _validateTransferredBytes(entry, bytes);
+          await storeAttachment(entry, bytes);
+          attachmentFilesReceived += 1;
+          attachmentBytesReceived += bytes.length;
+        }
+        for (final entry in expectedPlanFromPeer.records) {
+          final result = await applyAttachmentRecord(entry);
+          if (result.changed) {
+            attachmentRecordsApplied += 1;
+          }
+        }
+        for (final entry in expectedPlanFromPeer.tombstones) {
+          final result = await applyAttachmentTombstone(entry);
+          if (result.changed) {
+            attachmentTombstonesApplied += 1;
+          }
+        }
+
+        for (final entry in expectedPlanByPeer.files) {
+          final bytes = await readAttachment(entry);
+          if (bytes == null) {
+            throw StateError(
+              'Локальное вложение исчезло во время синхронизации.',
+            );
+          }
+          _validateTransferredBytes(entry, bytes);
+          await _sendAttachmentCommand(
+            client: client,
+            offer: offer,
+            local: local,
+            trustedHost: trustedHost,
+            crypto: crypto,
+            kind: LanAttachmentCommandKind.upload,
+            entry: entry,
+            dataBase64: base64Encode(bytes),
+          );
+          attachmentFilesSent += 1;
+          attachmentBytesSent += bytes.length;
+        }
+        for (final entry in expectedPlanByPeer.records) {
+          await _sendAttachmentCommand(
+            client: client,
+            offer: offer,
+            local: local,
+            trustedHost: trustedHost,
+            crypto: crypto,
+            kind: LanAttachmentCommandKind.record,
+            entry: entry,
+          );
+        }
+        for (final entry in expectedPlanByPeer.tombstones) {
+          await _sendAttachmentCommand(
+            client: client,
+            offer: offer,
+            local: local,
+            trustedHost: trustedHost,
+            crypto: crypto,
+            kind: LanAttachmentCommandKind.tombstone,
+            entry: entry,
+          );
+        }
+        attachmentManifest = await buildAttachmentManifest();
+
         final completedAt = DateTime.now();
         await saveCursor(
           SyncCursor(
@@ -528,7 +767,77 @@ class LanSyncClient {
       hasMore: hasMore,
       attachmentPlanFromPeer: attachmentPlanFromPeer,
       attachmentPlanByPeer: attachmentPlanByPeer,
+      attachmentFilesReceived: attachmentFilesReceived,
+      attachmentFilesSent: attachmentFilesSent,
+      attachmentBytesReceived: attachmentBytesReceived,
+      attachmentBytesSent: attachmentBytesSent,
+      attachmentRecordsApplied: attachmentRecordsApplied,
+      attachmentTombstonesApplied: attachmentTombstonesApplied,
     );
+  }
+
+  static Future<LanAttachmentCommandResponse> _sendAttachmentCommand({
+    required HttpClient client,
+    required LanSyncOffer offer,
+    required LocalPairingIdentity local,
+    required PairingPeer trustedHost,
+    required PairingCrypto crypto,
+    required LanAttachmentCommandKind kind,
+    required AttachmentSyncEntry entry,
+    String? dataBase64,
+  }) async {
+    final transferId = const Uuid().v4();
+    final unsigned = LanAttachmentCommand(
+      sessionId: offer.sessionId,
+      token: offer.token,
+      transferId: transferId,
+      peer: local.peer,
+      kind: kind,
+      entry: entry,
+      dataBase64: dataBase64,
+      signature: '',
+    );
+    final signature = await crypto.sign(
+      unsigned.signingPayload,
+      local.keyMaterial,
+    );
+    final command = LanAttachmentCommand(
+      sessionId: offer.sessionId,
+      token: offer.token,
+      transferId: transferId,
+      peer: local.peer,
+      kind: kind,
+      entry: entry,
+      dataBase64: dataBase64,
+      signature: signature,
+    );
+    final rawResponse = await _postJson(
+      client,
+      offer,
+      '/v1/sync/attachment',
+      command.toJson(),
+    );
+    if (rawResponse.statusCode != HttpStatus.ok) {
+      throw StateError(_friendlySyncError(rawResponse.json));
+    }
+    final response = LanAttachmentCommandResponse.fromJson(rawResponse.json);
+    if (response.sessionId != offer.sessionId ||
+        response.transferId != transferId ||
+        response.hostPeer.deviceId != trustedHost.deviceId ||
+        response.hostPeer.publicKey != trustedHost.publicKey ||
+        response.kind != kind ||
+        !_sameAttachmentEntry(response.entry, entry)) {
+      throw StateError('Ответ передачи вложения не прошёл проверку.');
+    }
+    final valid = await crypto.verify(
+      message: response.signingPayload,
+      signatureBase64: response.signature,
+      publicKeyBase64: trustedHost.publicKey,
+    );
+    if (!valid) {
+      throw StateError('Подпись передачи вложения неверна.');
+    }
+    return response;
   }
 
   static Future<void> _verifyResponse({
@@ -630,6 +939,64 @@ void _applyCors(HttpResponse response) {
     ..set('Access-Control-Allow-Methods', 'POST, OPTIONS');
 }
 
+void _requireManifestEntry(
+  AttachmentSyncManifest manifest,
+  AttachmentSyncEntry requested,
+) {
+  for (final entry in manifest.entries) {
+    if (_sameAttachmentEntry(entry, requested) && !entry.isDeleted) {
+      return;
+    }
+  }
+  throw StateError('attachment_not_found');
+}
+
+void _requirePlannedAction({
+  required AttachmentSyncManifest local,
+  required AttachmentSyncEntry remoteEntry,
+  required LanAttachmentCommandKind expected,
+}) {
+  final remote = AttachmentSyncManifest(
+    generatedAt: DateTime.now().toUtc(),
+    entries: <AttachmentSyncEntry>[remoteEntry],
+  );
+  final plan = buildAttachmentSyncPlan(local: local, remote: remote);
+  final allowed = switch (expected) {
+    LanAttachmentCommandKind.upload => plan.files,
+    LanAttachmentCommandKind.record => plan.records,
+    LanAttachmentCommandKind.tombstone => plan.tombstones,
+    LanAttachmentCommandKind.download => const <AttachmentSyncEntry>[],
+  };
+  if (!allowed.any((entry) => _sameAttachmentEntry(entry, remoteEntry))) {
+    throw StateError('attachment_action_not_allowed');
+  }
+}
+
+bool _sameAttachmentEntry(
+  AttachmentSyncEntry left,
+  AttachmentSyncEntry right,
+) {
+  return left.relativePath == right.relativePath &&
+      left.sha256 == right.sha256 &&
+      left.byteLength == right.byteLength &&
+      left.deletedAt?.toUtc().millisecondsSinceEpoch ==
+          right.deletedAt?.toUtc().millisecondsSinceEpoch;
+}
+
+void _validateTransferredBytes(
+  AttachmentSyncEntry entry,
+  Uint8List bytes,
+) {
+  if (entry.isDeleted ||
+      bytes.length != entry.byteLength ||
+      bytes.length > maxAttachmentSyncEntryBytes) {
+    throw const FormatException('Attachment payload size is invalid.');
+  }
+  if (sha256.convert(bytes).toString() != entry.sha256) {
+    throw const FormatException('Attachment payload checksum is invalid.');
+  }
+}
+
 String _friendlySyncError(Map<String, dynamic> json) {
   final raw = '${json['error'] ?? ''}';
   if (raw.contains('sync_expired')) {
@@ -647,96 +1014,11 @@ String _friendlySyncError(Map<String, dynamic> json) {
   if (raw.contains('round_not_found') || raw.contains('invalid_ack')) {
     return 'Подтверждение пакета синхронизации не принято.';
   }
+  if (raw.contains('attachment_not_found')) {
+    return 'Запрошенное вложение больше недоступно на другом устройстве.';
+  }
+  if (raw.contains('attachment_action_not_allowed')) {
+    return 'Передача вложения отклонена из-за изменившегося состояния Vault.';
+  }
   return raw.isEmpty ? 'Не удалось синхронизировать устройства.' : raw;
-}
-
-Future<List<String>> _localIpv4Addresses() async {
-  final interfaces = await NetworkInterface.list(
-    type: InternetAddressType.IPv4,
-    includeLoopback: false,
-    includeLinkLocal: false,
-  );
-  final candidates = <_AddressCandidate>[];
-  for (final interface in interfaces) {
-    for (final address in interface.addresses) {
-      if (!address.isLoopback && address.type == InternetAddressType.IPv4) {
-        candidates.add(
-          _AddressCandidate(
-            address: address.address,
-            interfaceName: interface.name,
-          ),
-        );
-      }
-    }
-  }
-  candidates.sort((left, right) {
-    final interfaceRank = _interfaceRank(
-      left.interfaceName,
-    ).compareTo(_interfaceRank(right.interfaceName));
-    if (interfaceRank != 0) {
-      return interfaceRank;
-    }
-    final addressRank = _addressRank(
-      left.address,
-    ).compareTo(_addressRank(right.address));
-    return addressRank != 0
-        ? addressRank
-        : left.address.compareTo(right.address);
-  });
-  return candidates.map((candidate) => candidate.address).toSet().toList();
-}
-
-class _AddressCandidate {
-  const _AddressCandidate({required this.address, required this.interfaceName});
-
-  final String address;
-  final String interfaceName;
-}
-
-int _interfaceRank(String value) {
-  final name = value.toLowerCase();
-  const virtualMarkers = <String>[
-    'vpn',
-    'tun',
-    'tap',
-    'wireguard',
-    'wsl',
-    'vethernet',
-    'virtualbox',
-    'vmware',
-    'hyper-v',
-    'docker',
-    'tailscale',
-    'zerotier',
-    'hiddify',
-  ];
-  if (virtualMarkers.any(name.contains)) {
-    return 4;
-  }
-  if (name.contains('wi-fi') ||
-      name.contains('wifi') ||
-      name.contains('wlan')) {
-    return 0;
-  }
-  if (name.contains('ethernet') || name == 'eth0' || name.startsWith('en')) {
-    return 1;
-  }
-  return 2;
-}
-
-int _addressRank(String value) {
-  if (value.startsWith('192.168.')) {
-    return 0;
-  }
-  if (value.startsWith('10.')) {
-    return 1;
-  }
-  final parts = value.split('.');
-  if (parts.length == 4 && parts.first == '172') {
-    final second = int.tryParse(parts[1]) ?? 0;
-    if (second >= 16 && second <= 31) {
-      return 2;
-    }
-  }
-  return 3;
 }

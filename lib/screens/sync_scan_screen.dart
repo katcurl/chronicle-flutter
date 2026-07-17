@@ -352,9 +352,23 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
     report = null;
     errorMessage = null;
     handlingCode = false;
-    if (mounted) {
-      setState(() => stage = _SyncScanStage.scanning);
+    if (!mounted) {
+      return;
+    }
+    setState(() => stage = _SyncScanStage.scanning);
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) {
+      return;
+    }
+    try {
       await controller.start();
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() {
+          stage = _SyncScanStage.error;
+          errorMessage = 'Не удалось перезапустить камеру: $error';
+        });
+      }
     }
   }
 }

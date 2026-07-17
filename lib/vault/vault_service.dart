@@ -441,6 +441,199 @@ class VaultService {
     );
   }
 
+  Future<Uint8List?> readAttachmentForSync(
+    AttachmentSyncEntry entry,
+  ) async {
+    _validateActiveSyncEntry(entry);
+    final rootPath = await _backend.resolveRootPath();
+    if (rootPath == null || rootPath.isEmpty) {
+      return null;
+    }
+    final records = await _readAttachmentRecords(rootPath);
+    final record = _findAttachmentRecord(records, entry.relativePath);
+    if (record == null ||
+        record.isDeleted ||
+        record.sha256.toLowerCase() != entry.sha256 ||
+        record.byteLength != entry.byteLength) {
+      return null;
+    }
+    final bytes = await _backend.readBinaryFile(rootPath, entry.relativePath);
+    if (bytes == null) {
+      return null;
+    }
+    _validateAttachmentBytes(entry, bytes);
+    return bytes;
+  }
+
+  Future<AttachmentSyncApplyResult> storeAttachmentFromSync(
+    AttachmentSyncEntry entry,
+    Uint8List bytes,
+  ) async {
+    _validateActiveSyncEntry(entry);
+    _validateAttachmentBytes(entry, bytes);
+    final rootPath = await _requireVaultRoot();
+    final records = await _readAttachmentRecords(rootPath);
+    final current = _findAttachmentRecord(records, entry.relativePath);
+
+    var needsWrite = true;
+    if (current != null) {
+      if (current.isDeleted) {
+        throw StateError(
+          'Удалённое вложение не может быть восстановлено автоматически.',
+        );
+      }
+      if (current.sha256.toLowerCase() != entry.sha256 ||
+          current.byteLength != entry.byteLength) {
+        throw StateError('Путь вложения занят другим содержимым.');
+      }
+      if (await _backend.fileExists(rootPath, entry.relativePath)) {
+        final existing = await _backend.readBinaryFile(
+          rootPath,
+          entry.relativePath,
+        );
+        if (existing != null) {
+          _validateAttachmentBytes(entry, existing);
+          return const AttachmentSyncApplyResult.unchanged();
+        }
+      }
+    } else if (await _backend.fileExists(rootPath, entry.relativePath)) {
+      final existing = await _backend.readBinaryFile(
+        rootPath,
+        entry.relativePath,
+      );
+      if (existing == null) {
+        throw StateError('Не удалось проверить существующее вложение.');
+      }
+      _validateAttachmentBytes(entry, existing);
+      needsWrite = false;
+    }
+
+    if (needsWrite) {
+      await _backend.writeBinaryFile(
+        rootPath: rootPath,
+        relativePath: entry.relativePath,
+        bytes: bytes,
+      );
+    }
+    await _upsertSyncedAttachmentRecord(rootPath, entry);
+    return AttachmentSyncApplyResult(
+      changed: true,
+      byteLength: entry.byteLength,
+    );
+  }
+
+  Future<AttachmentSyncApplyResult> applyAttachmentRecordFromSync(
+    AttachmentSyncEntry entry,
+  ) async {
+    _validateActiveSyncEntry(entry);
+    final rootPath = await _requireVaultRoot();
+    final records = await _readAttachmentRecords(rootPath);
+    final current = _findAttachmentRecord(records, entry.relativePath);
+    if (current != null) {
+      if (current.isDeleted) {
+        throw StateError(
+          'Удалённое вложение не может быть восстановлено автоматически.',
+        );
+      }
+      if (current.sha256.toLowerCase() != entry.sha256 ||
+          current.byteLength != entry.byteLength) {
+        throw StateError('Путь вложения занят другим содержимым.');
+      }
+      if (await _backend.fileExists(rootPath, entry.relativePath)) {
+        return const AttachmentSyncApplyResult.unchanged();
+      }
+    }
+
+    if (current == null &&
+        await _backend.fileExists(rootPath, entry.relativePath)) {
+      final existing = await _backend.readBinaryFile(
+        rootPath,
+        entry.relativePath,
+      );
+      if (existing == null) {
+        throw StateError('Не удалось проверить существующее вложение.');
+      }
+      _validateAttachmentBytes(entry, existing);
+      await _upsertSyncedAttachmentRecord(rootPath, entry);
+      return const AttachmentSyncApplyResult(changed: true);
+    }
+
+    VaultAttachmentRecord? source;
+    for (final record in records) {
+      if (!record.isDeleted &&
+          record.sha256.toLowerCase() == entry.sha256 &&
+          record.byteLength == entry.byteLength &&
+          await _backend.fileExists(rootPath, record.relativePath)) {
+        source = record;
+        break;
+      }
+    }
+    if (source == null) {
+      throw StateError('Локальная копия вложения для дедупликации не найдена.');
+    }
+    final bytes = await _backend.readBinaryFile(rootPath, source.relativePath);
+    if (bytes == null) {
+      throw StateError('Локальная копия вложения больше недоступна.');
+    }
+    _validateAttachmentBytes(entry, bytes);
+    await _backend.writeBinaryFile(
+      rootPath: rootPath,
+      relativePath: entry.relativePath,
+      bytes: bytes,
+    );
+    await _upsertSyncedAttachmentRecord(rootPath, entry);
+    return AttachmentSyncApplyResult(
+      changed: true,
+      byteLength: entry.byteLength,
+    );
+  }
+
+  Future<AttachmentSyncApplyResult> applyAttachmentTombstoneFromSync(
+    AttachmentSyncEntry entry,
+  ) async {
+    if (!entry.isDeleted || !_validAttachmentPath(entry.relativePath)) {
+      throw const FormatException('Некорректная запись удаления вложения.');
+    }
+    final rootPath = await _requireVaultRoot();
+    final records = await _readAttachmentRecords(rootPath);
+    final index = records.indexWhere(
+      (record) => record.relativePath == entry.relativePath,
+    );
+    if (index >= 0 && records[index].isDeleted) {
+      final localDeletedAt = records[index].deletedAt;
+      final remoteDeletedAt = entry.deletedAt;
+      if (localDeletedAt != null &&
+          remoteDeletedAt != null &&
+          !remoteDeletedAt.isAfter(localDeletedAt)) {
+        return const AttachmentSyncApplyResult.unchanged();
+      }
+    }
+
+    final existed = await _backend.fileExists(rootPath, entry.relativePath);
+    if (existed) {
+      await _backend.deleteFiles(
+        rootPath: rootPath,
+        relativePaths: <String>{entry.relativePath},
+      );
+    }
+    final tombstone = VaultAttachmentRecord(
+      relativePath: entry.relativePath,
+      originalName: entry.originalName,
+      sha256: entry.sha256,
+      mimeType: entry.mimeType,
+      byteLength: entry.byteLength,
+      createdAt: entry.createdAt,
+      deletedAt: entry.deletedAt,
+    );
+    if (index < 0) {
+      records.add(tombstone);
+    } else {
+      records[index] = tombstone;
+    }
+    await _writeAttachmentRecords(rootPath, records);
+    return AttachmentSyncApplyResult(changed: true);
+  }
+
   Future<AttachmentDeleteResult> deleteManagedAttachment(
     String relativePath,
   ) async {
@@ -1224,6 +1417,75 @@ class VaultService {
         byteLength: record.byteLength,
         createdAt: records[index].createdAt,
       );
+    }
+    await _writeAttachmentRecords(rootPath, records);
+  }
+
+  Future<String> _requireVaultRoot() async {
+    final rootPath = await _backend.resolveRootPath();
+    if (rootPath == null || rootPath.isEmpty) {
+      throw UnsupportedError('Не удалось определить папку Vault.');
+    }
+    return rootPath;
+  }
+
+  VaultAttachmentRecord? _findAttachmentRecord(
+    List<VaultAttachmentRecord> records,
+    String relativePath,
+  ) {
+    for (final record in records) {
+      if (record.relativePath == relativePath) {
+        return record;
+      }
+    }
+    return null;
+  }
+
+  void _validateActiveSyncEntry(AttachmentSyncEntry entry) {
+    if (entry.isDeleted ||
+        !_validAttachmentPath(entry.relativePath) ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(entry.sha256) ||
+        entry.byteLength < 0 ||
+        entry.byteLength > maxAttachmentBytes) {
+      throw const FormatException('Некорректное вложение для синхронизации.');
+    }
+  }
+
+  void _validateAttachmentBytes(
+    AttachmentSyncEntry entry,
+    Uint8List bytes,
+  ) {
+    if (bytes.length != entry.byteLength) {
+      throw const FormatException('Размер вложения не совпадает с манифестом.');
+    }
+    final actualHash = sha256.convert(bytes).toString();
+    if (actualHash != entry.sha256) {
+      throw const FormatException(
+        'Контрольная сумма вложения не совпадает с манифестом.',
+      );
+    }
+  }
+
+  Future<void> _upsertSyncedAttachmentRecord(
+    String rootPath,
+    AttachmentSyncEntry entry,
+  ) async {
+    final records = await _readAttachmentRecords(rootPath);
+    final index = records.indexWhere(
+      (record) => record.relativePath == entry.relativePath,
+    );
+    final record = VaultAttachmentRecord(
+      relativePath: entry.relativePath,
+      originalName: entry.originalName,
+      sha256: entry.sha256,
+      mimeType: entry.mimeType,
+      byteLength: entry.byteLength,
+      createdAt: entry.createdAt,
+    );
+    if (index < 0) {
+      records.add(record);
+    } else {
+      records[index] = record;
     }
     await _writeAttachmentRecords(rootPath, records);
   }

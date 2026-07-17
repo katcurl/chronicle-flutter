@@ -31,6 +31,10 @@ class LanSyncHostSession {
     required SavePeerCursor saveCursor,
     required MarkPeerSyncSuccess markSuccess,
     required BuildAttachmentSyncManifest buildAttachmentManifest,
+    required ReadAttachmentForSync readAttachment,
+    required StoreAttachmentFromSync storeAttachment,
+    required ApplyAttachmentRecordFromSync applyAttachmentRecord,
+    required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
     RemoteAppliedCallback? onRemoteApplied,
   }) {
     throw UnsupportedError(
@@ -58,6 +62,10 @@ class LanSyncClient {
     required SavePeerCursor saveCursor,
     required MarkPeerSyncSuccess markSuccess,
     required BuildAttachmentSyncManifest buildAttachmentManifest,
+    required ReadAttachmentForSync readAttachment,
+    required StoreAttachmentFromSync storeAttachment,
+    required ApplyAttachmentRecordFromSync applyAttachmentRecord,
+    required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
     RemoteAppliedCallback? onRemoteApplied,
   }) {
     throw UnsupportedError(

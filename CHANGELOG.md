@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.21.1+37
+
+- refreshed open note previews after synchronized attachment files arrive;
+- made remote images re-resolve from the local Vault after the final sync report;
+- restarted the Android QR camera after a failed pairing or sync attempt;
+- preferred physical Wi-Fi and Ethernet interfaces over VPN and virtual adapters in QR offers;
+- added regression tests for Vault image refresh and VPN-aware LAN address ordering.
+
+## 0.21.0+36
+
+- added two-way LAN transfer of missing attachment binaries between trusted devices;
+- verified every received file against the signed SHA-256 and byte length before atomic Vault storage;
+- synchronized attachment tombstones and metadata-only deduplicated records;
+- prevented automatic overwrite when a managed path contains different content;
+- added attachment byte and file counters to sync reports and reliability diagnostics;
+- updated the signed LAN protocol to `chronicle-sync-v3`;
+- added integration tests for bidirectional attachment transfer and Vault checksum enforcement.
+
 ## 0.20.1+35
 
 - added column content reordering from the existing layout dialog;

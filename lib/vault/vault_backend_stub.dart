@@ -61,6 +61,13 @@ class VaultBackend {
     required String directory,
   }) async => <String, Uint8List>{};
 
+  Future<Uint8List?> readBinaryFile(
+    String rootPath,
+    String relativePath,
+  ) async {
+    return null;
+  }
+
   Future<bool> fileExists(String rootPath, String relativePath) async => false;
 
   Future<void> writeBinaryFile({

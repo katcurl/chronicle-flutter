@@ -173,6 +173,17 @@ class VaultBackend {
     return result;
   }
 
+  Future<Uint8List?> readBinaryFile(
+    String rootPath,
+    String relativePath,
+  ) async {
+    final file = File(p.join(rootPath, _native(relativePath)));
+    if (!await file.exists()) {
+      return null;
+    }
+    return file.readAsBytes();
+  }
+
   Future<bool> fileExists(String rootPath, String relativePath) {
     return File(p.join(rootPath, _native(relativePath))).exists();
   }

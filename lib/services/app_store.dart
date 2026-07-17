@@ -44,6 +44,11 @@ class AppStore extends ChangeNotifier {
         LanSyncService(
           repository: repository,
           buildAttachmentManifest: _vaultService.buildAttachmentSyncManifest,
+          readAttachment: _vaultService.readAttachmentForSync,
+          storeAttachment: _vaultService.storeAttachmentFromSync,
+          applyAttachmentRecord: _vaultService.applyAttachmentRecordFromSync,
+          applyAttachmentTombstone:
+              _vaultService.applyAttachmentTombstoneFromSync,
         );
     autoSyncService = LanAutoSyncService(
       repository: repository,
@@ -1547,9 +1552,13 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
             report.attachmentPlanFromPeer.tombstoneCount,
         'attachmentTombstonesByPeer':
             report.attachmentPlanByPeer.tombstoneCount,
-        'attachmentConflicts':
-            report.attachmentPlanFromPeer.conflictCount +
-            report.attachmentPlanByPeer.conflictCount,
+        'attachmentFilesReceived': report.attachmentFilesReceived,
+        'attachmentFilesSent': report.attachmentFilesSent,
+        'attachmentBytesReceived': report.attachmentBytesReceived,
+        'attachmentBytesSent': report.attachmentBytesSent,
+        'attachmentRecordsApplied': report.attachmentRecordsApplied,
+        'attachmentTombstonesApplied': report.attachmentTombstonesApplied,
+        'attachmentConflicts': report.attachmentConflictCount,
         'durationMs':
             report.completedAt.difference(report.startedAt).inMilliseconds,
       },

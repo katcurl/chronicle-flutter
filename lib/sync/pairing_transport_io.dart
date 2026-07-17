@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:uuid/uuid.dart';
 
+import 'lan_address_selector.dart';
 import 'pairing_crypto.dart';
 import 'pairing_models.dart';
 
@@ -26,7 +27,7 @@ class PairingHostSession {
     required Future<void> Function(PairingPeer peer) onTrust,
   }) async {
     final server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
-    final addresses = await _localIpv4Addresses();
+    final addresses = await localLanIpv4Addresses();
     if (addresses.isEmpty) {
       await server.close(force: true);
       throw StateError(
@@ -500,43 +501,4 @@ String _friendlyNetworkError(Map<String, dynamic> json) {
     final Object? value when value != null => '$value',
     _ => 'Не удалось подключиться к устройству.',
   };
-}
-
-Future<List<String>> _localIpv4Addresses() async {
-  final interfaces = await NetworkInterface.list(
-    type: InternetAddressType.IPv4,
-    includeLoopback: false,
-    includeLinkLocal: false,
-  );
-  final addresses = <String>{};
-  for (final interface in interfaces) {
-    for (final address in interface.addresses) {
-      if (!address.isLoopback && address.type == InternetAddressType.IPv4) {
-        addresses.add(address.address);
-      }
-    }
-  }
-  final sorted =
-      addresses.toList()..sort((a, b) {
-        final rankCompare = _addressRank(a).compareTo(_addressRank(b));
-        return rankCompare != 0 ? rankCompare : a.compareTo(b);
-      });
-  return sorted;
-}
-
-int _addressRank(String value) {
-  if (value.startsWith('192.168.')) {
-    return 0;
-  }
-  if (value.startsWith('10.')) {
-    return 1;
-  }
-  final parts = value.split('.');
-  if (parts.length == 4 && parts.first == '172') {
-    final second = int.tryParse(parts[1]) ?? 0;
-    if (second >= 16 && second <= 31) {
-      return 2;
-    }
-  }
-  return 3;
 }

@@ -633,6 +633,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       onResizeImage: _replaceImagePresentation,
       onEditColumns: _editColumnsReference,
       onResizeColumns: _replaceColumnsWidths,
+      assetListenable: widget.store,
       vaultRootPath: widget.store.vaultStatus.rootPath,
     );
   }

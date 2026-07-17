@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:chronicle/models/app_models.dart';
+import 'package:chronicle/sync/attachment_sync_models.dart';
 import 'package:chronicle/vault/vault_backend.dart';
 import 'package:chronicle/vault/vault_service.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -107,6 +109,86 @@ void main() {
     expect(manifest.entries, isEmpty);
   });
 
+
+  test('synced attachment is verified, stored, and indexed', () async {
+    final backend = _AttachmentBackend(const <PickedVaultFile>[]);
+    final service = VaultService(backend: backend);
+    final bytes = Uint8List.fromList(utf8.encode('remote-content'));
+    final entry = AttachmentSyncEntry(
+      relativePath: 'Attachments/remote--12345678.pdf',
+      originalName: 'remote.pdf',
+      sha256: sha256.convert(bytes).toString(),
+      mimeType: 'application/pdf',
+      byteLength: bytes.length,
+      createdAt: DateTime.utc(2026, 7, 18, 9),
+    );
+
+    final result = await service.storeAttachmentFromSync(entry, bytes);
+    final restored = await service.readAttachmentForSync(entry);
+    final manifest = await service.buildAttachmentSyncManifest();
+
+    expect(result.changed, isTrue);
+    expect(restored, orderedEquals(bytes));
+    expect(manifest.entries, hasLength(1));
+    expect(manifest.entries.single.relativePath, entry.relativePath);
+  });
+
+  test('synced attachment with a wrong checksum is rejected', () async {
+    final backend = _AttachmentBackend(const <PickedVaultFile>[]);
+    final service = VaultService(backend: backend);
+    final bytes = Uint8List.fromList(<int>[1, 2, 3]);
+    final entry = AttachmentSyncEntry(
+      relativePath: 'Attachments/broken--aaaaaaaa.bin',
+      originalName: 'broken.bin',
+      sha256:
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      mimeType: 'application/octet-stream',
+      byteLength: bytes.length,
+      createdAt: DateTime.utc(2026, 7, 18, 9),
+    );
+
+    await expectLater(
+      service.storeAttachmentFromSync(entry, bytes),
+      throwsFormatException,
+    );
+    expect(backend.binaryFiles, isEmpty);
+  });
+
+  test('remote tombstone removes a local attachment', () async {
+    final backend = _AttachmentBackend(<PickedVaultFile>[
+      PickedVaultFile(
+        name: 'old.pdf',
+        bytes: Uint8List.fromList(utf8.encode('old-content')),
+      ),
+    ]);
+    final service = VaultService(backend: backend);
+    final note = Note(
+      id: 'note-1',
+      title: 'Old',
+      projectId: 'project-1',
+      body: '# Old',
+    );
+    final imported = await service.pickAndStoreAttachment(note);
+    final active = (await service.buildAttachmentSyncManifest()).entries.single;
+    final tombstone = AttachmentSyncEntry(
+      relativePath: active.relativePath,
+      originalName: active.originalName,
+      sha256: active.sha256,
+      mimeType: active.mimeType,
+      byteLength: active.byteLength,
+      createdAt: active.createdAt,
+      deletedAt: DateTime.utc(2026, 7, 18, 12),
+    );
+
+    final result = await service.applyAttachmentTombstoneFromSync(tombstone);
+    final manifest = await service.buildAttachmentSyncManifest();
+
+    expect(imported, isNotNull);
+    expect(result.changed, isTrue);
+    expect(backend.binaryFiles, isEmpty);
+    expect(manifest.tombstoneCount, 1);
+  });
+
 }
 
 class _AttachmentBackend extends VaultBackend {
@@ -132,6 +214,15 @@ class _AttachmentBackend extends VaultBackend {
   @override
   Future<bool> fileExists(String rootPath, String relativePath) async {
     return binaryFiles.containsKey(relativePath);
+  }
+
+  @override
+  Future<Uint8List?> readBinaryFile(
+    String rootPath,
+    String relativePath,
+  ) async {
+    final value = binaryFiles[relativePath];
+    return value == null ? null : Uint8List.fromList(value);
   }
 
   @override

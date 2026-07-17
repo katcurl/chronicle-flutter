@@ -466,7 +466,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
         SnackBar(
           content: Text(
             'Синхронизация завершена: отправлено ${report.sentCount}, '
-            'получено ${report.receivedCount}, применено ${report.appliedCount}.',
+            'получено ${report.receivedCount}, применено ${report.appliedCount}; '
+            'вложений получено ${report.attachmentFilesReceived}, '
+            'отправлено ${report.attachmentFilesSent}.',
           ),
         ),
       );

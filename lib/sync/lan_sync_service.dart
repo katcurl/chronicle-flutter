@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../data/repositories/app_repository.dart';
 import 'attachment_sync_models.dart';
 import 'lan_sync_models.dart';
@@ -11,14 +13,28 @@ class LanSyncService {
     required AppRepository repository,
     PairingCrypto? crypto,
     BuildAttachmentSyncManifest? buildAttachmentManifest,
+    ReadAttachmentForSync? readAttachment,
+    StoreAttachmentFromSync? storeAttachment,
+    ApplyAttachmentRecordFromSync? applyAttachmentRecord,
+    ApplyAttachmentTombstoneFromSync? applyAttachmentTombstone,
   }) : _repository = repository,
        crypto = crypto ?? PairingCrypto(),
        _buildAttachmentManifest =
-           buildAttachmentManifest ?? _emptyAttachmentManifest;
+           buildAttachmentManifest ?? _emptyAttachmentManifest,
+       _readAttachment = readAttachment ?? _missingAttachment,
+       _storeAttachment = storeAttachment ?? _unsupportedStoreAttachment,
+       _applyAttachmentRecord =
+           applyAttachmentRecord ?? _unsupportedAttachmentRecord,
+       _applyAttachmentTombstone =
+           applyAttachmentTombstone ?? _unsupportedAttachmentTombstone;
 
   final AppRepository _repository;
   final PairingCrypto crypto;
   final BuildAttachmentSyncManifest _buildAttachmentManifest;
+  final ReadAttachmentForSync _readAttachment;
+  final StoreAttachmentFromSync _storeAttachment;
+  final ApplyAttachmentRecordFromSync _applyAttachmentRecord;
+  final ApplyAttachmentTombstoneFromSync _applyAttachmentTombstone;
 
   Future<LocalPairingIdentity> ensureLocalIdentity() => _ensureLocalIdentity();
 
@@ -51,6 +67,10 @@ class LanSyncService {
       saveCursor: _repository.saveSyncCursor,
       markSuccess: _markSuccess,
       buildAttachmentManifest: _buildAttachmentManifest,
+      readAttachment: _readAttachment,
+      storeAttachment: _storeAttachment,
+      applyAttachmentRecord: _applyAttachmentRecord,
+      applyAttachmentTombstone: _applyAttachmentTombstone,
       onRemoteApplied: onRemoteApplied,
     );
   }
@@ -77,6 +97,10 @@ class LanSyncService {
       saveCursor: _repository.saveSyncCursor,
       markSuccess: _markSuccess,
       buildAttachmentManifest: _buildAttachmentManifest,
+      readAttachment: _readAttachment,
+      storeAttachment: _storeAttachment,
+      applyAttachmentRecord: _applyAttachmentRecord,
+      applyAttachmentTombstone: _applyAttachmentTombstone,
       onRemoteApplied: onRemoteApplied,
     );
   }
@@ -149,4 +173,26 @@ class LanSyncService {
 
 Future<AttachmentSyncManifest> _emptyAttachmentManifest() async {
   return AttachmentSyncManifest(generatedAt: DateTime.now().toUtc());
+}
+
+
+Future<Uint8List?> _missingAttachment(AttachmentSyncEntry entry) async => null;
+
+Future<AttachmentSyncApplyResult> _unsupportedStoreAttachment(
+  AttachmentSyncEntry entry,
+  Uint8List bytes,
+) {
+  throw UnsupportedError('Хранилище вложений не подключено.');
+}
+
+Future<AttachmentSyncApplyResult> _unsupportedAttachmentRecord(
+  AttachmentSyncEntry entry,
+) {
+  throw UnsupportedError('Хранилище вложений не подключено.');
+}
+
+Future<AttachmentSyncApplyResult> _unsupportedAttachmentTombstone(
+  AttachmentSyncEntry entry,
+) {
+  throw UnsupportedError('Хранилище вложений не подключено.');
 }

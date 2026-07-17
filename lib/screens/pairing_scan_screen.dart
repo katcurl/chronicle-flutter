@@ -358,8 +358,23 @@ class _PairingScanScreenState extends State<PairingScanScreen> {
     connectedPeer = null;
     errorMessage = null;
     handlingCode = false;
-    if (mounted) {
-      setState(() => stage = _ScanStage.scanning);
+    if (!mounted) {
+      return;
+    }
+    setState(() => stage = _ScanStage.scanning);
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) {
+      return;
+    }
+    try {
+      await controller.start();
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() {
+          stage = _ScanStage.error;
+          errorMessage = 'Не удалось перезапустить камеру: $error';
+        });
+      }
     }
   }
 }
