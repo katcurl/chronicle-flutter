@@ -1,10 +1,17 @@
+# Changelog
+
+## 0.21.5+41
+
+- removed the duplicate whole-preview rebuild when attachment storage changes; each Vault image now refreshes independently;
+- added an injectable attachment-byte loader so the refresh widget test is deterministic on Linux and Windows runners;
+- replaced the real file-I/O and `runAsync` loop that could deadlock until the ten-minute test timeout;
+- kept production Vault reads, checksum validation and LAN synchronization unchanged.
+
 ## 0.21.4+40
 
 - Remote Vault images now keep their own byte state instead of depending on `FutureBuilder` completion timing.
 - A completed `dart:io` read explicitly schedules the widget rebuild, so a synchronized image replaces the placeholder in an already-open note.
 - The cross-platform widget test now targets the exact remote image and fallback widgets.
-
-# Changelog
 
 ## 0.21.3+39
 

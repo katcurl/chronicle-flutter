@@ -12,6 +12,11 @@ import 'note_columns_syntax.dart';
 import 'note_document.dart';
 import 'note_image_syntax.dart';
 
+typedef VaultAttachmentBytesLoader = Future<Uint8List?> Function(
+  String rootPath,
+  String markdownPath,
+);
+
 typedef NoteImageEditCallback = void Function(NoteImageReference reference);
 typedef NoteImageResizeCallback =
     void Function(
@@ -33,6 +38,7 @@ class NoteMarkdownView extends StatelessWidget {
     this.onEditColumns,
     this.onResizeColumns,
     this.assetListenable,
+    this.assetLoader,
     this.vaultRootPath = '',
     this.padding = const EdgeInsets.fromLTRB(20, 18, 20, 120),
   });
@@ -44,23 +50,15 @@ class NoteMarkdownView extends StatelessWidget {
   final NoteColumnsEditCallback? onEditColumns;
   final NoteColumnsResizeCallback? onResizeColumns;
   final Listenable? assetListenable;
+  final VaultAttachmentBytesLoader? assetLoader;
   final String vaultRootPath;
   final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
-    Widget buildView() => ListView(
+    return ListView(
       padding: padding,
       children: _buildContentChunks(context, markdown, baseOffset: 0),
-    );
-
-    final listenable = assetListenable;
-    if (listenable == null) {
-      return buildView();
-    }
-    return ListenableBuilder(
-      listenable: listenable,
-      builder: (context, child) => buildView(),
     );
   }
 
@@ -198,6 +196,7 @@ class NoteMarkdownView extends StatelessWidget {
         fallbackLabel: alt.isEmpty ? target : alt,
         expand: expand,
         refreshListenable: assetListenable,
+        loader: assetLoader ?? loadVaultAttachment,
       );
     }
     return _ImageFallback(label: alt.isEmpty ? target : alt);
@@ -729,6 +728,7 @@ class _VaultAttachmentImage extends StatefulWidget {
     required this.markdownPath,
     required this.fallbackLabel,
     required this.expand,
+    required this.loader,
     this.refreshListenable,
   });
 
@@ -736,6 +736,7 @@ class _VaultAttachmentImage extends StatefulWidget {
   final String markdownPath;
   final String fallbackLabel;
   final bool expand;
+  final VaultAttachmentBytesLoader loader;
   final Listenable? refreshListenable;
 
   @override
@@ -763,7 +764,8 @@ class _VaultAttachmentImageState extends State<_VaultAttachmentImage> {
       widget.refreshListenable?.addListener(_reload);
     }
     if (oldWidget.rootPath != widget.rootPath ||
-        oldWidget.markdownPath != widget.markdownPath) {
+        oldWidget.markdownPath != widget.markdownPath ||
+        oldWidget.loader != widget.loader) {
       _bytes = null;
       _initialLoadPending = true;
       _startLoad();
@@ -778,7 +780,7 @@ class _VaultAttachmentImageState extends State<_VaultAttachmentImage> {
   }
 
   Future<Uint8List?> _load() =>
-      loadVaultAttachment(widget.rootPath, widget.markdownPath);
+      widget.loader(widget.rootPath, widget.markdownPath);
 
   void _startLoad() {
     final generation = ++_loadGeneration;
