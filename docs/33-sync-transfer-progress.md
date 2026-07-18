@@ -6,4 +6,4 @@ The progress model reports the current phase, journal round, attachment name, co
 
 The final report distinguishes journal records from attachment files and includes sent/received bytes, applied tombstones, and path conflicts. A failed manual exchange can be retried with the same unexpired offer without reopening the camera.
 
-This release does not yet provide cancellation or per-file selective retry. Those require a resumable transfer protocol and are intentionally deferred rather than simulated in the UI.
+The next release adds cancellation and selective retry at file granularity. Byte-range continuation inside one partially transferred file remains outside this progress-only release.

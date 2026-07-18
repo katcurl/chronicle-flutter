@@ -412,6 +412,7 @@ enum LanSyncProgressStage {
   downloadingAttachment,
   applyingAttachmentMetadata,
   uploadingAttachment,
+  retryingAttachment,
   finalizing,
 }
 
@@ -424,6 +425,7 @@ class LanSyncProgress {
     this.bytesTransferred = 0,
     this.totalBytes = 0,
     this.currentFileName,
+    this.retryAttempt = 0,
   });
 
   final LanSyncProgressStage stage;
@@ -433,11 +435,13 @@ class LanSyncProgress {
   final int bytesTransferred;
   final int totalBytes;
   final String? currentFileName;
+  final int retryAttempt;
 
   double? get fraction {
     final transferringBytes =
         stage == LanSyncProgressStage.downloadingAttachment ||
-        stage == LanSyncProgressStage.uploadingAttachment;
+        stage == LanSyncProgressStage.uploadingAttachment ||
+        stage == LanSyncProgressStage.retryingAttachment;
     if (transferringBytes && totalBytes > 0) {
       return (bytesTransferred / totalBytes).clamp(0.0, 1.0).toDouble();
     }

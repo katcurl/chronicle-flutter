@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/app_store.dart';
 import '../sync/lan_sync_models.dart';
+import '../sync/lan_sync_resilience.dart';
 import '../sync/sync_models.dart';
 import '../widgets/desktop_navigation.dart';
 
@@ -32,9 +33,11 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
   String? errorMessage;
   bool handlingCode = false;
   String? lastOffer;
+  LanSyncCancellationToken? cancellationToken;
 
   @override
   void dispose() {
+    cancellationToken?.cancel();
     unawaited(controller.dispose());
     super.dispose();
   }
@@ -168,6 +171,12 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
                           ),
                     ),
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 18),
+                  OutlinedButton.icon(
+                    onPressed: _cancelSync,
+                    icon: const Icon(Icons.stop_circle_outlined),
+                    label: const Text('Отменить синхронизацию'),
                   ),
                 ],
               ),
@@ -340,6 +349,8 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
     }
     handlingCode = true;
     lastOffer = raw;
+    final token = LanSyncCancellationToken();
+    cancellationToken = token;
     await controller.stop();
     if (mounted) {
       setState(() {
@@ -359,6 +370,7 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
             setState(() => syncProgress = value);
           }
         },
+        cancellationToken: token,
       );
       if (mounted) {
         setState(() {
@@ -374,8 +386,15 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
         });
       }
     } finally {
+      if (identical(cancellationToken, token)) {
+        cancellationToken = null;
+      }
       handlingCode = false;
     }
+  }
+
+  void _cancelSync() {
+    cancellationToken?.cancel();
   }
 
   Future<void> _retryLastOffer() async {
@@ -451,6 +470,7 @@ String _progressTitle(LanSyncProgress progress) => switch (progress.stage) {
   LanSyncProgressStage.exchangingJournal => 'Синхронизируем записи',
   LanSyncProgressStage.downloadingAttachment => 'Получаем вложение',
   LanSyncProgressStage.uploadingAttachment => 'Отправляем вложение',
+  LanSyncProgressStage.retryingAttachment => 'Повторяем передачу вложения',
   LanSyncProgressStage.applyingAttachmentMetadata =>
     'Применяем изменения вложений',
   LanSyncProgressStage.finalizing => 'Завершаем синхронизацию',
@@ -460,6 +480,9 @@ String _progressDetails(LanSyncProgress progress) {
   final parts = <String>[];
   if (progress.currentFileName case final fileName?) {
     parts.add(fileName);
+  }
+  if (progress.retryAttempt > 0) {
+    parts.add('попытка ${progress.retryAttempt} из 3');
   }
   if (progress.totalItems > 0) {
     parts.add('${progress.completedItems} из ${progress.totalItems}');
@@ -481,6 +504,9 @@ String _progressDetails(LanSyncProgress progress) {
 String _friendlyError(Object error) {
   final raw = error.toString().replaceFirst('Bad state: ', '').trim();
   final lower = raw.toLowerCase();
+  if (error is LanSyncCancelledException || lower.contains('синхронизация отменена')) {
+    return 'Синхронизация отменена. Уже переданные файлы сохранены; при повторе Chronicle продолжит с оставшихся.';
+  }
   if (lower.contains('socketexception') ||
       lower.contains('connection refused') ||
       lower.contains('network is unreachable')) {

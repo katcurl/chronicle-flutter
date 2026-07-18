@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import 'attachment_sync_models.dart';
 import 'lan_address_selector.dart';
 import 'lan_sync_models.dart';
+import 'lan_sync_resilience.dart';
 import 'pairing_crypto.dart';
 import 'pairing_models.dart';
 import 'sync_models.dart';
@@ -138,6 +139,7 @@ class LanSyncHostSession {
   final StreamController<LanSyncProgress> _progressController =
       StreamController<LanSyncProgress>.broadcast();
   final Map<String, _PendingSyncRound> _pendingRounds = {};
+  final Set<String> _completedAttachmentTransfers = <String>{};
   int _attachmentFilesReceived = 0;
   int _attachmentFilesSent = 0;
   int _attachmentBytesReceived = 0;
@@ -312,6 +314,9 @@ class LanSyncHostSession {
       return;
     }
 
+    final repeatedTransfer = _completedAttachmentTransfers.contains(
+      command.transferId,
+    );
     Uint8List? responseBytes;
     var changed = false;
     switch (command.kind) {
@@ -325,69 +330,84 @@ class LanSyncHostSession {
           throw StateError('attachment_not_found');
         }
         _validateTransferredBytes(command.entry, responseBytes);
-        _attachmentFilesSent += 1;
-        _attachmentBytesSent += responseBytes.length;
-        _attachmentWorkCompleted += 1;
-        _attachmentBytesTransferred += responseBytes.length;
+        if (!repeatedTransfer) {
+          _attachmentFilesSent += 1;
+          _attachmentBytesSent += responseBytes.length;
+          _attachmentWorkCompleted += 1;
+          _attachmentBytesTransferred += responseBytes.length;
+        }
         _emitHostProgress(
           stage: LanSyncProgressStage.downloadingAttachment,
           currentFileName: _attachmentDisplayName(command.entry),
         );
         break;
       case LanAttachmentCommandKind.upload:
-        _requirePlannedAction(
-          local: await _buildAttachmentManifest(),
-          remoteEntry: command.entry,
-          expected: LanAttachmentCommandKind.upload,
+        final uploadManifest = await _buildAttachmentManifest();
+        final uploadAlreadyApplied = _manifestContainsExactEntry(
+          uploadManifest,
+          command.entry,
         );
-        final raw = command.dataBase64;
-        if (raw == null || raw.isEmpty) {
-          throw const FormatException('Attachment payload is missing.');
+        if (!uploadAlreadyApplied) {
+          _requirePlannedAction(
+            local: uploadManifest,
+            remoteEntry: command.entry,
+            expected: LanAttachmentCommandKind.upload,
+          );
+          final raw = command.dataBase64;
+          if (raw == null || raw.isEmpty) {
+            throw const FormatException('Attachment payload is missing.');
+          }
+          final bytes = base64Decode(raw);
+          _validateTransferredBytes(command.entry, bytes);
+          final uploadResult = await _storeAttachment(command.entry, bytes);
+          changed = uploadResult.changed;
+          _attachmentFilesReceived += 1;
+          _attachmentBytesReceived += bytes.length;
+          _attachmentWorkCompleted += 1;
+          _attachmentBytesTransferred += bytes.length;
         }
-        final bytes = base64Decode(raw);
-        _validateTransferredBytes(command.entry, bytes);
-        final uploadResult = await _storeAttachment(command.entry, bytes);
-        changed = uploadResult.changed;
-        _attachmentFilesReceived += 1;
-        _attachmentBytesReceived += bytes.length;
-        _attachmentWorkCompleted += 1;
-        _attachmentBytesTransferred += bytes.length;
         _emitHostProgress(
           stage: LanSyncProgressStage.uploadingAttachment,
           currentFileName: _attachmentDisplayName(command.entry),
         );
         break;
       case LanAttachmentCommandKind.record:
-        _requirePlannedAction(
-          local: await _buildAttachmentManifest(),
-          remoteEntry: command.entry,
-          expected: LanAttachmentCommandKind.record,
-        );
-        final recordResult = await _applyAttachmentRecord(command.entry);
-        changed = recordResult.changed;
-        if (recordResult.changed) {
-          _attachmentRecordsApplied += 1;
+        final recordManifest = await _buildAttachmentManifest();
+        if (!_manifestContainsExactEntry(recordManifest, command.entry)) {
+          _requirePlannedAction(
+            local: recordManifest,
+            remoteEntry: command.entry,
+            expected: LanAttachmentCommandKind.record,
+          );
+          final recordResult = await _applyAttachmentRecord(command.entry);
+          changed = recordResult.changed;
+          if (recordResult.changed) {
+            _attachmentRecordsApplied += 1;
+          }
+          _attachmentWorkCompleted += 1;
         }
-        _attachmentWorkCompleted += 1;
         _emitHostProgress(
           stage: LanSyncProgressStage.applyingAttachmentMetadata,
           currentFileName: _attachmentDisplayName(command.entry),
         );
         break;
       case LanAttachmentCommandKind.tombstone:
-        _requirePlannedAction(
-          local: await _buildAttachmentManifest(),
-          remoteEntry: command.entry,
-          expected: LanAttachmentCommandKind.tombstone,
-        );
-        final tombstoneResult = await _applyAttachmentTombstone(
-          command.entry,
-        );
-        changed = tombstoneResult.changed;
-        if (tombstoneResult.changed) {
-          _attachmentTombstonesApplied += 1;
+        final tombstoneManifest = await _buildAttachmentManifest();
+        if (!_manifestContainsExactEntry(tombstoneManifest, command.entry)) {
+          _requirePlannedAction(
+            local: tombstoneManifest,
+            remoteEntry: command.entry,
+            expected: LanAttachmentCommandKind.tombstone,
+          );
+          final tombstoneResult = await _applyAttachmentTombstone(
+            command.entry,
+          );
+          changed = tombstoneResult.changed;
+          if (tombstoneResult.changed) {
+            _attachmentTombstonesApplied += 1;
+          }
+          _attachmentWorkCompleted += 1;
         }
-        _attachmentWorkCompleted += 1;
         _emitHostProgress(
           stage: LanSyncProgressStage.applyingAttachmentMetadata,
           currentFileName: _attachmentDisplayName(command.entry),
@@ -395,6 +415,7 @@ class LanSyncHostSession {
         break;
     }
 
+    _completedAttachmentTransfers.add(command.transferId);
     final unsigned = LanAttachmentCommandResponse(
       sessionId: sessionId,
       transferId: command.transferId,
@@ -503,6 +524,7 @@ class LanSyncHostSession {
     _attachmentWorkCompleted = 0;
     _attachmentBytesTotal = 0;
     _attachmentBytesTransferred = 0;
+    _completedAttachmentTransfers.clear();
     _pendingRounds.remove(ack.roundId);
     _reportController.add(report);
     await _jsonResponse(request.response, HttpStatus.ok, {
@@ -577,7 +599,9 @@ class LanSyncClient {
     required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
     RemoteAppliedCallback? onRemoteApplied,
     LanSyncProgressCallback? onProgress,
+    LanSyncCancellationToken? cancellationToken,
   }) async {
+    cancellationToken?.throwIfCancelled();
     if (offer.isExpired) {
       throw StateError('Срок действия кода синхронизации истёк.');
     }
@@ -594,6 +618,13 @@ class LanSyncClient {
       const LanSyncProgress(stage: LanSyncProgressStage.preparing),
     );
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    if (cancellationToken != null) {
+      unawaited(
+        cancellationToken.whenCancelled.then((_) {
+          client.close(force: true);
+        }),
+      );
+    }
     var roundCount = 0;
     var sentCount = 0;
     var receivedCount = 0;
@@ -614,6 +645,7 @@ class LanSyncClient {
 
     try {
       do {
+        cancellationToken?.throwIfCancelled();
         roundCount++;
         onProgress?.call(
           LanSyncProgress(
@@ -655,12 +687,14 @@ class LanSyncClient {
           attachmentManifest: attachmentManifest,
           signature: requestSignature,
         );
+        cancellationToken?.throwIfCancelled();
         final rawResponse = await _postJson(
           client,
           offer,
           '/v1/sync/exchange',
           request.toJson(),
         );
+        cancellationToken?.throwIfCancelled();
         if (rawResponse.statusCode != HttpStatus.ok) {
           throw StateError(_friendlySyncError(rawResponse.json));
         }
@@ -704,6 +738,7 @@ class LanSyncClient {
         }
 
         for (final entry in expectedPlanFromPeer.files) {
+          final transferId = const Uuid().v4();
           onProgress?.call(
             LanSyncProgress(
               stage: LanSyncProgressStage.downloadingAttachment,
@@ -715,14 +750,34 @@ class LanSyncClient {
               currentFileName: _attachmentDisplayName(entry),
             ),
           );
-          final response = await _sendAttachmentCommand(
-            client: client,
-            offer: offer,
-            local: local,
-            trustedHost: trustedHost,
-            crypto: crypto,
-            kind: LanAttachmentCommandKind.download,
-            entry: entry,
+          final response = await runLanSyncOperationWithRetry(
+            operation: (_) => _sendAttachmentCommand(
+              client: client,
+              offer: offer,
+              local: local,
+              trustedHost: trustedHost,
+              crypto: crypto,
+              kind: LanAttachmentCommandKind.download,
+              entry: entry,
+              transferId: transferId,
+              cancellationToken: cancellationToken,
+            ),
+            shouldRetry: _isRetryableTransferError,
+            cancellationToken: cancellationToken,
+            onRetry: (nextAttempt, _) {
+              onProgress?.call(
+                LanSyncProgress(
+                  stage: LanSyncProgressStage.retryingAttachment,
+                  round: roundCount,
+                  completedItems: attachmentWorkCompleted,
+                  totalItems: attachmentWorkTotal,
+                  bytesTransferred: attachmentBytesTransferred,
+                  totalBytes: attachmentBytesTotal,
+                  currentFileName: _attachmentDisplayName(entry),
+                  retryAttempt: nextAttempt,
+                ),
+              );
+            },
           );
           final raw = response.dataBase64;
           if (raw == null || raw.isEmpty) {
@@ -785,6 +840,7 @@ class LanSyncClient {
         }
 
         for (final entry in expectedPlanByPeer.files) {
+          final transferId = const Uuid().v4();
           onProgress?.call(
             LanSyncProgress(
               stage: LanSyncProgressStage.uploadingAttachment,
@@ -803,15 +859,35 @@ class LanSyncClient {
             );
           }
           _validateTransferredBytes(entry, bytes);
-          await _sendAttachmentCommand(
-            client: client,
-            offer: offer,
-            local: local,
-            trustedHost: trustedHost,
-            crypto: crypto,
-            kind: LanAttachmentCommandKind.upload,
-            entry: entry,
-            dataBase64: base64Encode(bytes),
+          await runLanSyncOperationWithRetry(
+            operation: (_) => _sendAttachmentCommand(
+              client: client,
+              offer: offer,
+              local: local,
+              trustedHost: trustedHost,
+              crypto: crypto,
+              kind: LanAttachmentCommandKind.upload,
+              entry: entry,
+              dataBase64: base64Encode(bytes),
+              transferId: transferId,
+              cancellationToken: cancellationToken,
+            ),
+            shouldRetry: _isRetryableTransferError,
+            cancellationToken: cancellationToken,
+            onRetry: (nextAttempt, _) {
+              onProgress?.call(
+                LanSyncProgress(
+                  stage: LanSyncProgressStage.retryingAttachment,
+                  round: roundCount,
+                  completedItems: attachmentWorkCompleted,
+                  totalItems: attachmentWorkTotal,
+                  bytesTransferred: attachmentBytesTransferred,
+                  totalBytes: attachmentBytesTotal,
+                  currentFileName: _attachmentDisplayName(entry),
+                  retryAttempt: nextAttempt,
+                ),
+              );
+            },
           );
           attachmentFilesSent += 1;
           attachmentBytesSent += bytes.length;
@@ -830,6 +906,7 @@ class LanSyncClient {
           );
         }
         for (final entry in expectedPlanByPeer.records) {
+          final transferId = const Uuid().v4();
           onProgress?.call(
             LanSyncProgress(
               stage: LanSyncProgressStage.applyingAttachmentMetadata,
@@ -841,18 +918,39 @@ class LanSyncClient {
               currentFileName: _attachmentDisplayName(entry),
             ),
           );
-          await _sendAttachmentCommand(
-            client: client,
-            offer: offer,
-            local: local,
-            trustedHost: trustedHost,
-            crypto: crypto,
-            kind: LanAttachmentCommandKind.record,
-            entry: entry,
+          await runLanSyncOperationWithRetry(
+            operation: (_) => _sendAttachmentCommand(
+              client: client,
+              offer: offer,
+              local: local,
+              trustedHost: trustedHost,
+              crypto: crypto,
+              kind: LanAttachmentCommandKind.record,
+              entry: entry,
+              transferId: transferId,
+              cancellationToken: cancellationToken,
+            ),
+            shouldRetry: _isRetryableTransferError,
+            cancellationToken: cancellationToken,
+            onRetry: (nextAttempt, _) {
+              onProgress?.call(
+                LanSyncProgress(
+                  stage: LanSyncProgressStage.retryingAttachment,
+                  round: roundCount,
+                  completedItems: attachmentWorkCompleted,
+                  totalItems: attachmentWorkTotal,
+                  bytesTransferred: attachmentBytesTransferred,
+                  totalBytes: attachmentBytesTotal,
+                  currentFileName: _attachmentDisplayName(entry),
+                  retryAttempt: nextAttempt,
+                ),
+              );
+            },
           );
           attachmentWorkCompleted += 1;
         }
         for (final entry in expectedPlanByPeer.tombstones) {
+          final transferId = const Uuid().v4();
           onProgress?.call(
             LanSyncProgress(
               stage: LanSyncProgressStage.applyingAttachmentMetadata,
@@ -864,14 +962,34 @@ class LanSyncClient {
               currentFileName: _attachmentDisplayName(entry),
             ),
           );
-          await _sendAttachmentCommand(
-            client: client,
-            offer: offer,
-            local: local,
-            trustedHost: trustedHost,
-            crypto: crypto,
-            kind: LanAttachmentCommandKind.tombstone,
-            entry: entry,
+          await runLanSyncOperationWithRetry(
+            operation: (_) => _sendAttachmentCommand(
+              client: client,
+              offer: offer,
+              local: local,
+              trustedHost: trustedHost,
+              crypto: crypto,
+              kind: LanAttachmentCommandKind.tombstone,
+              entry: entry,
+              transferId: transferId,
+              cancellationToken: cancellationToken,
+            ),
+            shouldRetry: _isRetryableTransferError,
+            cancellationToken: cancellationToken,
+            onRetry: (nextAttempt, _) {
+              onProgress?.call(
+                LanSyncProgress(
+                  stage: LanSyncProgressStage.retryingAttachment,
+                  round: roundCount,
+                  completedItems: attachmentWorkCompleted,
+                  totalItems: attachmentWorkTotal,
+                  bytesTransferred: attachmentBytesTransferred,
+                  totalBytes: attachmentBytesTotal,
+                  currentFileName: _attachmentDisplayName(entry),
+                  retryAttempt: nextAttempt,
+                ),
+              );
+            },
           );
           attachmentWorkCompleted += 1;
         }
@@ -927,6 +1045,9 @@ class LanSyncClient {
         unsupportedCount += applied.unsupportedCount;
         hasMore = outgoing.hasMore || response.batch.hasMore;
       } while (hasMore);
+    } on Object {
+      cancellationToken?.throwIfCancelled();
+      rethrow;
     } finally {
       client.close(force: true);
     }
@@ -971,12 +1092,15 @@ class LanSyncClient {
     required LanAttachmentCommandKind kind,
     required AttachmentSyncEntry entry,
     String? dataBase64,
+    String? transferId,
+    LanSyncCancellationToken? cancellationToken,
   }) async {
-    final transferId = const Uuid().v4();
+    cancellationToken?.throwIfCancelled();
+    final effectiveTransferId = transferId ?? const Uuid().v4();
     final unsigned = LanAttachmentCommand(
       sessionId: offer.sessionId,
       token: offer.token,
-      transferId: transferId,
+      transferId: effectiveTransferId,
       peer: local.peer,
       kind: kind,
       entry: entry,
@@ -990,25 +1114,27 @@ class LanSyncClient {
     final command = LanAttachmentCommand(
       sessionId: offer.sessionId,
       token: offer.token,
-      transferId: transferId,
+      transferId: effectiveTransferId,
       peer: local.peer,
       kind: kind,
       entry: entry,
       dataBase64: dataBase64,
       signature: signature,
     );
+    cancellationToken?.throwIfCancelled();
     final rawResponse = await _postJson(
       client,
       offer,
       '/v1/sync/attachment',
       command.toJson(),
     );
+    cancellationToken?.throwIfCancelled();
     if (rawResponse.statusCode != HttpStatus.ok) {
       throw StateError(_friendlySyncError(rawResponse.json));
     }
     final response = LanAttachmentCommandResponse.fromJson(rawResponse.json);
     if (response.sessionId != offer.sessionId ||
-        response.transferId != transferId ||
+        response.transferId != effectiveTransferId ||
         response.hostPeer.deviceId != trustedHost.deviceId ||
         response.hostPeer.publicKey != trustedHost.publicKey ||
         response.kind != kind ||
@@ -1168,6 +1294,34 @@ void _requirePlannedAction({
   if (!allowed.any((entry) => _sameAttachmentEntry(entry, remoteEntry))) {
     throw StateError('attachment_action_not_allowed');
   }
+}
+
+bool _manifestContainsExactEntry(
+  AttachmentSyncManifest manifest,
+  AttachmentSyncEntry expected,
+) {
+  return manifest.entries.any(
+    (entry) => _sameAttachmentEntry(entry, expected),
+  );
+}
+
+bool _isRetryableTransferError(Object error) {
+  if (error is SocketException ||
+      error is HttpException ||
+      error is TimeoutException) {
+    return true;
+  }
+  final message = error.toString().toLowerCase();
+  const retryableFragments = <String>[
+    'connection reset',
+    'connection closed',
+    'broken pipe',
+    'timed out',
+    'timeout',
+    'temporarily unavailable',
+    'software caused connection abort',
+  ];
+  return retryableFragments.any(message.contains);
 }
 
 bool _sameAttachmentEntry(

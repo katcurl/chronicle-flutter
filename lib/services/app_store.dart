@@ -14,6 +14,7 @@ import '../sync/lan_auto_sync_models.dart';
 import '../sync/lan_auto_sync_service.dart';
 import '../sync/lan_auto_sync_transport.dart';
 import '../sync/lan_sync_models.dart';
+import '../sync/lan_sync_resilience.dart';
 import '../sync/lan_sync_service.dart';
 import '../sync/lan_sync_transport.dart';
 import '../sync/pairing_service.dart';
@@ -738,6 +739,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     String rawOffer, {
     required String expectedPeerDeviceId,
     LanSyncProgressCallback? onProgress,
+    LanSyncCancellationToken? cancellationToken,
   }) async {
     if (lanSyncBusy) {
       throw StateError('Синхронизация уже выполняется.');
@@ -758,6 +760,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         expectedPeerDeviceId: expectedPeerDeviceId,
         onRemoteApplied: (_) => refreshAfterLanSync(),
         onProgress: onProgress,
+        cancellationToken: cancellationToken,
       );
       await refreshAfterLanSync(report: report);
       await _recordSyncSuccess(
@@ -767,10 +770,13 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       );
       return report;
     } on Object catch (error) {
+      final cancelled = error is LanSyncCancelledException;
       await _recordReliability(
         stage: ReliabilityStage.connection,
-        level: ReliabilityLevel.error,
-        message: 'Ручная LAN-синхронизация не выполнена.',
+        level: cancelled ? ReliabilityLevel.info : ReliabilityLevel.error,
+        message: cancelled
+            ? 'Ручная LAN-синхронизация отменена пользователем.'
+            : 'Ручная LAN-синхронизация не выполнена.',
         peerDeviceId: expectedPeerDeviceId,
         details: <String, Object?>{'error': _friendlyLanError(error)},
         notify: false,

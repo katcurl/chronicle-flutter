@@ -26,6 +26,20 @@ void main() {
     expect(progress.fraction, 0.75);
   });
 
+  test('LAN sync progress exposes selective retry attempt', () {
+    const progress = LanSyncProgress(
+      stage: LanSyncProgressStage.retryingAttachment,
+      completedItems: 2,
+      totalItems: 5,
+      currentFileName: 'trajectory.zip',
+      retryAttempt: 2,
+    );
+
+    expect(progress.fraction, 0.4);
+    expect(progress.retryAttempt, 2);
+    expect(progress.currentFileName, 'trajectory.zip');
+  });
+
   test('LAN sync progress is indeterminate without known totals', () {
     const progress = LanSyncProgress(
       stage: LanSyncProgressStage.preparing,

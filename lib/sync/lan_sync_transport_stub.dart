@@ -1,5 +1,6 @@
 import 'attachment_sync_models.dart';
 import 'lan_sync_models.dart';
+import 'lan_sync_resilience.dart';
 import 'pairing_crypto.dart';
 import 'pairing_models.dart';
 import 'sync_models.dart';
@@ -69,6 +70,7 @@ class LanSyncClient {
     required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
     RemoteAppliedCallback? onRemoteApplied,
     LanSyncProgressCallback? onProgress,
+    LanSyncCancellationToken? cancellationToken,
   }) {
     throw UnsupportedError(
       'LAN-синхронизация доступна в нативных Android и desktop-сборках.',

@@ -72,6 +72,13 @@ class _SyncHostScreenState extends State<SyncHostScreen> {
     }
   }
 
+  Future<void> _cancelHostSync() async {
+    await session?.close();
+    if (mounted) {
+      Navigator.pop(context);
+    }
+  }
+
   @override
   void dispose() {
     countdownTimer?.cancel();
@@ -256,6 +263,12 @@ class _SyncHostScreenState extends State<SyncHostScreen> {
                     _progressDetails(syncProgress!),
                     textAlign: TextAlign.center,
                   ),
+                  const SizedBox(height: 14),
+                  OutlinedButton.icon(
+                    onPressed: _cancelHostSync,
+                    icon: const Icon(Icons.stop_circle_outlined),
+                    label: const Text('Отменить синхронизацию'),
+                  ),
                 ],
                 if (currentReport != null) ...[
                   const SizedBox(height: 8),
@@ -280,6 +293,7 @@ String _progressTitle(LanSyncProgress progress) => switch (progress.stage) {
   LanSyncProgressStage.exchangingJournal => 'Синхронизируем записи…',
   LanSyncProgressStage.downloadingAttachment => 'Отправляем вложение…',
   LanSyncProgressStage.uploadingAttachment => 'Получаем вложение…',
+  LanSyncProgressStage.retryingAttachment => 'Повторяем передачу вложения…',
   LanSyncProgressStage.applyingAttachmentMetadata =>
     'Применяем изменения вложений…',
   LanSyncProgressStage.finalizing => 'Завершаем синхронизацию…',
@@ -289,6 +303,9 @@ String _progressDetails(LanSyncProgress progress) {
   final parts = <String>[];
   if (progress.currentFileName case final fileName?) {
     parts.add(fileName);
+  }
+  if (progress.retryAttempt > 0) {
+    parts.add('попытка ${progress.retryAttempt} из 3');
   }
   if (progress.totalItems > 0) {
     parts.add('${progress.completedItems} из ${progress.totalItems}');

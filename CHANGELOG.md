@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.21.7+43
+
+- Added explicit cancellation for active manual LAN synchronization on both devices.
+- Added automatic per-file retry for transient Wi-Fi, VPN, timeout, and connection-reset failures.
+- Made upload, metadata, and tombstone commands idempotent so a lost response can be retried safely.
+- Kept successfully transferred files in the Vault; repeating the same offer recalculates the manifest and continues with the remaining files.
+- Added retry-attempt progress messages and a cancellation-specific recovery explanation.
+- Added deterministic tests for cancellation and selective retry behavior.
+
 ## 0.21.6+42
 
 - Added live LAN sync progress for journal rounds and attachment transfers.

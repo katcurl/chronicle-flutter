@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../data/repositories/app_repository.dart';
 import 'attachment_sync_models.dart';
 import 'lan_sync_models.dart';
+import 'lan_sync_resilience.dart';
 import 'lan_sync_transport.dart';
 import 'pairing_crypto.dart';
 import 'pairing_models.dart';
@@ -80,6 +81,7 @@ class LanSyncService {
     required String expectedPeerDeviceId,
     Future<void> Function(SyncApplyResult result)? onRemoteApplied,
     LanSyncProgressCallback? onProgress,
+    LanSyncCancellationToken? cancellationToken,
   }) async {
     final offer = LanSyncOffer.decode(rawOffer);
     if (offer.hostPeer.deviceId != expectedPeerDeviceId) {
@@ -104,6 +106,7 @@ class LanSyncService {
       applyAttachmentTombstone: _applyAttachmentTombstone,
       onRemoteApplied: onRemoteApplied,
       onProgress: onProgress,
+      cancellationToken: cancellationToken,
     );
   }
 
