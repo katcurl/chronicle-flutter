@@ -368,6 +368,7 @@ class NoteWorkspaceScreen extends StatefulWidget {
 class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   late final TextEditingController titleController;
   late final TextEditingController contentController;
+  late final ValueNotifier<String> _contentTextNotifier;
   late String projectId;
   late String status;
   late String folderPath;
@@ -375,6 +376,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   late List<String> tags;
   late Map<String, String> properties;
   late bool pinned;
+  late String _lastTitleText;
+  late String _lastContentText;
+  bool _suppressTextChangeTracking = false;
   bool dirty = false;
   int mode = 0;
 
@@ -384,6 +388,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     final parsed = NoteDocument.parse(widget.note.body);
     titleController = TextEditingController(text: widget.note.title);
     contentController = TextEditingController(text: parsed.content);
+    _contentTextNotifier = ValueNotifier<String>(parsed.content);
     projectId = widget.note.projectId;
     status = parsed.frontMatter['status'] ?? widget.note.status;
     folderPath = parsed.frontMatter['folder'] ?? widget.note.folderPath;
@@ -399,6 +404,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       }
     }
     pinned = widget.note.pinned;
+    _lastTitleText = titleController.text;
+    _lastContentText = contentController.text;
     titleController.addListener(_markDirty);
     contentController.addListener(_markDirty);
   }
@@ -407,11 +414,29 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   void dispose() {
     titleController.dispose();
     contentController.dispose();
+    _contentTextNotifier.dispose();
     super.dispose();
   }
 
   void _markDirty() {
-    if (mounted) setState(() => dirty = true);
+    if (_suppressTextChangeTracking) {
+      return;
+    }
+    final nextTitle = titleController.text;
+    final nextContent = contentController.text;
+    final titleChanged = nextTitle != _lastTitleText;
+    final contentChanged = nextContent != _lastContentText;
+    if (!titleChanged && !contentChanged) {
+      return;
+    }
+    _lastTitleText = nextTitle;
+    _lastContentText = nextContent;
+    if (contentChanged) {
+      _contentTextNotifier.value = nextContent;
+    }
+    if (!dirty && mounted) {
+      setState(() => dirty = true);
+    }
   }
 
   @override
@@ -629,15 +654,20 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   }
 
   Widget _previewPane() {
-    return NoteMarkdownView(
-      markdown: contentController.text,
-      onWikiLink: _openWikiLink,
-      onEditImage: _editImageReference,
-      onResizeImage: _replaceImagePresentation,
-      onEditColumns: _editColumnsReference,
-      onResizeColumns: _replaceColumnsWidths,
-      assetListenable: widget.store,
-      vaultRootPath: widget.store.vaultStatus.rootPath,
+    return ValueListenableBuilder<String>(
+      valueListenable: _contentTextNotifier,
+      builder: (context, text, _) {
+        return NoteMarkdownView(
+          markdown: text,
+          onWikiLink: _openWikiLink,
+          onEditImage: _editImageReference,
+          onResizeImage: _replaceImagePresentation,
+          onEditColumns: _editColumnsReference,
+          onResizeColumns: _replaceColumnsWidths,
+          assetListenable: widget.store,
+          vaultRootPath: widget.store.vaultStatus.rootPath,
+        );
+      },
     );
   }
 
@@ -647,8 +677,6 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     required List<WorkTask> linkedTasks,
     required List<NoteVersion> versions,
   }) {
-    final words = NoteDocument.wordCount(contentController.text);
-    final minutes = NoteDocument.readingMinutes(contentController.text);
     final seconds = widget.store.data.entries
         .where((entry) => entry.noteId == widget.note.id)
         .fold<int>(0, (sum, entry) => sum + entry.durationSeconds);
@@ -699,21 +727,34 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         const SizedBox(height: 10),
         _ContextCard(
           title: 'Статистика',
-          child: Wrap(
-            spacing: 14,
-            runSpacing: 8,
-            children: [
-              _StatChip(icon: Icons.text_fields_rounded, label: '$words слов'),
-              _StatChip(icon: Icons.menu_book_rounded, label: '$minutes мин'),
-              _StatChip(
-                icon: Icons.timer_outlined,
-                label: '${(seconds / 3600).toStringAsFixed(1)} ч',
-              ),
-              _StatChip(
-                icon: Icons.history_rounded,
-                label: 'rev ${widget.note.revision}',
-              ),
-            ],
+          child: ValueListenableBuilder<String>(
+            valueListenable: _contentTextNotifier,
+            builder: (context, text, _) {
+              final words = NoteDocument.wordCount(text);
+              final minutes = NoteDocument.readingMinutes(text);
+              return Wrap(
+                spacing: 14,
+                runSpacing: 8,
+                children: [
+                  _StatChip(
+                    icon: Icons.text_fields_rounded,
+                    label: '$words слов',
+                  ),
+                  _StatChip(
+                    icon: Icons.menu_book_rounded,
+                    label: '$minutes мин',
+                  ),
+                  _StatChip(
+                    icon: Icons.timer_outlined,
+                    label: '${(seconds / 3600).toStringAsFixed(1)} ч',
+                  ),
+                  _StatChip(
+                    icon: Icons.history_rounded,
+                    label: 'rev ${widget.note.revision}',
+                  ),
+                ],
+              );
+            },
           ),
         ),
         const SizedBox(height: 10),
@@ -825,6 +866,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       contentController.text,
     );
     widget.store.updateNote(widget.note);
+    _lastTitleText = titleController.text;
+    _lastContentText = contentController.text;
     if (mounted) setState(() => dirty = false);
   }
 
@@ -1401,8 +1444,13 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     );
     widget.store.restoreNoteVersion(widget.note, version);
     final parsed = NoteDocument.parse(widget.note.body);
+    _suppressTextChangeTracking = true;
     titleController.text = widget.note.title;
     contentController.text = parsed.content;
+    _suppressTextChangeTracking = false;
+    _lastTitleText = titleController.text;
+    _lastContentText = contentController.text;
+    _contentTextNotifier.value = _lastContentText;
     setState(() {
       projectId = widget.note.projectId;
       status = widget.note.status;
@@ -1430,7 +1478,7 @@ enum _NoteBlockAction {
   quote,
 }
 
-class _EditorToolbar extends StatelessWidget {
+class _EditorToolbar extends StatefulWidget {
   const _EditorToolbar({
     required this.controller,
     required this.onAttach,
@@ -1446,188 +1494,272 @@ class _EditorToolbar extends StatelessWidget {
   final ValueChanged<_NoteBlockAction> onBlockAction;
 
   @override
+  State<_EditorToolbar> createState() => _EditorToolbarState();
+}
+
+class _EditorToolbarState extends State<_EditorToolbar> {
+  static const _parseDelay = Duration(milliseconds: 90);
+
+  Timer? _parseTimer;
+  String _parsedText = '';
+  List<NoteBlockReference> _blocks = const [];
+  NoteBlockReference? _block;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_handleControllerChanged);
+    _parseNow(notify: false);
+  }
+
+  @override
+  void didUpdateWidget(covariant _EditorToolbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == widget.controller) {
+      return;
+    }
+    oldWidget.controller.removeListener(_handleControllerChanged);
+    widget.controller.addListener(_handleControllerChanged);
+    _parseTimer?.cancel();
+    _parseNow(notify: false);
+  }
+
+  @override
+  void dispose() {
+    _parseTimer?.cancel();
+    widget.controller.removeListener(_handleControllerChanged);
+    super.dispose();
+  }
+
+  void _handleControllerChanged() {
+    final value = widget.controller.value;
+    if (value.text != _parsedText) {
+      _parseTimer?.cancel();
+      _parseTimer = Timer(_parseDelay, () => _parseNow());
+      return;
+    }
+    final nextBlock = _findCurrentBlock(value);
+    if (_sameBlock(_block, nextBlock)) {
+      return;
+    }
+    setState(() => _block = nextBlock);
+  }
+
+  void _parseNow({bool notify = true}) {
+    _parseTimer?.cancel();
+    _parseTimer = null;
+    final value = widget.controller.value;
+    final blocks = NoteBlockSyntax.all(value.text);
+    final block = NoteBlockSyntax.findIn(
+      blocks,
+      value.text.length,
+      _selectionOffset(value),
+    );
+    if (!notify || !mounted) {
+      _parsedText = value.text;
+      _blocks = blocks;
+      _block = block;
+      return;
+    }
+    setState(() {
+      _parsedText = value.text;
+      _blocks = blocks;
+      _block = block;
+    });
+  }
+
+  NoteBlockReference? _findCurrentBlock(TextEditingValue value) {
+    return NoteBlockSyntax.findIn(
+      _blocks,
+      value.text.length,
+      _selectionOffset(value),
+    );
+  }
+
+  int _selectionOffset(TextEditingValue value) {
+    return value.selection.isValid
+        ? value.selection.extentOffset
+        : value.text.length;
+  }
+
+  bool _sameBlock(NoteBlockReference? left, NoteBlockReference? right) {
+    return left?.start == right?.start &&
+        left?.end == right?.end &&
+        left?.type == right?.type &&
+        left?.index == right?.index;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final block = _block;
+    final canMoveUp = block != null && block.index > 0;
+    final canMoveDown = block != null && block.index < _blocks.length - 1;
+    final canConvert = block?.supportsTextConversion ?? false;
+
     return SizedBox(
       height: 48,
-      child: ValueListenableBuilder<TextEditingValue>(
-        valueListenable: controller,
-        builder: (context, value, _) {
-          final offset =
-              value.selection.isValid
-                  ? value.selection.extentOffset
-                  : value.text.length;
-          final blocks = NoteBlockSyntax.all(value.text);
-          final block = NoteBlockSyntax.findIn(
-            blocks,
-            value.text.length,
-            offset,
-          );
-          final canMoveUp = block != null && block.index > 0;
-          final canMoveDown =
-              block != null && block.index < blocks.length - 1;
-          final canConvert = block?.supportsTextConversion ?? false;
-
-          return ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            children: [
-              if (block != null)
-                Tooltip(
-                  message: 'Текущий блок: ${block.label}',
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 6,
-                    ),
-                    child: Chip(
-                      avatar: const Icon(Icons.view_agenda_outlined, size: 16),
-                      label: Text(block.label),
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        children: [
+          Tooltip(
+            message:
+                block == null
+                    ? 'Помести курсор в блок заметки'
+                    : 'Текущий блок: ${block.label}',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              child: SizedBox(
+                width: 118,
+                child: Chip(
+                  avatar: const Icon(Icons.view_agenda_outlined, size: 16),
+                  label: Text(
+                    block?.label ?? 'Нет блока',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Переместить блок выше',
+            onPressed:
+                canMoveUp
+                    ? () => widget.onBlockAction(_NoteBlockAction.moveUp)
+                    : null,
+            icon: const Icon(Icons.keyboard_arrow_up_rounded),
+          ),
+          IconButton(
+            tooltip: 'Переместить блок ниже',
+            onPressed:
+                canMoveDown
+                    ? () => widget.onBlockAction(_NoteBlockAction.moveDown)
+                    : null,
+            icon: const Icon(Icons.keyboard_arrow_down_rounded),
+          ),
+          PopupMenuButton<_NoteBlockAction>(
+            tooltip: 'Действия с текущим блоком',
+            enabled: block != null,
+            onSelected: widget.onBlockAction,
+            itemBuilder:
+                (context) => [
+                  const PopupMenuItem(
+                    value: _NoteBlockAction.duplicate,
+                    child: ListTile(
+                      leading: Icon(Icons.copy_all_outlined),
+                      title: Text('Дублировать блок'),
+                      contentPadding: EdgeInsets.zero,
                     ),
                   ),
-                ),
-              IconButton(
-                tooltip: 'Переместить блок выше',
-                onPressed:
-                    canMoveUp
-                        ? () => onBlockAction(_NoteBlockAction.moveUp)
-                        : null,
-                icon: const Icon(Icons.keyboard_arrow_up_rounded),
-              ),
-              IconButton(
-                tooltip: 'Переместить блок ниже',
-                onPressed:
-                    canMoveDown
-                        ? () => onBlockAction(_NoteBlockAction.moveDown)
-                        : null,
-                icon: const Icon(Icons.keyboard_arrow_down_rounded),
-              ),
-              PopupMenuButton<_NoteBlockAction>(
-                tooltip: 'Действия с текущим блоком',
-                enabled: block != null,
-                onSelected: onBlockAction,
-                itemBuilder:
-                    (context) => [
-                      const PopupMenuItem(
-                        value: _NoteBlockAction.duplicate,
-                        child: ListTile(
-                          leading: Icon(Icons.copy_all_outlined),
-                          title: Text('Дублировать блок'),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: _NoteBlockAction.copy,
-                        child: ListTile(
-                          leading: Icon(Icons.content_copy_rounded),
-                          title: Text('Копировать Markdown'),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      const PopupMenuDivider(),
-                      PopupMenuItem(
-                        value: _NoteBlockAction.paragraph,
-                        enabled:
-                            canConvert &&
-                            block?.type != NoteBlockType.paragraph,
-                        child: const ListTile(
-                          leading: Icon(Icons.notes_rounded),
-                          title: Text('Преобразовать в абзац'),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: _NoteBlockAction.heading1,
-                        enabled: canConvert,
-                        child: const ListTile(
-                          leading: Icon(Icons.looks_one_outlined),
-                          title: Text('Преобразовать в заголовок 1'),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: _NoteBlockAction.heading2,
-                        enabled: canConvert,
-                        child: const ListTile(
-                          leading: Icon(Icons.looks_two_outlined),
-                          title: Text('Преобразовать в заголовок 2'),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: _NoteBlockAction.bulletedList,
-                        enabled:
-                            canConvert &&
-                            block?.type != NoteBlockType.bulletedList,
-                        child: const ListTile(
-                          leading: Icon(Icons.format_list_bulleted_rounded),
-                          title: Text('Преобразовать в список'),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: _NoteBlockAction.checklist,
-                        enabled:
-                            canConvert &&
-                            block?.type != NoteBlockType.checklist,
-                        child: const ListTile(
-                          leading: Icon(Icons.check_box_outlined),
-                          title: Text('Преобразовать в чек-лист'),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: _NoteBlockAction.quote,
-                        enabled:
-                            canConvert && block?.type != NoteBlockType.quote,
-                        child: const ListTile(
-                          leading: Icon(Icons.format_quote_rounded),
-                          title: Text('Преобразовать в цитату'),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      const PopupMenuDivider(),
-                      const PopupMenuItem(
-                        value: _NoteBlockAction.delete,
-                        child: ListTile(
-                          leading: Icon(Icons.delete_outline_rounded),
-                          title: Text('Удалить блок'),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
-                icon: const Icon(Icons.more_horiz_rounded),
-              ),
-              const VerticalDivider(indent: 10, endIndent: 10),
-              _button(Icons.title_rounded, '# ', ''),
-              _button(Icons.format_bold_rounded, '**', '**'),
-              _button(Icons.format_italic_rounded, '_', '_'),
-              _button(Icons.format_list_bulleted_rounded, '- ', ''),
-              _button(Icons.check_box_outlined, '- [ ] ', ''),
-              _button(Icons.link_rounded, '[[', ']]'),
-              _button(Icons.functions_rounded, r'$', r'$'),
-              _button(Icons.calculate_outlined, '\n\\[\n', '\n\\]\n'),
-              IconButton(
-                tooltip: 'Добавить локальное вложение',
-                onPressed: onAttach,
-                icon: const Icon(Icons.attach_file_rounded),
-              ),
-              IconButton(
-                tooltip: 'Размер, выравнивание и подпись изображения',
-                onPressed: onConfigureImage,
-                icon: const Icon(Icons.photo_size_select_large_rounded),
-              ),
-              IconButton(
-                tooltip: 'Вставить или настроить колонки',
-                onPressed: onConfigureColumns,
-                icon: const Icon(Icons.view_column_outlined),
-              ),
-              _button(Icons.image_outlined, '![описание](', ')'),
-              _button(Icons.code_rounded, '```\n', '\n```'),
-            ],
-          );
-        },
+                  const PopupMenuItem(
+                    value: _NoteBlockAction.copy,
+                    child: ListTile(
+                      leading: Icon(Icons.content_copy_rounded),
+                      title: Text('Копировать Markdown'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: _NoteBlockAction.paragraph,
+                    enabled:
+                        canConvert && block?.type != NoteBlockType.paragraph,
+                    child: const ListTile(
+                      leading: Icon(Icons.notes_rounded),
+                      title: Text('Преобразовать в абзац'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _NoteBlockAction.heading1,
+                    enabled: canConvert,
+                    child: const ListTile(
+                      leading: Icon(Icons.looks_one_outlined),
+                      title: Text('Преобразовать в заголовок 1'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _NoteBlockAction.heading2,
+                    enabled: canConvert,
+                    child: const ListTile(
+                      leading: Icon(Icons.looks_two_outlined),
+                      title: Text('Преобразовать в заголовок 2'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _NoteBlockAction.bulletedList,
+                    enabled:
+                        canConvert &&
+                        block?.type != NoteBlockType.bulletedList,
+                    child: const ListTile(
+                      leading: Icon(Icons.format_list_bulleted_rounded),
+                      title: Text('Преобразовать в список'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _NoteBlockAction.checklist,
+                    enabled:
+                        canConvert && block?.type != NoteBlockType.checklist,
+                    child: const ListTile(
+                      leading: Icon(Icons.check_box_outlined),
+                      title: Text('Преобразовать в чек-лист'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _NoteBlockAction.quote,
+                    enabled: canConvert && block?.type != NoteBlockType.quote,
+                    child: const ListTile(
+                      leading: Icon(Icons.format_quote_rounded),
+                      title: Text('Преобразовать в цитату'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    value: _NoteBlockAction.delete,
+                    child: ListTile(
+                      leading: Icon(Icons.delete_outline_rounded),
+                      title: Text('Удалить блок'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+            icon: const Icon(Icons.more_horiz_rounded),
+          ),
+          const VerticalDivider(indent: 10, endIndent: 10),
+          _button(Icons.title_rounded, '# ', ''),
+          _button(Icons.format_bold_rounded, '**', '**'),
+          _button(Icons.format_italic_rounded, '_', '_'),
+          _button(Icons.format_list_bulleted_rounded, '- ', ''),
+          _button(Icons.check_box_outlined, '- [ ] ', ''),
+          _button(Icons.link_rounded, '[[', ']]'),
+          _button(Icons.functions_rounded, r'$', r'$'),
+          _button(Icons.calculate_outlined, '\n\\[\n', '\n\\]\n'),
+          IconButton(
+            tooltip: 'Добавить локальное вложение',
+            onPressed: widget.onAttach,
+            icon: const Icon(Icons.attach_file_rounded),
+          ),
+          IconButton(
+            tooltip: 'Размер, выравнивание и подпись изображения',
+            onPressed: widget.onConfigureImage,
+            icon: const Icon(Icons.photo_size_select_large_rounded),
+          ),
+          IconButton(
+            tooltip: 'Вставить или настроить колонки',
+            onPressed: widget.onConfigureColumns,
+            icon: const Icon(Icons.view_column_outlined),
+          ),
+          _button(Icons.image_outlined, '![описание](', ')'),
+          _button(Icons.code_rounded, '```\n', '\n```'),
+        ],
       ),
     );
   }
@@ -1640,13 +1772,13 @@ class _EditorToolbar extends StatelessWidget {
   }
 
   void _wrapSelection(String before, String after) {
-    final value = controller.value;
+    final value = widget.controller.value;
     final selection = value.selection;
     final start = selection.isValid ? selection.start : value.text.length;
     final end = selection.isValid ? selection.end : value.text.length;
     final selected = value.text.substring(start, end);
     final replacement = '$before$selected$after';
-    controller.value = value.copyWith(
+    widget.controller.value = value.copyWith(
       text: value.text.replaceRange(start, end, replacement),
       selection: TextSelection.collapsed(
         offset: start + before.length + selected.length,

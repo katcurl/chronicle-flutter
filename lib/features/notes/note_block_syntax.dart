@@ -369,24 +369,32 @@ class NoteBlockSyntax {
       return null;
     }
     final safeOffset = offset.clamp(0, sourceLength).toInt();
-    for (final block in blocks) {
-      if (safeOffset >= block.start && safeOffset <= block.end) {
+    var low = 0;
+    var high = blocks.length - 1;
+
+    while (low <= high) {
+      final middle = low + ((high - low) >> 1);
+      final block = blocks[middle];
+      if (safeOffset < block.start) {
+        high = middle - 1;
+      } else if (safeOffset > block.end) {
+        low = middle + 1;
+      } else {
         return block;
       }
     }
-    NoteBlockReference? previous;
-    for (final block in blocks) {
-      if (block.start > safeOffset) {
-        if (previous == null) {
-          return block;
-        }
-        return safeOffset - previous.end <= block.start - safeOffset
-            ? previous
-            : block;
-      }
-      previous = block;
+
+    final previous = high >= 0 ? blocks[high] : null;
+    final next = low < blocks.length ? blocks[low] : null;
+    if (previous == null) {
+      return next;
     }
-    return previous;
+    if (next == null) {
+      return previous;
+    }
+    return safeOffset - previous.end <= next.start - safeOffset
+        ? previous
+        : next;
   }
 
   static bool _startsIndependentBlock(String text) {

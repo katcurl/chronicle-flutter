@@ -172,4 +172,29 @@ B
       isNull,
     );
   });
+  test('finds the nearest block in a large document without rescanning it', () {
+    final source = List.generate(
+      1200,
+      (index) => '## Раздел $index\n\nТекст блока $index',
+    ).join('\n\n');
+    final blocks = NoteBlockSyntax.all(source);
+    final targetOffset = source.indexOf('Текст блока 973');
+
+    final target = NoteBlockSyntax.findIn(
+      blocks,
+      source.length,
+      targetOffset,
+    );
+    final gap = NoteBlockSyntax.findIn(
+      blocks,
+      source.length,
+      source.indexOf('## Раздел 974') - 1,
+    );
+
+    expect(target, isNotNull);
+    expect(target!.raw, 'Текст блока 973');
+    expect(gap, isNotNull);
+    expect(gap!.raw, 'Текст блока 973');
+  });
+
 }

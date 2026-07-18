@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.22.1+45
+
+- Fixed editor stutter and visual shaking introduced by the block-controls toolbar.
+- Stopped selection-only controller notifications from rebuilding the entire note workspace and marking the note dirty.
+- Cached parsed Markdown blocks and delayed reparsing until typing pauses briefly instead of parsing the whole note on every cursor event.
+- Kept the current-block chip at a stable width so toolbar buttons no longer shift while the cursor moves between block types.
+- Updated split preview and note statistics independently so they remain live without rebuilding the complete workspace.
+- Replaced linear current-block lookup with binary search and added a large-document regression test.
+
 ## 0.22.0+44
 
 - Added safe block-aware controls to the Markdown editor without changing the portable note format.
