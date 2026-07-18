@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.22.3+47
+
+- Migrated the block organizer from Flutter's deprecated `onReorder` callback to `onReorderItem`.
+- Removed the obsolete manual downward-index correction because Flutter 3.44 now supplies the adjusted insertion index.
+- Kept the separate confirmation dialog, delayed mobile drag handle, undo behavior, Markdown serialization, and Vault data unchanged.
+- Restored clean `flutter analyze` execution on Flutter 3.44 with fatal deprecation diagnostics enabled.
+
 ## 0.22.2+46
 
 - Added a separate drag-and-drop block organizer instead of placing gesture layers over the Markdown text field.

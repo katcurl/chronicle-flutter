@@ -96,7 +96,7 @@ class _NoteBlockReorderDialogState extends State<NoteBlockReorderDialog> {
               child: ReorderableListView.builder(
                 buildDefaultDragHandles: false,
                 itemCount: _entries.length,
-                onReorder: _reorder,
+                onReorderItem: _reorderItem,
                 proxyDecorator: (child, index, animation) {
                   return Material(
                     elevation: 6,
@@ -169,10 +169,7 @@ class _NoteBlockReorderDialogState extends State<NoteBlockReorderDialog> {
     return ReorderableDragStartListener(index: index, child: child);
   }
 
-  void _reorder(int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) {
-      newIndex -= 1;
-    }
+  void _reorderItem(int oldIndex, int newIndex) {
     if (newIndex == oldIndex) {
       return;
     }
