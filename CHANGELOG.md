@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.22.0+44
+
+- Added safe block-aware controls to the Markdown editor without changing the portable note format.
+- Recognized paragraphs, headings, lists, checklists, quotes, images, display formulas, fenced code, dividers, and Chronicle column groups.
+- Added toolbar actions to move the current block up or down, duplicate it, copy its raw Markdown, and delete it with an undo action.
+- Added loss-safe conversion between paragraph, heading, bulleted-list, checklist, and quote blocks.
+- Kept images, code, formulas, and column groups protected from destructive type conversion.
+- Added deterministic parser and edit-operation tests for complex Markdown blocks.
+
 ## 0.21.7+43
 
 - Added explicit cancellation for active manual LAN synchronization on both devices.
