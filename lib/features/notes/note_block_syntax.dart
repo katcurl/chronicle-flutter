@@ -265,6 +265,78 @@ class NoteBlockSyntax {
     );
   }
 
+  static NoteBlockEditResult? reorder(
+    String source,
+    List<int> order, {
+    int? selectedOriginalIndex,
+  }) {
+    final blocks = all(source);
+    if (blocks.length < 2 || order.length != blocks.length) {
+      return null;
+    }
+
+    final seen = List<bool>.filled(blocks.length, false);
+    var changed = false;
+    for (var index = 0; index < order.length; index += 1) {
+      final originalIndex = order[index];
+      if (originalIndex < 0 ||
+          originalIndex >= blocks.length ||
+          seen[originalIndex]) {
+        return null;
+      }
+      seen[originalIndex] = true;
+      changed = changed || originalIndex != index;
+    }
+    if (!changed) {
+      return null;
+    }
+
+    final separators = <String>[
+      for (var index = 0; index < blocks.length - 1; index += 1)
+        source.substring(blocks[index].end, blocks[index + 1].start),
+    ];
+    final prefix = source.substring(0, blocks.first.start);
+    final suffix = source.substring(blocks.last.end);
+    var fallbackSelectionIndex = order.first;
+    for (var slot = 0; slot < order.length; slot += 1) {
+      if (order[slot] != slot) {
+        fallbackSelectionIndex = order[slot];
+        break;
+      }
+    }
+    final selectedIndex =
+        selectedOriginalIndex != null &&
+                selectedOriginalIndex >= 0 &&
+                selectedOriginalIndex < blocks.length
+            ? selectedOriginalIndex
+            : fallbackSelectionIndex;
+
+    final buffer = StringBuffer(prefix);
+    var selectionStart = prefix.length;
+    var selectionEnd = prefix.length;
+    for (var slot = 0; slot < order.length; slot += 1) {
+      final originalIndex = order[slot];
+      final block = blocks[originalIndex];
+      final blockStart = buffer.length;
+      buffer.write(block.raw);
+      final blockEnd = buffer.length;
+      if (originalIndex == selectedIndex) {
+        selectionStart = blockStart;
+        selectionEnd = blockEnd;
+      }
+      if (slot < separators.length) {
+        buffer.write(separators[slot]);
+      }
+    }
+    buffer.write(suffix);
+
+    return NoteBlockEditResult(
+      text: buffer.toString(),
+      selectionStart: selectionStart,
+      selectionEnd: selectionEnd,
+    );
+  }
+
   static NoteBlockEditResult? duplicate(String source, int offset) {
     final blocks = all(source);
     final current = _findIn(blocks, source.length, offset);

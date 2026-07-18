@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.22.2+46
+
+- Added a separate drag-and-drop block organizer instead of placing gesture layers over the Markdown text field.
+- Reordered paragraphs, headings, lists, images, formulas, fenced code, dividers, and complete Chronicle column groups as intact units.
+- Applied the new order only after explicit confirmation; cancelling the dialog leaves the note byte-for-byte unchanged.
+- Preserved every block body, leading and trailing text, and the existing separator sequences between block slots.
+- Added an immediate undo action after applying a reordered block list.
+- Kept the existing up/down controls as the precise fallback and avoided any new listeners on editor scrolling or cursor movement.
+- Added deterministic tests for distant reordering, selection relocation, invalid plans, and unchanged plans.
+
 ## 0.22.1+45
 
 - Fixed editor stutter and visual shaking introduced by the block-controls toolbar.

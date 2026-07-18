@@ -108,6 +108,70 @@ B
 ```''');
   });
 
+  test('reorders distant blocks without rewriting block Markdown', () {
+    const source = '''
+Первый
+
+```text
+A
+
+B
+```
+
+
+Последний
+''';
+
+    final result = NoteBlockSyntax.reorder(
+      source,
+      const [2, 0, 1],
+      selectedOriginalIndex: 1,
+    )!;
+
+    expect(result.text, '''
+Последний
+
+Первый
+
+
+```text
+A
+
+B
+```
+''');
+    expect(
+      result.text.substring(result.selectionStart, result.selectionEnd),
+      '''```text
+A
+
+B
+```''',
+    );
+  });
+
+  test('reorders a complete columns group as one block', () {
+    final columns = NoteColumnsSyntax.build(
+      widths: const [40, 60],
+      contents: const ['Фото', 'Описание'],
+    );
+    final source = 'До\n\n$columns\n\nПосле';
+
+    final result = NoteBlockSyntax.reorder(source, const [1, 2, 0])!;
+
+    expect(result.text, '$columns\n\nПосле\n\nДо');
+    expect(NoteBlockSyntax.all(result.text).first.type, NoteBlockType.columns);
+    expect(NoteBlockSyntax.all(result.text).first.raw, columns);
+  });
+
+  test('rejects incomplete, duplicate and unchanged reorder plans', () {
+    const source = 'Один\n\nДва\n\nТри';
+
+    expect(NoteBlockSyntax.reorder(source, const [0, 1]), isNull);
+    expect(NoteBlockSyntax.reorder(source, const [0, 0, 2]), isNull);
+    expect(NoteBlockSyntax.reorder(source, const [0, 1, 2]), isNull);
+  });
+
   test('duplicates the selected block and preserves separators', () {
     const source = 'Один\n\nДва\n\nТри';
 

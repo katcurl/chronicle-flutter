@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
+import '../features/notes/note_block_reorder_dialog.dart';
 import '../features/notes/note_block_syntax.dart';
 import '../features/notes/note_columns_editor_dialog.dart';
 import '../features/notes/note_columns_syntax.dart';
@@ -626,6 +627,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           onAttach: _attachFile,
           onConfigureImage: _editImageAtCursor,
           onConfigureColumns: _configureColumnsAtCursor,
+          onReorderBlocks: _reorderBlocks,
           onBlockAction: _handleBlockAction,
         ),
         const Divider(height: 1),
@@ -1244,6 +1246,73 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   }
 
 
+  Future<void> _reorderBlocks() async {
+    final value = contentController.value;
+    final blocks = NoteBlockSyntax.all(value.text);
+    if (blocks.length < 2) {
+      _showBlockMessage('Для перетаскивания нужны хотя бы два блока.');
+      return;
+    }
+
+    final selectionOffset =
+        value.selection.isValid
+            ? value.selection.extentOffset
+            : value.text.length;
+    final selectedBlock = NoteBlockSyntax.findIn(
+      blocks,
+      value.text.length,
+      selectionOffset,
+    );
+    final order = await NoteBlockReorderDialog.show(
+      context,
+      source: value.text,
+      selectedBlockIndex: selectedBlock?.index,
+    );
+    if (order == null || !mounted) {
+      return;
+    }
+
+    final result = NoteBlockSyntax.reorder(
+      value.text,
+      order,
+      selectedOriginalIndex: selectedBlock?.index,
+    );
+    if (result == null) {
+      return;
+    }
+
+    final previousValue = value;
+    contentController.value = value.copyWith(
+      text: result.text,
+      selection: TextSelection(
+        baseOffset: result.selectionStart,
+        extentOffset: result.selectionEnd,
+      ),
+      composing: TextRange.empty,
+    );
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('Порядок блоков изменён.'),
+          action: SnackBarAction(
+            label: 'Отменить',
+            onPressed: () {
+              if (contentController.text != result.text) {
+                _showBlockMessage(
+                  'После перемещения текст уже изменился; автоматическая '
+                  'отмена не применена.',
+                );
+                return;
+              }
+              contentController.value = previousValue;
+            },
+          ),
+        ),
+      );
+  }
+
   Future<void> _handleBlockAction(_NoteBlockAction action) async {
     final value = contentController.value;
     final offset =
@@ -1484,6 +1553,7 @@ class _EditorToolbar extends StatefulWidget {
     required this.onAttach,
     required this.onConfigureImage,
     required this.onConfigureColumns,
+    required this.onReorderBlocks,
     required this.onBlockAction,
   });
 
@@ -1491,6 +1561,7 @@ class _EditorToolbar extends StatefulWidget {
   final VoidCallback onAttach;
   final VoidCallback onConfigureImage;
   final VoidCallback onConfigureColumns;
+  final VoidCallback onReorderBlocks;
   final ValueChanged<_NoteBlockAction> onBlockAction;
 
   @override
@@ -1639,6 +1710,11 @@ class _EditorToolbarState extends State<_EditorToolbar> {
                     ? () => widget.onBlockAction(_NoteBlockAction.moveDown)
                     : null,
             icon: const Icon(Icons.keyboard_arrow_down_rounded),
+          ),
+          IconButton(
+            tooltip: 'Перетащить блоки',
+            onPressed: _blocks.length > 1 ? widget.onReorderBlocks : null,
+            icon: const Icon(Icons.drag_indicator_rounded),
           ),
           PopupMenuButton<_NoteBlockAction>(
             tooltip: 'Действия с текущим блоком',
