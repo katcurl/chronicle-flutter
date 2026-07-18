@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -743,13 +744,15 @@ class _VaultAttachmentImage extends StatefulWidget {
 }
 
 class _VaultAttachmentImageState extends State<_VaultAttachmentImage> {
-  late Future<Uint8List?> _bytesFuture;
+  Uint8List? _bytes;
+  bool _initialLoadPending = true;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _bytesFuture = _load();
     widget.refreshListenable?.addListener(_reload);
+    _startLoad();
   }
 
   @override
@@ -761,12 +764,15 @@ class _VaultAttachmentImageState extends State<_VaultAttachmentImage> {
     }
     if (oldWidget.rootPath != widget.rootPath ||
         oldWidget.markdownPath != widget.markdownPath) {
-      _reload();
+      _bytes = null;
+      _initialLoadPending = true;
+      _startLoad();
     }
   }
 
   @override
   void dispose() {
+    _loadGeneration += 1;
     widget.refreshListenable?.removeListener(_reload);
     super.dispose();
   }
@@ -774,42 +780,60 @@ class _VaultAttachmentImageState extends State<_VaultAttachmentImage> {
   Future<Uint8List?> _load() =>
       loadVaultAttachment(widget.rootPath, widget.markdownPath);
 
+  void _startLoad() {
+    final generation = ++_loadGeneration;
+    unawaited(_completeLoad(generation));
+  }
+
+  Future<void> _completeLoad(int generation) async {
+    final bytes = await _load();
+    if (!mounted || generation != _loadGeneration) {
+      return;
+    }
+    setState(() {
+      _bytes = bytes;
+      _initialLoadPending = false;
+    });
+  }
+
   void _reload() {
     if (!mounted) {
       return;
     }
-    setState(() => _bytesFuture = _load());
+    // Keep the current image/fallback visible while the new bytes are read.
+    // The explicit setState in _completeLoad schedules a frame after dart:io
+    // finishes, instead of relying on FutureBuilder timing.
+    _startLoad();
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List?>(
-      future: _bytesFuture,
-      builder: (context, snapshot) {
-        final bytes = snapshot.data;
-        if (bytes == null) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Padding(
-              padding: EdgeInsets.all(20),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-          return _ImageFallback(label: widget.fallbackLabel);
-        }
-        return Image.memory(
-          bytes,
-          width: widget.expand ? double.infinity : null,
-          fit: BoxFit.contain,
-          errorBuilder:
-              (_, __, ___) => _ImageFallback(label: widget.fallbackLabel),
+    final bytes = _bytes;
+    if (bytes == null) {
+      if (_initialLoadPending) {
+        return const Padding(
+          padding: EdgeInsets.all(20),
+          child: Center(child: CircularProgressIndicator()),
         );
-      },
+      }
+      return _ImageFallback(
+        key: ValueKey('vault-image-fallback:${widget.markdownPath}'),
+        label: widget.fallbackLabel,
+      );
+    }
+    return Image.memory(
+      bytes,
+      key: ValueKey('vault-image:${widget.markdownPath}'),
+      width: widget.expand ? double.infinity : null,
+      fit: BoxFit.contain,
+      errorBuilder:
+          (_, __, ___) => _ImageFallback(label: widget.fallbackLabel),
     );
   }
 }
 
 class _ImageFallback extends StatelessWidget {
-  const _ImageFallback({this.label});
+  const _ImageFallback({super.key, this.label});
 
   final String? label;
 

@@ -1,3 +1,9 @@
+## 0.21.4+40
+
+- Remote Vault images now keep their own byte state instead of depending on `FutureBuilder` completion timing.
+- A completed `dart:io` read explicitly schedules the widget rebuild, so a synchronized image replaces the placeholder in an already-open note.
+- The cross-platform widget test now targets the exact remote image and fallback widgets.
+
 # Changelog
 
 ## 0.21.3+39

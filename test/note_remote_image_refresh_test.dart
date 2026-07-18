@@ -27,9 +27,21 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    final fallbackKey = ValueKey(
+      'vault-image-fallback:../Attachments/remote.png',
+    );
+    final imageKey = ValueKey('vault-image:../Attachments/remote.png');
 
-    expect(find.byIcon(Icons.broken_image_outlined), findsOneWidget);
+    for (var attempt = 0; attempt < 20; attempt += 1) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 25)),
+      );
+      await tester.pump();
+      if (find.byKey(fallbackKey).evaluate().isNotEmpty) {
+        break;
+      }
+    }
+    expect(find.byKey(fallbackKey), findsOneWidget);
 
     final attachment = File('${root.path}/Attachments/remote.png');
     await attachment.parent.create(recursive: true);
@@ -43,22 +55,21 @@ void main() {
 
     notifier.notifyListeners();
 
-    // Vault reads use dart:io. A single pumpAndSettle can stop before that
-    // real asynchronous read completes because no frame is scheduled yet.
-    // Give the I/O event loop a bounded chance to finish, pumping the widget
-    // tree after each wait so the completed FutureBuilder can rebuild.
+    // Vault reads use dart:io. Give the real I/O event loop a bounded chance
+    // to finish and pump after each wait. The image widget explicitly calls
+    // setState when the newest guarded read completes.
     for (var attempt = 0; attempt < 20; attempt += 1) {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 25)),
       );
       await tester.pump();
-      if (find.byType(Image).evaluate().isNotEmpty &&
-          find.byIcon(Icons.broken_image_outlined).evaluate().isEmpty) {
+      if (find.byKey(imageKey).evaluate().isNotEmpty &&
+          find.byKey(fallbackKey).evaluate().isEmpty) {
         break;
       }
     }
 
-    expect(find.byIcon(Icons.broken_image_outlined), findsNothing);
-    expect(find.byType(Image), findsOneWidget);
+    expect(find.byKey(fallbackKey), findsNothing);
+    expect(find.byKey(imageKey), findsOneWidget);
   });
 }
