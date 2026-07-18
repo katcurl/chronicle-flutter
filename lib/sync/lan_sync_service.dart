@@ -79,6 +79,7 @@ class LanSyncService {
     String rawOffer, {
     required String expectedPeerDeviceId,
     Future<void> Function(SyncApplyResult result)? onRemoteApplied,
+    LanSyncProgressCallback? onProgress,
   }) async {
     final offer = LanSyncOffer.decode(rawOffer);
     if (offer.hostPeer.deviceId != expectedPeerDeviceId) {
@@ -102,6 +103,7 @@ class LanSyncService {
       applyAttachmentRecord: _applyAttachmentRecord,
       applyAttachmentTombstone: _applyAttachmentTombstone,
       onRemoteApplied: onRemoteApplied,
+      onProgress: onProgress,
     );
   }
 

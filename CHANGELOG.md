@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.21.6+42
+
+- Added live LAN sync progress for journal rounds and attachment transfers.
+- Both host and scanning devices show the current attachment name, item count, and transferred bytes.
+- Expanded the final sync report with attachment counts, bytes, deletions, and conflicts.
+- Added a retry action that reuses the current QR offer after transient Wi-Fi or VPN failures.
+- Added clearer local-network, timeout, and checksum error messages.
+- Added deterministic tests for sync progress calculations.
+
 ## 0.21.5+41
 
 - removed the duplicate whole-preview rebuild when attachment storage changes; each Vault image now refreshes independently;

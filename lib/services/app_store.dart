@@ -737,6 +737,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
   Future<LanSyncReport> syncFromLanOffer(
     String rawOffer, {
     required String expectedPeerDeviceId,
+    LanSyncProgressCallback? onProgress,
   }) async {
     if (lanSyncBusy) {
       throw StateError('Синхронизация уже выполняется.');
@@ -756,6 +757,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
         rawOffer,
         expectedPeerDeviceId: expectedPeerDeviceId,
         onRemoteApplied: (_) => refreshAfterLanSync(),
+        onProgress: onProgress,
       );
       await refreshAfterLanSync(report: report);
       await _recordSyncSuccess(

@@ -135,6 +135,8 @@ class LanSyncHostSession {
   final RemoteAppliedCallback? _onRemoteApplied;
   final StreamController<LanSyncReport> _reportController =
       StreamController<LanSyncReport>.broadcast();
+  final StreamController<LanSyncProgress> _progressController =
+      StreamController<LanSyncProgress>.broadcast();
   final Map<String, _PendingSyncRound> _pendingRounds = {};
   int _attachmentFilesReceived = 0;
   int _attachmentFilesSent = 0;
@@ -142,12 +144,17 @@ class LanSyncHostSession {
   int _attachmentBytesSent = 0;
   int _attachmentRecordsApplied = 0;
   int _attachmentTombstonesApplied = 0;
+  int _attachmentWorkTotal = 0;
+  int _attachmentWorkCompleted = 0;
+  int _attachmentBytesTotal = 0;
+  int _attachmentBytesTransferred = 0;
 
   StreamSubscription<HttpRequest>? _subscription;
   Timer? _expiryTimer;
   bool _closed = false;
 
   Stream<LanSyncReport> get reports => _reportController.stream;
+  Stream<LanSyncProgress> get progress => _progressController.stream;
 
   LanSyncOffer offerFor(String address) => LanSyncOffer(
     host: address,
@@ -244,6 +251,16 @@ class LanSyncHostSession {
       local: attachmentManifest,
       remote: payload.attachmentManifest,
     );
+    _attachmentWorkTotal = _planWorkCount(requesterAttachmentPlan) +
+        _planWorkCount(responderAttachmentPlan);
+    _attachmentWorkCompleted = 0;
+    _attachmentBytesTotal = _planByteCount(requesterAttachmentPlan) +
+        _planByteCount(responderAttachmentPlan);
+    _attachmentBytesTransferred = 0;
+    _emitHostProgress(
+      stage: LanSyncProgressStage.exchangingJournal,
+      round: 1,
+    );
     final unsigned = LanSyncExchangeResponse(
       sessionId: sessionId,
       roundId: payload.roundId,
@@ -310,6 +327,12 @@ class LanSyncHostSession {
         _validateTransferredBytes(command.entry, responseBytes);
         _attachmentFilesSent += 1;
         _attachmentBytesSent += responseBytes.length;
+        _attachmentWorkCompleted += 1;
+        _attachmentBytesTransferred += responseBytes.length;
+        _emitHostProgress(
+          stage: LanSyncProgressStage.downloadingAttachment,
+          currentFileName: _attachmentDisplayName(command.entry),
+        );
         break;
       case LanAttachmentCommandKind.upload:
         _requirePlannedAction(
@@ -327,6 +350,12 @@ class LanSyncHostSession {
         changed = uploadResult.changed;
         _attachmentFilesReceived += 1;
         _attachmentBytesReceived += bytes.length;
+        _attachmentWorkCompleted += 1;
+        _attachmentBytesTransferred += bytes.length;
+        _emitHostProgress(
+          stage: LanSyncProgressStage.uploadingAttachment,
+          currentFileName: _attachmentDisplayName(command.entry),
+        );
         break;
       case LanAttachmentCommandKind.record:
         _requirePlannedAction(
@@ -339,6 +368,11 @@ class LanSyncHostSession {
         if (recordResult.changed) {
           _attachmentRecordsApplied += 1;
         }
+        _attachmentWorkCompleted += 1;
+        _emitHostProgress(
+          stage: LanSyncProgressStage.applyingAttachmentMetadata,
+          currentFileName: _attachmentDisplayName(command.entry),
+        );
         break;
       case LanAttachmentCommandKind.tombstone:
         _requirePlannedAction(
@@ -353,6 +387,11 @@ class LanSyncHostSession {
         if (tombstoneResult.changed) {
           _attachmentTombstonesApplied += 1;
         }
+        _attachmentWorkCompleted += 1;
+        _emitHostProgress(
+          stage: LanSyncProgressStage.applyingAttachmentMetadata,
+          currentFileName: _attachmentDisplayName(command.entry),
+        );
         break;
     }
 
@@ -432,6 +471,7 @@ class LanSyncHostSession {
     );
     await _markSuccess(pending.request.peer, completedAt);
 
+    _emitHostProgress(stage: LanSyncProgressStage.finalizing, round: 1);
     final report = LanSyncReport(
       peer: pending.request.peer,
       startedAt: pending.startedAt,
@@ -459,11 +499,36 @@ class LanSyncHostSession {
     _attachmentBytesSent = 0;
     _attachmentRecordsApplied = 0;
     _attachmentTombstonesApplied = 0;
+    _attachmentWorkTotal = 0;
+    _attachmentWorkCompleted = 0;
+    _attachmentBytesTotal = 0;
+    _attachmentBytesTransferred = 0;
     _pendingRounds.remove(ack.roundId);
     _reportController.add(report);
     await _jsonResponse(request.response, HttpStatus.ok, {
       'status': 'acknowledged',
     });
+  }
+
+  void _emitHostProgress({
+    required LanSyncProgressStage stage,
+    int round = 1,
+    String? currentFileName,
+  }) {
+    if (_progressController.isClosed) {
+      return;
+    }
+    _progressController.add(
+      LanSyncProgress(
+        stage: stage,
+        round: round,
+        completedItems: _attachmentWorkCompleted,
+        totalItems: _attachmentWorkTotal,
+        bytesTransferred: _attachmentBytesTransferred,
+        totalBytes: _attachmentBytesTotal,
+        currentFileName: currentFileName,
+      ),
+    );
   }
 
   void _validateSession(String receivedSessionId, String receivedToken) {
@@ -488,6 +553,7 @@ class LanSyncHostSession {
     await _subscription?.cancel();
     await _server.close(force: true);
     await _reportController.close();
+    await _progressController.close();
   }
 }
 
@@ -510,6 +576,7 @@ class LanSyncClient {
     required ApplyAttachmentRecordFromSync applyAttachmentRecord,
     required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
     RemoteAppliedCallback? onRemoteApplied,
+    LanSyncProgressCallback? onProgress,
   }) async {
     if (offer.isExpired) {
       throw StateError('Срок действия кода синхронизации истёк.');
@@ -523,6 +590,9 @@ class LanSyncClient {
     }
 
     final startedAt = DateTime.now();
+    onProgress?.call(
+      const LanSyncProgress(stage: LanSyncProgressStage.preparing),
+    );
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
     var roundCount = 0;
     var sentCount = 0;
@@ -545,6 +615,12 @@ class LanSyncClient {
     try {
       do {
         roundCount++;
+        onProgress?.call(
+          LanSyncProgress(
+            stage: LanSyncProgressStage.exchangingJournal,
+            round: roundCount,
+          ),
+        );
         if (roundCount > 20) {
           throw StateError(
             'Слишком много пакетов синхронизации. Повтори обмен ещё раз.',
@@ -612,6 +688,12 @@ class LanSyncClient {
         }
         attachmentPlanFromPeer = expectedPlanFromPeer;
         attachmentPlanByPeer = expectedPlanByPeer;
+        final attachmentWorkTotal = _planWorkCount(expectedPlanFromPeer) +
+            _planWorkCount(expectedPlanByPeer);
+        final attachmentBytesTotal = _planByteCount(expectedPlanFromPeer) +
+            _planByteCount(expectedPlanByPeer);
+        var attachmentWorkCompleted = 0;
+        var attachmentBytesTransferred = 0;
         final applied = await applyIncoming(response.batch.changes);
         if (applied.insertedCount > 0 && onRemoteApplied != null) {
           try {
@@ -622,6 +704,17 @@ class LanSyncClient {
         }
 
         for (final entry in expectedPlanFromPeer.files) {
+          onProgress?.call(
+            LanSyncProgress(
+              stage: LanSyncProgressStage.downloadingAttachment,
+              round: roundCount,
+              completedItems: attachmentWorkCompleted,
+              totalItems: attachmentWorkTotal,
+              bytesTransferred: attachmentBytesTransferred,
+              totalBytes: attachmentBytesTotal,
+              currentFileName: _attachmentDisplayName(entry),
+            ),
+          );
           final response = await _sendAttachmentCommand(
             client: client,
             offer: offer,
@@ -640,21 +733,69 @@ class LanSyncClient {
           await storeAttachment(entry, bytes);
           attachmentFilesReceived += 1;
           attachmentBytesReceived += bytes.length;
+          attachmentWorkCompleted += 1;
+          attachmentBytesTransferred += bytes.length;
+          onProgress?.call(
+            LanSyncProgress(
+              stage: LanSyncProgressStage.downloadingAttachment,
+              round: roundCount,
+              completedItems: attachmentWorkCompleted,
+              totalItems: attachmentWorkTotal,
+              bytesTransferred: attachmentBytesTransferred,
+              totalBytes: attachmentBytesTotal,
+              currentFileName: _attachmentDisplayName(entry),
+            ),
+          );
         }
         for (final entry in expectedPlanFromPeer.records) {
+          onProgress?.call(
+            LanSyncProgress(
+              stage: LanSyncProgressStage.applyingAttachmentMetadata,
+              round: roundCount,
+              completedItems: attachmentWorkCompleted,
+              totalItems: attachmentWorkTotal,
+              bytesTransferred: attachmentBytesTransferred,
+              totalBytes: attachmentBytesTotal,
+              currentFileName: _attachmentDisplayName(entry),
+            ),
+          );
           final result = await applyAttachmentRecord(entry);
           if (result.changed) {
             attachmentRecordsApplied += 1;
           }
+          attachmentWorkCompleted += 1;
         }
         for (final entry in expectedPlanFromPeer.tombstones) {
+          onProgress?.call(
+            LanSyncProgress(
+              stage: LanSyncProgressStage.applyingAttachmentMetadata,
+              round: roundCount,
+              completedItems: attachmentWorkCompleted,
+              totalItems: attachmentWorkTotal,
+              bytesTransferred: attachmentBytesTransferred,
+              totalBytes: attachmentBytesTotal,
+              currentFileName: _attachmentDisplayName(entry),
+            ),
+          );
           final result = await applyAttachmentTombstone(entry);
           if (result.changed) {
             attachmentTombstonesApplied += 1;
           }
+          attachmentWorkCompleted += 1;
         }
 
         for (final entry in expectedPlanByPeer.files) {
+          onProgress?.call(
+            LanSyncProgress(
+              stage: LanSyncProgressStage.uploadingAttachment,
+              round: roundCount,
+              completedItems: attachmentWorkCompleted,
+              totalItems: attachmentWorkTotal,
+              bytesTransferred: attachmentBytesTransferred,
+              totalBytes: attachmentBytesTotal,
+              currentFileName: _attachmentDisplayName(entry),
+            ),
+          );
           final bytes = await readAttachment(entry);
           if (bytes == null) {
             throw StateError(
@@ -674,8 +815,32 @@ class LanSyncClient {
           );
           attachmentFilesSent += 1;
           attachmentBytesSent += bytes.length;
+          attachmentWorkCompleted += 1;
+          attachmentBytesTransferred += bytes.length;
+          onProgress?.call(
+            LanSyncProgress(
+              stage: LanSyncProgressStage.uploadingAttachment,
+              round: roundCount,
+              completedItems: attachmentWorkCompleted,
+              totalItems: attachmentWorkTotal,
+              bytesTransferred: attachmentBytesTransferred,
+              totalBytes: attachmentBytesTotal,
+              currentFileName: _attachmentDisplayName(entry),
+            ),
+          );
         }
         for (final entry in expectedPlanByPeer.records) {
+          onProgress?.call(
+            LanSyncProgress(
+              stage: LanSyncProgressStage.applyingAttachmentMetadata,
+              round: roundCount,
+              completedItems: attachmentWorkCompleted,
+              totalItems: attachmentWorkTotal,
+              bytesTransferred: attachmentBytesTransferred,
+              totalBytes: attachmentBytesTotal,
+              currentFileName: _attachmentDisplayName(entry),
+            ),
+          );
           await _sendAttachmentCommand(
             client: client,
             offer: offer,
@@ -685,8 +850,20 @@ class LanSyncClient {
             kind: LanAttachmentCommandKind.record,
             entry: entry,
           );
+          attachmentWorkCompleted += 1;
         }
         for (final entry in expectedPlanByPeer.tombstones) {
+          onProgress?.call(
+            LanSyncProgress(
+              stage: LanSyncProgressStage.applyingAttachmentMetadata,
+              round: roundCount,
+              completedItems: attachmentWorkCompleted,
+              totalItems: attachmentWorkTotal,
+              bytesTransferred: attachmentBytesTransferred,
+              totalBytes: attachmentBytesTotal,
+              currentFileName: _attachmentDisplayName(entry),
+            ),
+          );
           await _sendAttachmentCommand(
             client: client,
             offer: offer,
@@ -696,6 +873,7 @@ class LanSyncClient {
             kind: LanAttachmentCommandKind.tombstone,
             entry: entry,
           );
+          attachmentWorkCompleted += 1;
         }
         attachmentManifest = await buildAttachmentManifest();
 
@@ -753,6 +931,14 @@ class LanSyncClient {
       client.close(force: true);
     }
 
+    onProgress?.call(
+      LanSyncProgress(
+        stage: LanSyncProgressStage.finalizing,
+        round: roundCount,
+        completedItems: 1,
+        totalItems: 1,
+      ),
+    );
     return LanSyncReport(
       peer: trustedHost,
       startedAt: startedAt,
@@ -862,6 +1048,18 @@ class LanSyncClient {
       throw StateError('Криптографическая подпись ответа неверна.');
     }
   }
+}
+
+int _planWorkCount(AttachmentSyncPlan plan) =>
+    plan.files.length + plan.records.length + plan.tombstones.length;
+
+int _planByteCount(AttachmentSyncPlan plan) =>
+    plan.files.fold<int>(0, (total, entry) => total + entry.byteLength);
+
+String _attachmentDisplayName(AttachmentSyncEntry entry) {
+  final normalized = entry.relativePath.replaceAll('\\', '/');
+  final segments = normalized.split('/');
+  return segments.isEmpty ? entry.relativePath : segments.last;
 }
 
 class _PendingSyncRound {

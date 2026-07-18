@@ -44,6 +44,7 @@ class LanSyncHostSession {
 
   List<String> get addresses => const [];
   Stream<LanSyncReport> get reports => const Stream.empty();
+  Stream<LanSyncProgress> get progress => const Stream.empty();
   LanSyncOffer offerFor(String address) => throw UnsupportedError('');
   Future<void> close() async {}
 }
@@ -67,6 +68,7 @@ class LanSyncClient {
     required ApplyAttachmentRecordFromSync applyAttachmentRecord,
     required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
     RemoteAppliedCallback? onRemoteApplied,
+    LanSyncProgressCallback? onProgress,
   }) {
     throw UnsupportedError(
       'LAN-синхронизация доступна в нативных Android и desktop-сборках.',

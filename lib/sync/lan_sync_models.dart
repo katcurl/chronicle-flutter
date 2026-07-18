@@ -405,6 +405,51 @@ class LanSyncAck {
   );
 }
 
+
+enum LanSyncProgressStage {
+  preparing,
+  exchangingJournal,
+  downloadingAttachment,
+  applyingAttachmentMetadata,
+  uploadingAttachment,
+  finalizing,
+}
+
+class LanSyncProgress {
+  const LanSyncProgress({
+    required this.stage,
+    this.round = 0,
+    this.completedItems = 0,
+    this.totalItems = 0,
+    this.bytesTransferred = 0,
+    this.totalBytes = 0,
+    this.currentFileName,
+  });
+
+  final LanSyncProgressStage stage;
+  final int round;
+  final int completedItems;
+  final int totalItems;
+  final int bytesTransferred;
+  final int totalBytes;
+  final String? currentFileName;
+
+  double? get fraction {
+    final transferringBytes =
+        stage == LanSyncProgressStage.downloadingAttachment ||
+        stage == LanSyncProgressStage.uploadingAttachment;
+    if (transferringBytes && totalBytes > 0) {
+      return (bytesTransferred / totalBytes).clamp(0.0, 1.0).toDouble();
+    }
+    if (totalItems > 0) {
+      return (completedItems / totalItems).clamp(0.0, 1.0).toDouble();
+    }
+    return null;
+  }
+}
+
+typedef LanSyncProgressCallback = void Function(LanSyncProgress progress);
+
 class LanSyncReport {
   const LanSyncReport({
     required this.peer,

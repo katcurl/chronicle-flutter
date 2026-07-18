@@ -23,9 +23,11 @@ class SyncHostScreen extends StatefulWidget {
 class _SyncHostScreenState extends State<SyncHostScreen> {
   LanSyncHostSession? session;
   StreamSubscription<LanSyncReport>? reportSubscription;
+  StreamSubscription<LanSyncProgress>? progressSubscription;
   Timer? countdownTimer;
   String? selectedAddress;
   LanSyncReport? report;
+  LanSyncProgress? syncProgress;
   Object? error;
   bool starting = true;
 
@@ -51,6 +53,11 @@ class _SyncHostScreenState extends State<SyncHostScreen> {
           setState(() {});
         }
       });
+      progressSubscription = value.progress.listen((event) {
+        if (mounted) {
+          setState(() => syncProgress = event);
+        }
+      });
       countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) {
           setState(() {});
@@ -69,6 +76,7 @@ class _SyncHostScreenState extends State<SyncHostScreen> {
   void dispose() {
     countdownTimer?.cancel();
     reportSubscription?.cancel();
+    progressSubscription?.cancel();
     unawaited(session?.close());
     super.dispose();
   }
@@ -118,12 +126,14 @@ class _SyncHostScreenState extends State<SyncHostScreen> {
         onRetry: () async {
           await session?.close();
           reportSubscription?.cancel();
+          progressSubscription?.cancel();
           countdownTimer?.cancel();
           setState(() {
             starting = true;
             error = null;
             session = null;
             report = null;
+            syncProgress = null;
           });
           await _start();
         },
@@ -147,9 +157,9 @@ class _SyncHostScreenState extends State<SyncHostScreen> {
             child: Column(
               children: [
                 Text(
-                  currentReport == null
+                  syncProgress == null
                       ? 'Отсканируй код на связанном устройстве'
-                      : 'Передаём следующие пакеты…',
+                      : _progressTitle(syncProgress!),
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -238,13 +248,20 @@ class _SyncHostScreenState extends State<SyncHostScreen> {
                   icon: const Icon(Icons.copy_rounded),
                   label: const Text('Скопировать код вручную'),
                 ),
-                if (currentReport != null) ...[
+                if (syncProgress != null) ...[
                   const SizedBox(height: 12),
-                  const LinearProgressIndicator(),
+                  LinearProgressIndicator(value: syncProgress!.fraction),
                   const SizedBox(height: 10),
                   Text(
-                    'Передано: ${currentReport.sentCount} · '
-                    'получено: ${currentReport.receivedCount}',
+                    _progressDetails(syncProgress!),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                if (currentReport != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Записи: передано ${currentReport.sentCount} · '
+                    'получено ${currentReport.receivedCount}',
                   ),
                 ],
               ],
@@ -256,6 +273,48 @@ class _SyncHostScreenState extends State<SyncHostScreen> {
       ],
     );
   }
+}
+
+String _progressTitle(LanSyncProgress progress) => switch (progress.stage) {
+  LanSyncProgressStage.preparing => 'Подготавливаем синхронизацию…',
+  LanSyncProgressStage.exchangingJournal => 'Синхронизируем записи…',
+  LanSyncProgressStage.downloadingAttachment => 'Отправляем вложение…',
+  LanSyncProgressStage.uploadingAttachment => 'Получаем вложение…',
+  LanSyncProgressStage.applyingAttachmentMetadata =>
+    'Применяем изменения вложений…',
+  LanSyncProgressStage.finalizing => 'Завершаем синхронизацию…',
+};
+
+String _progressDetails(LanSyncProgress progress) {
+  final parts = <String>[];
+  if (progress.currentFileName case final fileName?) {
+    parts.add(fileName);
+  }
+  if (progress.totalItems > 0) {
+    parts.add('${progress.completedItems} из ${progress.totalItems}');
+  }
+  if (progress.totalBytes > 0) {
+    parts.add(
+      '${_formatBytes(progress.bytesTransferred)} из '
+      '${_formatBytes(progress.totalBytes)}',
+    );
+  }
+  if (progress.round > 0) {
+    parts.add('пакет ${progress.round}');
+  }
+  return parts.isEmpty ? 'Устанавливаем защищённое соединение.' : parts.join(' · ');
+}
+
+String _formatBytes(int bytes) {
+  if (bytes < 1024) {
+    return '$bytes Б';
+  }
+  final kilobytes = bytes / 1024;
+  if (kilobytes < 1024) {
+    return '${kilobytes.toStringAsFixed(kilobytes >= 10 ? 0 : 1)} КБ';
+  }
+  final megabytes = kilobytes / 1024;
+  return '${megabytes.toStringAsFixed(megabytes >= 10 ? 0 : 1)} МБ';
 }
 
 class _SuccessCard extends StatelessWidget {
@@ -282,9 +341,9 @@ class _SuccessCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              report.appliedCount == 0
-                  ? 'Оба устройства уже были синхронизированы.'
-                  : 'Новые данные применены и сохранены локально.',
+              report.changedData
+                  ? 'Новые данные и вложения применены и сохранены локально.'
+                  : 'Оба устройства уже были синхронизированы.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
@@ -293,12 +352,25 @@ class _SuccessCard extends StatelessWidget {
               runSpacing: 10,
               alignment: WrapAlignment.center,
               children: [
-                _Metric(label: 'Передано', value: report.sentCount),
-                _Metric(label: 'Получено', value: report.receivedCount),
+                _Metric(label: 'Записей отправлено', value: report.sentCount),
+                _Metric(label: 'Записей получено', value: report.receivedCount),
                 _Metric(label: 'Применено', value: report.appliedCount),
+                _Metric(label: 'Файлов отправлено', value: report.attachmentFilesSent),
+                _Metric(label: 'Файлов получено', value: report.attachmentFilesReceived),
+                _Metric(label: 'Удалений', value: report.attachmentTombstonesApplied),
+                _Metric(label: 'Конфликтов', value: report.attachmentConflictCount),
                 _Metric(label: 'Пакетов', value: report.roundCount),
               ],
             ),
+            if (report.attachmentBytesSent > 0 ||
+                report.attachmentBytesReceived > 0) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Вложения: отправлено ${_formatBytes(report.attachmentBytesSent)}, '
+                'получено ${_formatBytes(report.attachmentBytesReceived)}.',
+                textAlign: TextAlign.center,
+              ),
+            ],
             const SizedBox(height: 22),
             FilledButton.icon(
               onPressed: () => Navigator.pop(context),

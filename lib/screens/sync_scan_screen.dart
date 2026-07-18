@@ -28,8 +28,10 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
 
   _SyncScanStage stage = _SyncScanStage.scanning;
   LanSyncReport? report;
+  LanSyncProgress? syncProgress;
   String? errorMessage;
   bool handlingCode = false;
+  String? lastOffer;
 
   @override
   void dispose() {
@@ -143,19 +145,28 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
                 children: [
                   const Icon(Icons.sync_rounded, size: 56),
                   const SizedBox(height: 18),
-                  const CircularProgressIndicator(),
+                  LinearProgressIndicator(value: syncProgress?.fraction),
                   const SizedBox(height: 18),
                   Text(
-                    'Синхронизируем данные',
+                    _progressTitle(
+                      syncProgress ??
+                          const LanSyncProgress(
+                            stage: LanSyncProgressStage.preparing,
+                          ),
+                    ),
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Chronicle передаёт журнал небольшими пакетами, проверяет '
-                    'подписи и применяет только новые изменения.',
+                  Text(
+                    _progressDetails(
+                      syncProgress ??
+                          const LanSyncProgress(
+                            stage: LanSyncProgressStage.preparing,
+                          ),
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -195,9 +206,9 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    value.appliedCount == 0
-                        ? 'Новых изменений не было.'
-                        : 'Новые данные применены и сохранены.',
+                    value.changedData
+                        ? 'Новые данные и вложения применены и сохранены.'
+                        : 'Оба устройства уже были синхронизированы.',
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
@@ -206,12 +217,42 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
                     runSpacing: 10,
                     alignment: WrapAlignment.center,
                     children: [
-                      Chip(label: Text('Передано: ${value.sentCount}')),
-                      Chip(label: Text('Получено: ${value.receivedCount}')),
+                      Chip(label: Text('Записей отправлено: ${value.sentCount}')),
+                      Chip(label: Text('Записей получено: ${value.receivedCount}')),
                       Chip(label: Text('Применено: ${value.appliedCount}')),
+                      Chip(
+                        label: Text(
+                          'Файлов отправлено: ${value.attachmentFilesSent}',
+                        ),
+                      ),
+                      Chip(
+                        label: Text(
+                          'Файлов получено: ${value.attachmentFilesReceived}',
+                        ),
+                      ),
+                      Chip(
+                        label: Text(
+                          'Удалений: ${value.attachmentTombstonesApplied}',
+                        ),
+                      ),
+                      Chip(
+                        label: Text(
+                          'Конфликтов: ${value.attachmentConflictCount}',
+                        ),
+                      ),
                       Chip(label: Text('Пакетов: ${value.roundCount}')),
                     ],
                   ),
+                  if (value.attachmentBytesSent > 0 ||
+                      value.attachmentBytesReceived > 0) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Вложения: отправлено '
+                      '${_formatBytes(value.attachmentBytesSent)}, получено '
+                      '${_formatBytes(value.attachmentBytesReceived)}.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                   if (value.duplicateCount > 0 || value.staleCount > 0) ...[
                     const SizedBox(height: 12),
                     Text(
@@ -266,10 +307,23 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 18),
-                  FilledButton.icon(
-                    onPressed: _reset,
-                    icon: const Icon(Icons.qr_code_scanner_rounded),
-                    label: const Text('Сканировать снова'),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      if (lastOffer != null)
+                        FilledButton.icon(
+                          onPressed: _retryLastOffer,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Повторить'),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: _reset,
+                        icon: const Icon(Icons.qr_code_scanner_rounded),
+                        label: const Text('Сканировать снова'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -285,17 +339,26 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
       return;
     }
     handlingCode = true;
+    lastOffer = raw;
     await controller.stop();
     if (mounted) {
       setState(() {
         stage = _SyncScanStage.syncing;
         errorMessage = null;
+        syncProgress = const LanSyncProgress(
+          stage: LanSyncProgressStage.preparing,
+        );
       });
     }
     try {
       final value = await widget.store.syncFromLanOffer(
         raw,
         expectedPeerDeviceId: widget.device.deviceId,
+        onProgress: (value) {
+          if (mounted) {
+            setState(() => syncProgress = value);
+          }
+        },
       );
       if (mounted) {
         setState(() {
@@ -306,13 +369,22 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
     } on Object catch (error) {
       if (mounted) {
         setState(() {
-          errorMessage = '$error';
+          errorMessage = _friendlyError(error);
           stage = _SyncScanStage.error;
         });
       }
     } finally {
       handlingCode = false;
     }
+  }
+
+  Future<void> _retryLastOffer() async {
+    final raw = lastOffer;
+    if (raw == null || raw.isEmpty) {
+      await _reset();
+      return;
+    }
+    await _sync(raw);
   }
 
   Future<void> _manualEntry() async {
@@ -350,6 +422,7 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
 
   Future<void> _reset() async {
     report = null;
+    syncProgress = null;
     errorMessage = null;
     handlingCode = false;
     if (!mounted) {
@@ -371,6 +444,71 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
       }
     }
   }
+}
+
+String _progressTitle(LanSyncProgress progress) => switch (progress.stage) {
+  LanSyncProgressStage.preparing => 'Подготавливаем синхронизацию',
+  LanSyncProgressStage.exchangingJournal => 'Синхронизируем записи',
+  LanSyncProgressStage.downloadingAttachment => 'Получаем вложение',
+  LanSyncProgressStage.uploadingAttachment => 'Отправляем вложение',
+  LanSyncProgressStage.applyingAttachmentMetadata =>
+    'Применяем изменения вложений',
+  LanSyncProgressStage.finalizing => 'Завершаем синхронизацию',
+};
+
+String _progressDetails(LanSyncProgress progress) {
+  final parts = <String>[];
+  if (progress.currentFileName case final fileName?) {
+    parts.add(fileName);
+  }
+  if (progress.totalItems > 0) {
+    parts.add('${progress.completedItems} из ${progress.totalItems}');
+  }
+  if (progress.totalBytes > 0) {
+    parts.add(
+      '${_formatBytes(progress.bytesTransferred)} из '
+      '${_formatBytes(progress.totalBytes)}',
+    );
+  }
+  if (progress.round > 0) {
+    parts.add('пакет ${progress.round}');
+  }
+  return parts.isEmpty
+      ? 'Устанавливаем защищённое соединение и проверяем изменения.'
+      : parts.join(' · ');
+}
+
+String _friendlyError(Object error) {
+  final raw = error.toString().replaceFirst('Bad state: ', '').trim();
+  final lower = raw.toLowerCase();
+  if (lower.contains('socketexception') ||
+      lower.contains('connection refused') ||
+      lower.contains('network is unreachable')) {
+    return 'Не удалось подключиться к другому устройству. Проверь, что оба '
+        'устройства находятся в одной Wi-Fi-сети, а VPN разрешает доступ к '
+        'локальной сети.';
+  }
+  if (lower.contains('timeout')) {
+    return 'Соединение не ответило вовремя. Проверь Wi-Fi и доступ к локальной '
+        'сети в настройках VPN, затем нажми «Повторить».';
+  }
+  if (lower.contains('attachment payload') || lower.contains('checksum')) {
+    return 'Вложение не прошло проверку целостности и не было сохранено. '
+        'Повтори синхронизацию.';
+  }
+  return raw.isEmpty ? 'Неизвестная ошибка синхронизации.' : raw;
+}
+
+String _formatBytes(int bytes) {
+  if (bytes < 1024) {
+    return '$bytes Б';
+  }
+  final kilobytes = bytes / 1024;
+  if (kilobytes < 1024) {
+    return '${kilobytes.toStringAsFixed(kilobytes >= 10 ? 0 : 1)} КБ';
+  }
+  final megabytes = kilobytes / 1024;
+  return '${megabytes.toStringAsFixed(megabytes >= 10 ? 0 : 1)} МБ';
 }
 
 class _ScannerError extends StatelessWidget {
