@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.23.0+48
+
+- Added a read-only interactive knowledge map built from Chronicle's existing `[[wiki links]]` and backlink index.
+- Grouped notes by project in deterministic clusters without adding a graph package, database migration, or background animation.
+- Added pan, zoom, project filtering, search highlighting, connection counts, unresolved-link counts, and direct note opening.
+- Kept Markdown, block editing, columns, Vault files, synchronization, themes, and note persistence unchanged.
+- Added deterministic layout tests for node separation, resolved, hidden and missing targets, duplicate edges, and self-links.
+
 ## 0.22.3+47
 
 - Migrated the block organizer from Flutter's deprecated `onReorder` callback to `onReorderItem`.

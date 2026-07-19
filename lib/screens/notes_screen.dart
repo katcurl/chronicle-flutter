@@ -11,6 +11,7 @@ import '../features/notes/note_columns_syntax.dart';
 import '../features/notes/note_document.dart';
 import '../features/notes/note_image_editor_dialog.dart';
 import '../features/notes/note_image_syntax.dart';
+import '../features/notes/note_graph_screen.dart';
 import '../features/notes/note_markdown_view.dart';
 import '../features/notes/note_templates.dart';
 import '../features/tasks/task_editor_sheet.dart';
@@ -73,6 +74,11 @@ class _NotesScreenState extends State<NotesScreen> {
       appBar: AppBar(
         title: const Text('Заметки'),
         actions: [
+          IconButton(
+            tooltip: 'Карта знаний',
+            onPressed: _openKnowledgeGraph,
+            icon: const Icon(Icons.hub_outlined),
+          ),
           IconButton(
             tooltip: pinnedOnly ? 'Показать все' : 'Только закреплённые',
             onPressed: () => setState(() => pinnedOnly = !pinnedOnly),
@@ -184,6 +190,21 @@ class _NotesScreenState extends State<NotesScreen> {
         label: const Text('Заметка'),
       ),
     );
+  }
+
+  Future<void> _openKnowledgeGraph() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder:
+            (_) => NoteGraphScreen(
+              store: widget.store,
+              onOpenNote: _open,
+            ),
+      ),
+    );
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _add() async {
