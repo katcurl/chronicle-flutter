@@ -1,6 +1,7 @@
 import '../../models/app_models.dart';
 import 'note_columns_syntax.dart';
 import 'note_image_syntax.dart';
+import 'note_wiki_link_syntax.dart';
 
 class ParsedNoteDocument {
   const ParsedNoteDocument({required this.content, required this.frontMatter});
@@ -11,10 +12,6 @@ class ParsedNoteDocument {
 
 class NoteDocument {
   const NoteDocument._();
-
-  static final RegExp _wikiLinkPattern = RegExp(
-    r'\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]',
-  );
 
   static ParsedNoteDocument parse(String body) {
     final normalized = body.replaceAll('\r\n', '\n');
@@ -64,20 +61,11 @@ class NoteDocument {
   }
 
   static Set<String> extractWikiTargets(String markdown) {
-    return _wikiLinkPattern
-        .allMatches(markdown)
-        .map((match) => match.group(1)?.trim() ?? '')
-        .where((title) => title.isNotEmpty)
-        .toSet();
+    return NoteWikiLinkSyntax.targets(markdown);
   }
 
   static String convertWikiLinksToMarkdown(String markdown) {
-    return markdown.replaceAllMapped(_wikiLinkPattern, (match) {
-      final target = match.group(1)?.trim() ?? '';
-      final label = match.group(2)?.trim();
-      final shown = label == null || label.isEmpty ? target : label;
-      return '[$shown](chronicle://note/${Uri.encodeComponent(target)})';
-    });
+    return NoteWikiLinkSyntax.convertToMarkdown(markdown);
   }
 
   static List<String> parseTags(String? raw) {

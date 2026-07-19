@@ -144,4 +144,40 @@ void main() {
 
     expect(layout.edges, hasLength(1));
   });
+
+  test('unresolved duplicate-title links are not connected arbitrarily', () {
+    final source = Note(
+      id: 'source',
+      title: 'Source',
+      projectId: 'project-a',
+      body: '',
+    );
+    final first = Note(
+      id: 'first',
+      title: 'Shared',
+      projectId: 'project-a',
+      body: '',
+    );
+    final second = Note(
+      id: 'second',
+      title: 'Shared',
+      projectId: 'project-b',
+      body: '',
+    );
+    final link = NoteLink(
+      id: 'ambiguous',
+      sourceNoteId: source.id,
+      targetTitle: 'Shared',
+    );
+
+    final layout = NoteGraphLayoutEngine.build(
+      allNotes: [source, first, second],
+      visibleNotes: [source, first, second],
+      links: [link],
+      projectOrder: const ['project-a', 'project-b'],
+    );
+
+    expect(layout.edges, isEmpty);
+    expect(layout.unresolvedLinkCount, 1);
+  });
 }

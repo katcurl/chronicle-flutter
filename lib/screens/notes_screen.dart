@@ -14,6 +14,7 @@ import '../features/notes/note_image_syntax.dart';
 import '../features/notes/note_graph_screen.dart';
 import '../features/notes/note_markdown_view.dart';
 import '../features/notes/note_templates.dart';
+import '../features/notes/note_wiki_link_syntax.dart';
 import '../features/tasks/task_editor_sheet.dart';
 import '../models/app_models.dart';
 import '../services/app_store.dart';
@@ -651,6 +652,13 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           onReorderBlocks: _reorderBlocks,
           onBlockAction: _handleBlockAction,
         ),
+        _WikiLinkSuggestionsBar(
+          controller: contentController,
+          store: widget.store,
+          currentNoteId: widget.note.id,
+          sourceProjectId: projectId,
+          sourceFolderPath: folderPath,
+        ),
         const Divider(height: 1),
         Expanded(
           child: TextField(
@@ -814,6 +822,14 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           emptyText: 'На эту заметку пока никто не ссылается',
           links: backlinks,
           resolve: (link) => widget.store.noteById(link.sourceNoteId),
+          subtitle: (link, source) {
+            if (source == null) return null;
+            final content = NoteDocument.parse(source.body).content;
+            return NoteWikiLinkSyntax.snippetForTarget(
+              content,
+              link.targetTitle,
+            );
+          },
           onOpen: _openNote,
         ),
         const SizedBox(height: 10),
@@ -824,9 +840,37 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           resolve:
               (link) =>
                   link.targetNoteId == null
-                      ? widget.store.noteByTitle(link.targetTitle)
+                      ? widget.store.resolveWikiTarget(
+                        link.targetTitle,
+                        source: widget.note,
+                      )
                       : widget.store.noteById(link.targetNoteId!),
+          subtitle: (link, target) {
+            if (target == null) {
+              final candidates = widget.store.notesForWikiTarget(
+                link.targetTitle,
+                source: widget.note,
+              );
+              return candidates.isEmpty
+                  ? 'Цель не найдена — можно создать заметку'
+                  : 'Найдено несколько заметок — выбери нужную';
+            }
+            final project = widget.store.projectById(target.projectId);
+            final location = [
+              project?.title,
+              if (target.folderPath.trim().isNotEmpty) target.folderPath,
+            ].whereType<String>().join(' · ');
+            return location.isEmpty ? null : location;
+          },
           onOpen: _openNote,
+          onMissing: (link) => _openWikiLink(link.targetTitle),
+          missingActionLabel: (link) {
+            final candidates = widget.store.notesForWikiTarget(
+              link.targetTitle,
+              source: widget.note,
+            );
+            return candidates.isEmpty ? 'Создать' : 'Выбрать';
+          },
         ),
         const SizedBox(height: 10),
         _ContextCard(
@@ -1468,15 +1512,30 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _openWikiLink(String title) async {
+  Future<void> _openWikiLink(String rawTarget) async {
     _save(createVersion: false);
-    var target = widget.store.noteByTitle(title);
+    final reference = NoteWikiTarget.parse(rawTarget);
+    final candidates = widget.store.notesForWikiTarget(
+      rawTarget,
+      source: widget.note,
+    );
+    var target = widget.store.resolveWikiTarget(
+      rawTarget,
+      source: widget.note,
+    );
+
+    if (target == null && candidates.isNotEmpty) {
+      target = await _chooseWikiTarget(reference.noteTitle, candidates);
+      if (!mounted || target == null) return;
+    }
+
     if (target == null) {
+      if (!mounted) return;
       final create = await showDialog<bool>(
         context: context,
         builder:
             (context) => AlertDialog(
-              title: Text('Создать «$title»?'),
+              title: Text('Создать «${reference.noteTitle}»?'),
               content: const Text('Такой заметки пока нет в базе знаний.'),
               actions: [
                 TextButton(
@@ -1491,19 +1550,69 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
             ),
       );
       if (create != true || !mounted) return;
+
+      var targetProjectId = projectId;
+      final projectTitle = reference.projectTitle?.trim().toLowerCase();
+      if (projectTitle != null) {
+        for (final project in widget.store.data.projects) {
+          if (project.title.trim().toLowerCase() == projectTitle) {
+            targetProjectId = project.id;
+            break;
+          }
+        }
+      }
       target = Note(
         id: const Uuid().v4(),
-        title: title,
-        projectId: projectId,
+        title: reference.noteTitle,
+        projectId: targetProjectId,
         body: '',
-        folderPath: folderPath,
+        folderPath: targetProjectId == projectId ? folderPath : '',
       );
-      target.body = NoteDocument.serialize(target, '# $title\n\n');
+      target.body = NoteDocument.serialize(
+        target,
+        '# ${reference.noteTitle}\n\n',
+      );
       widget.store.addNote(target);
       await widget.store.rebuildAllNoteLinks();
     }
     if (!mounted) return;
     await _openNote(target);
+  }
+
+  Future<Note?> _chooseWikiTarget(
+    String title,
+    List<Note> candidates,
+  ) {
+    return showDialog<Note>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text('Какую заметку «$title» открыть?'),
+            content: SizedBox(
+              width: 440,
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final candidate in candidates)
+                    ListTile(
+                      leading: Text(noteTypeIcon(candidate.noteType)),
+                      title: Text(candidate.title),
+                      subtitle: Text(
+                        _noteLocationLabel(widget.store, candidate),
+                      ),
+                      onTap: () => Navigator.pop(context, candidate),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Отмена'),
+              ),
+            ],
+          ),
+    );
   }
 
   Future<void> _openNote(Note? note) async {
@@ -1885,6 +1994,134 @@ class _EditorToolbarState extends State<_EditorToolbar> {
   }
 }
 
+class _WikiLinkSuggestionsBar extends StatelessWidget {
+  const _WikiLinkSuggestionsBar({
+    required this.controller,
+    required this.store,
+    required this.currentNoteId,
+    required this.sourceProjectId,
+    required this.sourceFolderPath,
+  });
+
+  final TextEditingController controller;
+  final AppStore store;
+  final String currentNoteId;
+  final String sourceProjectId;
+  final String sourceFolderPath;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final value = controller.value;
+        if (!value.selection.isValid || !value.selection.isCollapsed) {
+          return const SizedBox.shrink();
+        }
+        final query = NoteWikiLinkSyntax.autocompleteAt(
+          value.text,
+          value.selection.extentOffset,
+        );
+        if (query == null) {
+          return const SizedBox.shrink();
+        }
+
+        final normalized = query.query.toLowerCase();
+        final candidates = store.data.notes
+            .where((note) => note.id != currentNoteId)
+            .where((note) {
+              if (normalized.isEmpty) return true;
+              final project = store.projectById(note.projectId);
+              final searchable = [
+                note.title,
+                note.folderPath,
+                project?.title ?? '',
+              ].join(' ').toLowerCase();
+              return searchable.contains(normalized);
+            })
+            .toList();
+        candidates.sort((left, right) {
+          int rank(Note note) {
+            final title = note.title.toLowerCase();
+            final prefix = normalized.isNotEmpty && title.startsWith(normalized);
+            if (note.projectId == sourceProjectId &&
+                note.folderPath.trim() == sourceFolderPath.trim()) {
+              return prefix ? 0 : 1;
+            }
+            if (note.projectId == sourceProjectId) return prefix ? 2 : 3;
+            return prefix ? 4 : 5;
+          }
+
+          final rankCompare = rank(left).compareTo(rank(right));
+          if (rankCompare != 0) return rankCompare;
+          return left.title.toLowerCase().compareTo(right.title.toLowerCase());
+        });
+        final visible = candidates.take(6).toList(growable: false);
+        if (visible.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Material(
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          child: SizedBox(
+            height: 54,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              itemCount: visible.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final note = visible[index];
+                final project = store.projectById(note.projectId);
+                final duplicateTitle = store.notesByTitle(note.title).length > 1;
+                final label =
+                    duplicateTitle && project != null
+                        ? '${note.title} · ${project.title}'
+                        : note.title;
+                return Tooltip(
+                  message: _noteLocationLabel(store, note),
+                  child: ActionChip(
+                    avatar: Text(noteTypeIcon(note.noteType)),
+                    label: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onPressed: () => _complete(query, note),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _complete(NoteWikiAutocompleteQuery query, Note note) {
+    final value = controller.value;
+    if (query.end > value.text.length) return;
+    final completion = NoteWikiLinkSyntax.complete(
+      value.text,
+      query,
+      store.wikiTargetFor(note),
+    );
+    controller.value = value.copyWith(
+      text: completion.text,
+      selection: TextSelection.collapsed(offset: completion.cursor),
+      composing: TextRange.empty,
+    );
+  }
+}
+
+String _noteLocationLabel(AppStore store, Note note) {
+  final project = store.projectById(note.projectId);
+  return [
+    project?.title ?? 'Без проекта',
+    if (note.folderPath.trim().isNotEmpty) note.folderPath.trim(),
+  ].join(' · ');
+}
+
 class _LinkSection extends StatelessWidget {
   const _LinkSection({
     required this.title,
@@ -1892,13 +2129,19 @@ class _LinkSection extends StatelessWidget {
     required this.links,
     required this.resolve,
     required this.onOpen,
+    this.subtitle,
+    this.onMissing,
+    this.missingActionLabel,
   });
 
   final String title;
   final String emptyText;
   final List<NoteLink> links;
   final Note? Function(NoteLink link) resolve;
+  final String? Function(NoteLink link, Note? note)? subtitle;
   final ValueChanged<Note?> onOpen;
+  final ValueChanged<NoteLink>? onMissing;
+  final String Function(NoteLink link)? missingActionLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1909,17 +2152,45 @@ class _LinkSection extends StatelessWidget {
               ? Text(emptyText)
               : Column(
                 children: [
-                  for (final link in links)
-                    ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.description_outlined),
-                      title: Text(resolve(link)?.title ?? link.targetTitle),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () => onOpen(resolve(link)),
-                    ),
+                  for (final link in links) _buildLink(link),
                 ],
               ),
+    );
+  }
+
+  Widget _buildLink(NoteLink link) {
+    final note = resolve(link);
+    final detail = subtitle?.call(link, note);
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        note == null ? Icons.link_off_rounded : Icons.description_outlined,
+      ),
+      title: Text(
+        note?.title ?? NoteWikiTarget.parse(link.targetTitle).noteTitle,
+      ),
+      subtitle:
+          detail == null || detail.trim().isEmpty
+              ? null
+              : Text(
+                detail,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+      trailing:
+          note == null && onMissing != null
+              ? TextButton(
+                onPressed: () => onMissing!(link),
+                child: Text(missingActionLabel?.call(link) ?? 'Открыть'),
+              )
+              : const Icon(Icons.chevron_right_rounded),
+      onTap:
+          note != null
+              ? () => onOpen(note)
+              : onMissing == null
+              ? null
+              : () => onMissing!(link),
     );
   }
 }

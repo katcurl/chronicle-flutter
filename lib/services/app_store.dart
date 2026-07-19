@@ -7,6 +7,7 @@ import '../data/migration/legacy_preferences_importer.dart';
 import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
 import '../features/notes/note_document.dart';
+import '../features/notes/note_wiki_link_syntax.dart';
 import '../models/app_models.dart';
 import '../reliability/reliability_models.dart';
 import '../reliability/reliability_service.dart';
@@ -322,11 +323,93 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
   }
 
   Note? noteByTitle(String title) {
+    final matches = notesByTitle(title);
+    return matches.isEmpty ? null : matches.first;
+  }
+
+  List<Note> notesByTitle(String title) {
     final normalized = title.trim().toLowerCase();
-    for (final note in data.notes) {
-      if (note.title.trim().toLowerCase() == normalized) return note;
+    return data.notes
+        .where((note) => note.title.trim().toLowerCase() == normalized)
+        .toList(growable: false);
+  }
+
+  List<Note> notesForWikiTarget(String rawTarget, {Note? source}) {
+    final reference = NoteWikiTarget.parse(rawTarget);
+    var candidates = notesByTitle(reference.noteTitle);
+    if (reference.projectTitle != null) {
+      final projectName = reference.projectTitle!.trim().toLowerCase();
+      candidates = candidates.where((note) {
+        final project = projectById(note.projectId);
+        return project?.title.trim().toLowerCase() == projectName;
+      }).toList(growable: false);
     }
-    return null;
+
+    final sorted = List<Note>.from(candidates);
+    sorted.sort((left, right) {
+      int rank(Note note) {
+        if (source == null) return 2;
+        if (note.projectId == source.projectId &&
+            note.folderPath.trim() == source.folderPath.trim()) {
+          return 0;
+        }
+        if (note.projectId == source.projectId) return 1;
+        return 2;
+      }
+
+      final rankCompare = rank(left).compareTo(rank(right));
+      if (rankCompare != 0) return rankCompare;
+      final leftProject = projectById(left.projectId)?.title ?? '';
+      final rightProject = projectById(right.projectId)?.title ?? '';
+      final projectCompare = leftProject.toLowerCase().compareTo(
+        rightProject.toLowerCase(),
+      );
+      if (projectCompare != 0) return projectCompare;
+      final folderCompare = left.folderPath.toLowerCase().compareTo(
+        right.folderPath.toLowerCase(),
+      );
+      if (folderCompare != 0) return folderCompare;
+      return left.id.compareTo(right.id);
+    });
+    return List<Note>.unmodifiable(sorted);
+  }
+
+  Note? resolveWikiTarget(String rawTarget, {Note? source}) {
+    final reference = NoteWikiTarget.parse(rawTarget);
+    final candidates = notesForWikiTarget(rawTarget, source: source);
+    if (candidates.length == 1) return candidates.single;
+    if (reference.isQualified || source == null || candidates.isEmpty) {
+      return null;
+    }
+
+    final sameFolder = candidates
+        .where(
+          (note) =>
+              note.projectId == source.projectId &&
+              note.folderPath.trim() == source.folderPath.trim(),
+        )
+        .toList(growable: false);
+    if (sameFolder.length == 1) return sameFolder.single;
+
+    final sameProject = candidates
+        .where((note) => note.projectId == source.projectId)
+        .toList(growable: false);
+    return sameProject.length == 1 ? sameProject.single : null;
+  }
+
+  String wikiTargetFor(Note note) {
+    final duplicates = notesByTitle(note.title);
+    if (duplicates.length <= 1) return note.title;
+    final project = projectById(note.projectId);
+    if (project == null) return note.title;
+    final sameProject = duplicates
+        .where((candidate) => candidate.projectId == note.projectId)
+        .toList(growable: false);
+    if (sameProject.length != 1) return note.title;
+    return NoteWikiTarget.qualified(
+      projectTitle: project.title,
+      noteTitle: note.title,
+    );
   }
 
   List<NoteLink> outgoingLinksFor(String noteId) => data.noteLinks
@@ -334,14 +417,13 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       .toList(growable: false);
 
   List<NoteLink> backlinksFor(Note note) {
-    final normalized = note.title.trim().toLowerCase();
-    return data.noteLinks
-        .where(
-          (link) =>
-              link.targetNoteId == note.id ||
-              link.targetTitle.trim().toLowerCase() == normalized,
-        )
-        .toList(growable: false);
+    return data.noteLinks.where((link) {
+      if (link.targetNoteId != null) {
+        return link.targetNoteId == note.id;
+      }
+      final source = noteById(link.sourceNoteId);
+      return resolveWikiTarget(link.targetTitle, source: source)?.id == note.id;
+    }).toList(growable: false);
   }
 
   List<NoteVersion> versionsFor(String noteId) {
@@ -588,7 +670,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     final now = DateTime.now();
     final links =
         targets.map((title) {
-          final target = noteByTitle(title);
+          final target = resolveWikiTarget(title, source: note);
           return NoteLink(
             id: _uuid.v4(),
             sourceNoteId: note.id,

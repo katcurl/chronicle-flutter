@@ -156,10 +156,6 @@ class NoteGraphLayoutEngine {
     final allById = <String, Note>{
       for (final note in allNotes) note.id: note,
     };
-    final allByTitle = <String, Note>{};
-    for (final note in allNotes) {
-      allByTitle.putIfAbsent(_normalize(note.title), () => note);
-    }
     final visibleIds = visibleNotes.map((note) => note.id).toSet();
     final edgeKeys = <String>{};
     final edges = <NoteGraphEdgeLayout>[];
@@ -171,8 +167,7 @@ class NoteGraphLayoutEngine {
         continue;
       }
       final target =
-          (link.targetNoteId == null ? null : allById[link.targetNoteId!]) ??
-          allByTitle[_normalize(link.targetTitle)];
+          link.targetNoteId == null ? null : allById[link.targetNoteId!];
       if (target == null) {
         unresolved += 1;
         continue;
@@ -225,6 +220,4 @@ class NoteGraphLayoutEngine {
     }
     return result;
   }
-
-  static String _normalize(String value) => value.trim().toLowerCase();
 }

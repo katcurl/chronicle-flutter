@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.23.2+50
+
+- Added lightweight `[[` autocomplete that rebuilds only its suggestion strip instead of the complete note workspace.
+- Kept wiki links clickable in preview and added readable `[[Project :: Note]]` qualification for duplicate titles across projects.
+- Added safe duplicate-title resolution: same-folder and same-project notes are preferred, while unresolved ambiguity opens an explicit chooser instead of selecting an arbitrary note.
+- Added backlink context snippets, clearer outgoing-link locations, and a direct Create action for missing targets.
+- Made the knowledge map rely on resolved note IDs so ambiguous links are reported as unresolved rather than connected to the first matching title.
+- Preserved Markdown portability, existing notes, block editing, themes, Vault files, attachments, and synchronization without a database migration.
+- Added deterministic tests for autocomplete, aliases, qualified targets, backlink snippets, duplicate-title resolution, and ambiguous graph links.
+
 ## 0.23.1+49
 
 - Removed the redundant `dart:ui` import from the knowledge-map layout test.
