@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.23.1+49
+
+- Removed the redundant `dart:ui` import from the knowledge-map layout test.
+- Restored clean `flutter analyze` execution on Flutter 3.44 where unnecessary imports are fatal in GitHub Actions.
+- Kept the knowledge map, Markdown, Vault, synchronization, themes, and application behavior unchanged.
+
 ## 0.23.0+48
 
 - Added a read-only interactive knowledge map built from Chronicle's existing `[[wiki links]]` and backlink index.
