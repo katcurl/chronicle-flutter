@@ -63,8 +63,8 @@ void main() {
 
   // Duplicate titles must never be resolved to an arbitrary project.
   test('wiki targets prefer the source project and support qualification', () async {
-    final projectA = Project(id: 'project-a', title: 'Research A');
-    final projectB = Project(id: 'project-b', title: 'Research B');
+    final projectA = Project(id: 'project-a', title: 'Research A', emoji: '🧪');
+    final projectB = Project(id: 'project-b', title: 'Research B', emoji: '🧬');
     final targetA = Note(
       id: 'target-a',
       title: 'RMSD',

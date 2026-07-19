@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.23.3+51
+
+- Added the required project emoji to two wiki-navigation test fixtures.
+- Restored clean `flutter analyze` execution without changing production wiki-link behavior.
+- Kept all user-selected project emojis unrestricted; the two symbols are test data only.
+- Preserved notes, Markdown, the knowledge map, Vault files, synchronization, themes, and application data unchanged.
+
 ## 0.23.2+50
 
 - Added lightweight `[[` autocomplete that rebuilds only its suggestion strip instead of the complete note workspace.
