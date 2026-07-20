@@ -8,6 +8,7 @@ import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
 import '../features/notes/note_document.dart';
 import '../features/notes/note_wiki_link_syntax.dart';
+import '../features/notes/note_wiki_rename.dart';
 import '../models/app_models.dart';
 import '../reliability/reliability_models.dart';
 import '../reliability/reliability_service.dart';
@@ -336,6 +337,10 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
 
   List<Note> notesForWikiTarget(String rawTarget, {Note? source}) {
     final reference = NoteWikiTarget.parse(rawTarget);
+    if (reference.noteId != null) {
+      final exact = noteById(reference.noteId!);
+      return exact == null ? const <Note>[] : <Note>[exact];
+    }
     var candidates = notesByTitle(reference.noteTitle);
     if (reference.projectTitle != null) {
       final projectName = reference.projectTitle!.trim().toLowerCase();
@@ -400,16 +405,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
   String wikiTargetFor(Note note) {
     final duplicates = notesByTitle(note.title);
     if (duplicates.length <= 1) return note.title;
-    final project = projectById(note.projectId);
-    if (project == null) return note.title;
-    final sameProject = duplicates
-        .where((candidate) => candidate.projectId == note.projectId)
-        .toList(growable: false);
-    if (sameProject.length != 1) return note.title;
-    return NoteWikiTarget.qualified(
-      projectTitle: project.title,
-      noteTitle: note.title,
-    );
+    return NoteWikiTarget.exactId(note.id);
   }
 
   List<NoteLink> outgoingLinksFor(String noteId) => data.noteLinks
@@ -424,6 +420,248 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       final source = noteById(link.sourceNoteId);
       return resolveWikiTarget(link.targetTitle, source: source)?.id == note.id;
     }).toList(growable: false);
+  }
+
+  NoteWikiRenamePlan buildWikiRenamePlan(Note note, String newTitle) {
+    return NoteWikiRenamePlanner.build(
+      target: note,
+      newTitle: newTitle,
+      notes: data.notes,
+      resolveTarget:
+          (source, rawTarget) =>
+              resolveWikiTarget(rawTarget, source: source),
+      targetCandidates:
+          (source, rawTarget) =>
+              notesForWikiTarget(rawTarget, source: source),
+    );
+  }
+
+  List<NoteWikiLinkIssue> wikiLinkIssues() {
+    return NoteWikiRenamePlanner.findIssues(
+      notes: data.notes,
+      resolveTarget:
+          (source, rawTarget) =>
+              resolveWikiTarget(rawTarget, source: source),
+      targetCandidates:
+          (source, rawTarget) =>
+              notesForWikiTarget(rawTarget, source: source),
+    );
+  }
+
+  Future<NoteWikiRenameUndo> applyWikiRenamePlan(
+    NoteWikiRenamePlan plan,
+  ) async {
+    final target = noteById(plan.targetNoteId);
+    if (target == null) {
+      throw StateError('Переименовываемая заметка больше не существует.');
+    }
+    if (target.title != plan.oldTitle) {
+      throw StateError(
+        'Название заметки уже изменилось; открой предварительный просмотр снова.',
+      );
+    }
+
+    if (plan.skippedAmbiguousOccurrences > 0) {
+      throw StateError(
+        'Сначала исправь неоднозначные ссылки через проверку связей.',
+      );
+    }
+
+    final changedIds = <String>{
+      target.id,
+      ...plan.sourceChanges.map((change) => change.sourceNoteId),
+    };
+    final snapshots = <NoteWikiSnapshot>[];
+    final now = DateTime.now();
+    for (final noteId in changedIds) {
+      final note = noteById(noteId);
+      if (note == null) continue;
+      snapshots.add(
+        NoteWikiSnapshot(noteId: note.id, title: note.title, body: note.body),
+      );
+      final version = NoteVersion(
+        id: _uuid.v4(),
+        noteId: note.id,
+        title: note.title,
+        body: note.body,
+        tags: List<String>.from(note.tags),
+        status: note.status,
+        folderPath: note.folderPath,
+        noteType: note.noteType,
+        properties: Map<String, String>.from(note.properties),
+        reason: 'Перед безопасным переименованием «${plan.oldTitle}»',
+        createdAt: now,
+      );
+      data.noteVersions.insert(0, version);
+      await _repository.saveNoteVersion(version);
+    }
+
+    try {
+      for (final change in plan.sourceChanges) {
+        final source = noteById(change.sourceNoteId);
+        if (source == null) continue;
+        source.body = change.updatedBody;
+      }
+      target.title = plan.newTitle;
+
+      for (final noteId in changedIds) {
+        final note = noteById(noteId);
+        if (note == null) continue;
+        note.updatedAt = DateTime.now();
+        note.revision += 1;
+        await _repository.saveNote(note);
+      }
+      for (final noteId in changedIds) {
+        final note = noteById(noteId);
+        if (note != null) {
+          await _syncNoteLinks(note, notify: false);
+        }
+      }
+    } on Object {
+      await _restoreWikiSnapshots(snapshots);
+      rethrow;
+    }
+    _scheduleSyncOverviewRefresh();
+    _scheduleVaultMirror();
+    notifyListeners();
+    final appliedSnapshots = changedIds
+        .map(noteById)
+        .whereType<Note>()
+        .map(
+          (note) => NoteWikiSnapshot(
+            noteId: note.id,
+            title: note.title,
+            body: note.body,
+          ),
+        )
+        .toList(growable: false);
+    return NoteWikiRenameUndo(
+      snapshots: List<NoteWikiSnapshot>.unmodifiable(snapshots),
+      appliedSnapshots: List<NoteWikiSnapshot>.unmodifiable(appliedSnapshots),
+    );
+  }
+
+  Future<void> undoWikiRename(NoteWikiRenameUndo undo) async {
+    for (final expected in undo.appliedSnapshots) {
+      final note = noteById(expected.noteId);
+      if (note == null ||
+          note.title != expected.title ||
+          note.body != expected.body) {
+        throw StateError(
+          'После переименования одна из заметок уже изменилась; '
+          'автоматическая отмена остановлена.',
+        );
+      }
+    }
+    final restoredIds = <String>{};
+    for (final snapshot in undo.snapshots) {
+      final note = noteById(snapshot.noteId);
+      if (note == null) continue;
+      final version = NoteVersion(
+        id: _uuid.v4(),
+        noteId: note.id,
+        title: note.title,
+        body: note.body,
+        tags: List<String>.from(note.tags),
+        status: note.status,
+        folderPath: note.folderPath,
+        noteType: note.noteType,
+        properties: Map<String, String>.from(note.properties),
+        reason: 'Перед отменой безопасного переименования',
+      );
+      data.noteVersions.insert(0, version);
+      await _repository.saveNoteVersion(version);
+      note.title = snapshot.title;
+      note.body = snapshot.body;
+      note.updatedAt = DateTime.now();
+      note.revision += 1;
+      restoredIds.add(note.id);
+      await _repository.saveNote(note);
+    }
+    for (final noteId in restoredIds) {
+      final note = noteById(noteId);
+      if (note != null) {
+        await _syncNoteLinks(note, notify: false);
+      }
+    }
+    _scheduleSyncOverviewRefresh();
+    _scheduleVaultMirror();
+    notifyListeners();
+  }
+
+  Future<void> _restoreWikiSnapshots(
+    Iterable<NoteWikiSnapshot> snapshots,
+  ) async {
+    final restoredIds = <String>{};
+    for (final snapshot in snapshots) {
+      final note = noteById(snapshot.noteId);
+      if (note == null) continue;
+      note.title = snapshot.title;
+      note.body = snapshot.body;
+      note.updatedAt = DateTime.now();
+      note.revision += 1;
+      restoredIds.add(note.id);
+      await _repository.saveNote(note);
+    }
+    for (final noteId in restoredIds) {
+      final note = noteById(noteId);
+      if (note != null) {
+        await _syncNoteLinks(note, notify: false);
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> repairWikiLink({
+    required Note source,
+    required String rawTarget,
+    required Note target,
+  }) async {
+    final parsed = NoteDocument.parse(source.body);
+    var content = parsed.content;
+    var changed = false;
+    final normalized = rawTarget.trim().toLowerCase();
+    for (final reference in NoteWikiLinkSyntax.all(parsed.content).toList().reversed) {
+      if (reference.target.trim().toLowerCase() != normalized) {
+        continue;
+      }
+      final explicitLabel = reference.label?.trim();
+      final label =
+          explicitLabel != null && explicitLabel.isNotEmpty
+              ? explicitLabel
+              : target.title;
+      content = NoteWikiLinkSyntax.replaceTarget(
+        content,
+        reference,
+        target: NoteWikiTarget.exactId(target.id),
+        label: label,
+      );
+      changed = true;
+    }
+    if (!changed) return;
+
+    final version = NoteVersion(
+      id: _uuid.v4(),
+      noteId: source.id,
+      title: source.title,
+      body: source.body,
+      tags: List<String>.from(source.tags),
+      status: source.status,
+      folderPath: source.folderPath,
+      noteType: source.noteType,
+      properties: Map<String, String>.from(source.properties),
+      reason: 'Перед исправлением вики-ссылки',
+    );
+    data.noteVersions.insert(0, version);
+    await _repository.saveNoteVersion(version);
+    source.body = NoteDocument.replaceContent(source.body, content);
+    source.updatedAt = DateTime.now();
+    source.revision += 1;
+    await _repository.saveNote(source);
+    await _syncNoteLinks(source, notify: false);
+    _scheduleSyncOverviewRefresh();
+    _scheduleVaultMirror();
+    notifyListeners();
   }
 
   List<NoteVersion> versionsFor(String noteId) {

@@ -55,4 +55,33 @@ void main() {
     expect(snippet, isNot(contains('[[')));
     expect(snippet, contains('анализа'));
   });
+
+  // Exact-ID targets keep links stable after note renaming.
+  test('exact ID links and heading anchors stay readable', () {
+    const markdown = 'См. [[id:note-42#results|Результаты]].';
+    final link = NoteWikiLinkSyntax.all(markdown).single;
+
+    expect(link.target, 'id:note-42');
+    expect(link.anchor, '#results');
+    expect(link.visibleLabel, 'Результаты');
+    expect(NoteWikiTarget.parse('id:note-42#results').noteId, 'note-42');
+    expect(
+      NoteWikiLinkSyntax.convertToMarkdown(markdown),
+      contains('chronicle://note/id%3Anote-42%23results'),
+    );
+  });
+  test('autocomplete can insert an exact target with a readable label', () {
+    const text = 'См. [[';
+    final query = NoteWikiLinkSyntax.autocompleteAt(text, text.length)!;
+
+    final completion = NoteWikiLinkSyntax.complete(
+      text,
+      query,
+      'id:note-42',
+      label: 'RMSD',
+    );
+
+    expect(completion.text, 'См. [[id:note-42|RMSD]]');
+  });
+
 }

@@ -15,6 +15,7 @@ import '../features/notes/note_graph_screen.dart';
 import '../features/notes/note_markdown_view.dart';
 import '../features/notes/note_templates.dart';
 import '../features/notes/note_wiki_link_syntax.dart';
+import '../features/notes/note_wiki_rename.dart';
 import '../features/tasks/task_editor_sheet.dart';
 import '../models/app_models.dart';
 import '../services/app_store.dart';
@@ -79,6 +80,11 @@ class _NotesScreenState extends State<NotesScreen> {
             tooltip: 'Карта знаний',
             onPressed: _openKnowledgeGraph,
             icon: const Icon(Icons.hub_outlined),
+          ),
+          IconButton(
+            tooltip: 'Проверить ссылки',
+            onPressed: _openLinkHealth,
+            icon: const Icon(Icons.link_off_rounded),
           ),
           IconButton(
             tooltip: pinnedOnly ? 'Показать все' : 'Только закреплённые',
@@ -190,6 +196,130 @@ class _NotesScreenState extends State<NotesScreen> {
         icon: const Icon(Icons.add_rounded),
         label: const Text('Заметка'),
       ),
+    );
+  }
+
+  Future<void> _openLinkHealth() async {
+    while (true) {
+      if (!mounted) return;
+      final issues = widget.store.wikiLinkIssues();
+      final selection = await showDialog<_LinkHealthSelection>(
+        context: context,
+        builder:
+            (context) => _LinkHealthDialog(
+              store: widget.store,
+              issues: issues,
+            ),
+      );
+      if (!mounted || selection == null) return;
+      final source = widget.store.noteById(selection.issue.sourceNoteId);
+      if (source == null) continue;
+      if (!selection.repair) {
+        await _open(source);
+        return;
+      }
+      await _repairLinkIssue(selection.issue, source);
+    }
+  }
+
+  Future<void> _repairLinkIssue(
+    NoteWikiLinkIssue issue,
+    Note source,
+  ) async {
+    Note? target;
+    if (issue.kind == NoteWikiLinkIssueKind.ambiguous) {
+      final candidates = issue.candidateNoteIds
+          .map(widget.store.noteById)
+          .whereType<Note>()
+          .toList(growable: false);
+      target = await showDialog<Note>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: Text('Куда должна вести «${issue.rawTarget}»?'),
+              content: SizedBox(
+                width: 460,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final candidate in candidates)
+                      ListTile(
+                        leading: Text(noteTypeIcon(candidate.noteType)),
+                        title: Text(candidate.title),
+                        subtitle: Text(
+                          _noteLocationLabel(widget.store, candidate),
+                        ),
+                        onTap: () => Navigator.pop(context, candidate),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Отмена'),
+                ),
+              ],
+            ),
+      );
+    } else {
+      final reference = NoteWikiTarget.parse(issue.rawTarget);
+      if (reference.noteId != null || reference.noteTitle.trim().isEmpty) {
+        await _open(source);
+        return;
+      }
+      final create = await showDialog<bool>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: Text('Создать «${reference.noteTitle}»?'),
+              content: Text(
+                'Новая заметка будет создана рядом с «${source.title}», '
+                'а ссылка станет точной и устойчивой к переименованию.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Отмена'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Создать'),
+                ),
+              ],
+            ),
+      );
+      if (create != true || !mounted) return;
+      var targetProjectId = source.projectId;
+      final requestedProject = reference.projectTitle?.trim().toLowerCase();
+      if (requestedProject != null) {
+        for (final project in widget.store.data.projects) {
+          if (project.title.trim().toLowerCase() == requestedProject) {
+            targetProjectId = project.id;
+            break;
+          }
+        }
+      }
+      target = Note(
+        id: const Uuid().v4(),
+        title: reference.noteTitle,
+        projectId: targetProjectId,
+        body: '',
+        folderPath:
+            targetProjectId == source.projectId ? source.folderPath : '',
+      );
+      target.body = NoteDocument.serialize(
+        target,
+        '# ${reference.noteTitle}\n\n',
+      );
+      widget.store.addNote(target);
+      await widget.store.rebuildAllNoteLinks();
+    }
+    if (target == null) return;
+    await widget.store.repairWikiLink(
+      source: source,
+      rawTarget: issue.rawTarget,
+      target: target,
     );
   }
 
@@ -403,6 +533,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   late String _lastContentText;
   bool _suppressTextChangeTracking = false;
   bool dirty = false;
+  bool _renameReviewBusy = false;
   int mode = 0;
 
   @override
@@ -497,7 +628,12 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
               actions: [
                 IconButton(
                   tooltip: 'Сохранить версию',
-                  onPressed: dirty ? () => _save(createVersion: true) : null,
+                  onPressed:
+                      dirty && !_renameReviewBusy
+                          ? () => unawaited(
+                            _saveWithRenameReview(createVersion: true),
+                          )
+                          : null,
                   icon: const Icon(Icons.save_outlined),
                 ),
                 IconButton(
@@ -631,17 +767,46 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 4),
-          child: TextField(
-            controller: titleController,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              filled: false,
-              hintText: 'Название',
-            ),
+          padding: const EdgeInsets.fromLTRB(18, 8, 10, 4),
+          child: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: titleController,
+            builder: (context, titleValue, _) {
+              final proposed = titleValue.text.trim();
+              final titleChanged =
+                  proposed.isNotEmpty && proposed != widget.note.title;
+              return Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: titleController,
+                      onSubmitted:
+                          (_) => unawaited(
+                            _saveWithRenameReview(createVersion: false),
+                          ),
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        filled: false,
+                        hintText: 'Название',
+                      ),
+                    ),
+                  ),
+                  if (titleChanged)
+                    IconButton(
+                      tooltip: 'Предпросмотр безопасного переименования',
+                      onPressed:
+                          _renameReviewBusy
+                              ? null
+                              : () => unawaited(
+                                _saveWithRenameReview(createVersion: false),
+                              ),
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
+                ],
+              );
+            },
           ),
         ),
         _EditorToolbar(
@@ -901,26 +1066,167 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
 
   void _save({required bool createVersion}) {
     if (!dirty && !createVersion) return;
-    if (createVersion && dirty) {
-      widget.store.addNoteVersion(
-        NoteVersion(
-          id: const Uuid().v4(),
-          noteId: widget.note.id,
-          title: widget.note.title,
-          body: widget.note.body,
-          tags: List<String>.from(widget.note.tags),
-          status: widget.note.status,
-          folderPath: widget.note.folderPath,
-          noteType: widget.note.noteType,
-          properties: Map<String, String>.from(widget.note.properties),
-          reason: 'Ручное сохранение',
-        ),
-      );
+    final proposedTitle = _proposedTitle;
+    final titleChanged = proposedTitle != widget.note.title;
+    final renamePlan =
+        titleChanged
+            ? widget.store.buildWikiRenamePlan(widget.note, proposedTitle)
+            : null;
+    final needsReview = renamePlan?.requiresReview ?? false;
+
+    if (createVersion && dirty && !needsReview) {
+      _recordCurrentVersion('Ручное сохранение');
     }
-    widget.note.title =
-        titleController.text.trim().isEmpty
-            ? 'Без названия'
-            : titleController.text.trim();
+    final savedTitle = needsReview ? widget.note.title : proposedTitle;
+    _writeEditorState(savedTitle: savedTitle);
+    _lastContentText = contentController.text;
+    if (needsReview) {
+      _lastTitleText = widget.note.title;
+      if (mounted) setState(() => dirty = true);
+    } else {
+      _lastTitleText = titleController.text;
+      if (mounted) setState(() => dirty = false);
+    }
+  }
+
+  Future<void> _saveWithRenameReview({required bool createVersion}) async {
+    if (_renameReviewBusy) return;
+    final proposedTitle = _proposedTitle;
+    if (proposedTitle == widget.note.title) {
+      _save(createVersion: createVersion);
+      return;
+    }
+
+    setState(() => _renameReviewBusy = true);
+    try {
+      final oldTitle = widget.note.title;
+      _assignEditorState(savedTitle: oldTitle);
+      _lastContentText = contentController.text;
+      _lastTitleText = oldTitle;
+      final plan = widget.store.buildWikiRenamePlan(
+        widget.note,
+        proposedTitle,
+      );
+
+      if (!plan.requiresReview) {
+        final previous = NoteWikiSnapshot(
+          noteId: widget.note.id,
+          title: oldTitle,
+          body: widget.note.body,
+        );
+        if (createVersion) {
+          _recordCurrentVersion('Перед переименованием заметки');
+        }
+        widget.note.title = proposedTitle;
+        widget.store.updateNote(widget.note);
+        final undo = NoteWikiRenameUndo(
+          snapshots: [previous],
+          appliedSnapshots: [
+            NoteWikiSnapshot(
+              noteId: widget.note.id,
+              title: widget.note.title,
+              body: widget.note.body,
+            ),
+          ],
+        );
+        _reloadEditorFromNote();
+        _showRenameUndo(
+          undo,
+          'Заметка переименована; связанных ссылок для обновления нет.',
+        );
+        return;
+      }
+
+      final decision = await showDialog<_WikiRenameDecision>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => _WikiRenamePreviewDialog(plan: plan),
+      );
+      if (!mounted || decision == null || decision == _WikiRenameDecision.cancel) {
+        widget.store.updateNote(widget.note);
+        setState(() => dirty = true);
+        return;
+      }
+
+      if (decision == _WikiRenameDecision.renameOnly) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder:
+              (context) => AlertDialog(
+                title: const Text('Оставить старые ссылки?'),
+                content: const Text(
+                  'Ссылки с прежним названием перестанут открываться до '
+                  'ручного исправления. Безопаснее обновить их автоматически.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Назад'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Переименовать без ссылок'),
+                  ),
+                ],
+              ),
+        );
+        if (!mounted || confirmed != true) {
+          setState(() => dirty = true);
+          return;
+        }
+      }
+
+      late final NoteWikiRenameUndo undo;
+      if (decision == _WikiRenameDecision.renameOnly) {
+        final previous = NoteWikiSnapshot(
+          noteId: widget.note.id,
+          title: oldTitle,
+          body: widget.note.body,
+        );
+        _recordCurrentVersion('Перед переименованием без обновления ссылок');
+        widget.note.title = proposedTitle;
+        widget.store.updateNote(widget.note);
+        undo = NoteWikiRenameUndo(
+          snapshots: [previous],
+          appliedSnapshots: [
+            NoteWikiSnapshot(
+              noteId: widget.note.id,
+              title: widget.note.title,
+              body: widget.note.body,
+            ),
+          ],
+        );
+      } else {
+        undo = await widget.store.applyWikiRenamePlan(plan);
+      }
+      if (!mounted) return;
+      _reloadEditorFromNote();
+      final message =
+          decision == _WikiRenameDecision.renameOnly
+              ? 'Название изменено без обновления ссылок.'
+              : 'Обновлено ссылок: ${plan.occurrenceCount} '
+                'в ${plan.changedNoteCount} заметках.';
+      _showRenameUndo(undo, message);
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Не удалось переименовать заметку: $error')),
+        );
+      setState(() => dirty = true);
+    } finally {
+      if (mounted) setState(() => _renameReviewBusy = false);
+    }
+  }
+
+  String get _proposedTitle {
+    final value = titleController.text.trim();
+    return value.isEmpty ? 'Без названия' : value;
+  }
+
+  void _assignEditorState({required String savedTitle}) {
+    widget.note.title = savedTitle;
     widget.note.projectId = projectId;
     widget.note.status = status;
     widget.note.folderPath = folderPath.trim();
@@ -932,10 +1238,73 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       widget.note,
       contentController.text,
     );
+  }
+
+  void _writeEditorState({required String savedTitle}) {
+    _assignEditorState(savedTitle: savedTitle);
     widget.store.updateNote(widget.note);
+  }
+
+  void _recordCurrentVersion(String reason) {
+    widget.store.addNoteVersion(
+      NoteVersion(
+        id: const Uuid().v4(),
+        noteId: widget.note.id,
+        title: widget.note.title,
+        body: widget.note.body,
+        tags: List<String>.from(widget.note.tags),
+        status: widget.note.status,
+        folderPath: widget.note.folderPath,
+        noteType: widget.note.noteType,
+        properties: Map<String, String>.from(widget.note.properties),
+        reason: reason,
+      ),
+    );
+  }
+
+  void _reloadEditorFromNote() {
+    final parsed = NoteDocument.parse(widget.note.body);
+    _suppressTextChangeTracking = true;
+    titleController.text = widget.note.title;
+    contentController.text = parsed.content;
+    _suppressTextChangeTracking = false;
     _lastTitleText = titleController.text;
     _lastContentText = contentController.text;
-    if (mounted) setState(() => dirty = false);
+    _contentTextNotifier.value = _lastContentText;
+    if (mounted) {
+      setState(() => dirty = false);
+    }
+  }
+
+  void _showRenameUndo(NoteWikiRenameUndo undo, String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action: SnackBarAction(
+            label: 'Отменить',
+            onPressed: () => unawaited(_undoRename(undo)),
+          ),
+        ),
+      );
+  }
+
+  Future<void> _undoRename(NoteWikiRenameUndo undo) async {
+    try {
+      await widget.store.undoWikiRename(undo);
+      if (!mounted) return;
+      _reloadEditorFromNote();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Переименование и изменения ссылок отменены.')),
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось отменить переименование: $error')),
+      );
+    }
   }
 
   Future<void> _editProperties() async {
@@ -1529,6 +1898,29 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       if (!mounted || target == null) return;
     }
 
+    if (target == null && reference.noteId != null) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Связанная заметка удалена'),
+              content: const Text(
+                'Эта точная ссылка указывает на заметку, которой больше нет. '
+                'Открой «Проверить ссылки» в списке заметок, чтобы найти '
+                'источник и исправить ссылку вручную.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Закрыть'),
+                ),
+              ],
+            ),
+      );
+      return;
+    }
+
     if (target == null) {
       if (!mounted) return;
       final create = await showDialog<bool>(
@@ -2101,10 +2493,12 @@ class _WikiLinkSuggestionsBar extends StatelessWidget {
   void _complete(NoteWikiAutocompleteQuery query, Note note) {
     final value = controller.value;
     if (query.end > value.text.length) return;
+    final target = store.wikiTargetFor(note);
     final completion = NoteWikiLinkSyntax.complete(
       value.text,
       query,
-      store.wikiTargetFor(note),
+      target,
+      label: NoteWikiTarget.parse(target).noteId == null ? null : note.title,
     );
     controller.value = value.copyWith(
       text: completion.text,
@@ -2112,6 +2506,11 @@ class _WikiLinkSuggestionsBar extends StatelessWidget {
       composing: TextRange.empty,
     );
   }
+}
+
+String _wikiTargetDisplayName(String rawTarget) {
+  final parsed = NoteWikiTarget.parse(rawTarget);
+  return parsed.noteTitle.isEmpty ? rawTarget : parsed.noteTitle;
 }
 
 String _noteLocationLabel(AppStore store, Note note) {
@@ -2168,7 +2567,7 @@ class _LinkSection extends StatelessWidget {
         note == null ? Icons.link_off_rounded : Icons.description_outlined,
       ),
       title: Text(
-        note?.title ?? NoteWikiTarget.parse(link.targetTitle).noteTitle,
+        note?.title ?? _wikiTargetDisplayName(link.targetTitle),
       ),
       subtitle:
           detail == null || detail.trim().isEmpty
@@ -2523,6 +2922,248 @@ class _NoteMetadata {
   final List<String> tags;
   final Map<String, String> properties;
   final bool pinned;
+}
+
+
+enum _WikiRenameDecision { cancel, renameOnly, updateLinks }
+
+class _WikiRenamePreviewDialog extends StatelessWidget {
+  const _WikiRenamePreviewDialog({required this.plan});
+
+  final NoteWikiRenamePlan plan;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Безопасное переименование'),
+      content: SizedBox(
+        width: 620,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '«${plan.oldTitle}» → «${plan.newTitle}»',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Chronicle может обновить ${plan.occurrenceCount} '
+                'ссылок в ${plan.changedNoteCount} заметках. Перед операцией '
+                'для каждой изменяемой заметки будет сохранена версия.',
+              ),
+              if (plan.skippedAmbiguousOccurrences > 0) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Не будут изменены неоднозначные ссылки: '
+                  '${plan.skippedAmbiguousOccurrences}. Их можно исправить '
+                  'через «Проверить ссылки».',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              for (final change in plan.sourceChanges.take(12))
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: const EdgeInsets.only(bottom: 8),
+                  leading: const Icon(Icons.description_outlined),
+                  title: Text(change.sourceTitle),
+                  subtitle: Text(
+                    'Ссылок: ${change.occurrenceCount}',
+                  ),
+                  children: [
+                    for (final occurrence in change.occurrences.take(3))
+                      ListTile(
+                        dense: true,
+                        contentPadding: const EdgeInsets.only(left: 16),
+                        leading: const Icon(Icons.link_rounded, size: 18),
+                        title: Text(
+                          occurrence.snippet.isEmpty
+                              ? '[[${occurrence.rawTarget}]]'
+                              : occurrence.snippet,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                ),
+              if (plan.sourceChanges.length > 12)
+                Text(
+                  'И ещё заметок: ${plan.sourceChanges.length - 12}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(
+            context,
+            _WikiRenameDecision.cancel,
+          ),
+          child: const Text('Отмена'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(
+            context,
+            _WikiRenameDecision.renameOnly,
+          ),
+          child: const Text('Только название'),
+        ),
+        FilledButton.icon(
+          onPressed:
+              plan.skippedAmbiguousOccurrences > 0
+                  ? null
+                  : () => Navigator.pop(
+                    context,
+                    _WikiRenameDecision.updateLinks,
+                  ),
+          icon: const Icon(Icons.link_rounded),
+          label: Text(
+            plan.skippedAmbiguousOccurrences > 0
+                ? 'Сначала исправить неоднозначные'
+                : 'Обновить ${plan.occurrenceCount} ссылок',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LinkHealthSelection {
+  const _LinkHealthSelection({
+    required this.issue,
+    required this.repair,
+  });
+
+  final NoteWikiLinkIssue issue;
+  final bool repair;
+}
+
+class _LinkHealthDialog extends StatelessWidget {
+  const _LinkHealthDialog({required this.store, required this.issues});
+
+  final AppStore store;
+  final List<NoteWikiLinkIssue> issues;
+
+  @override
+  Widget build(BuildContext context) {
+    final missing = issues
+        .where((issue) => issue.kind == NoteWikiLinkIssueKind.missing)
+        .length;
+    final ambiguous = issues.length - missing;
+    final dialogHeight = (MediaQuery.sizeOf(context).height * 0.62)
+        .clamp(300.0, 520.0)
+        .toDouble();
+    return AlertDialog(
+      title: const Text('Проверка связей'),
+      content: SizedBox(
+        width: 680,
+        height: dialogHeight,
+        child:
+            issues.isEmpty
+                ? const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.verified_outlined, size: 52),
+                      SizedBox(height: 10),
+                      Text('Все вики-ссылки разрешаются однозначно.'),
+                    ],
+                  ),
+                )
+                : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Не найдены: $missing · Неоднозначны: $ambiguous',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: issues.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final issue = issues[index];
+                          final source = store.noteById(issue.sourceNoteId);
+                          final exactMissing =
+                              issue.kind == NoteWikiLinkIssueKind.missing &&
+                              NoteWikiTarget.parse(issue.rawTarget).noteId !=
+                                  null;
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              issue.kind == NoteWikiLinkIssueKind.missing
+                                  ? Icons.link_off_rounded
+                                  : Icons.call_split_rounded,
+                            ),
+                            title: Text(
+                              '[[${issue.rawTarget}]]',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              [
+                                source?.title ?? issue.sourceTitle,
+                                if (issue.snippet.isNotEmpty) issue.snippet,
+                              ].join('\n'),
+                              maxLines: 4,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => Navigator.pop(
+                              context,
+                              _LinkHealthSelection(
+                                issue: issue,
+                                repair: false,
+                              ),
+                            ),
+                            trailing:
+                                exactMissing
+                                    ? const Tooltip(
+                                      message:
+                                          'Точная ссылка ведёт на удалённую '
+                                          'заметку; открой источник для '
+                                          'ручного решения.',
+                                      child: Icon(Icons.info_outline_rounded),
+                                    )
+                                    : TextButton(
+                                      onPressed: () => Navigator.pop(
+                                        context,
+                                        _LinkHealthSelection(
+                                          issue: issue,
+                                          repair: true,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        issue.kind ==
+                                                NoteWikiLinkIssueKind.missing
+                                            ? 'Создать'
+                                            : 'Выбрать',
+                                      ),
+                                    ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Закрыть'),
+        ),
+      ],
+    );
+  }
 }
 
 class _NewNoteSheet extends StatefulWidget {

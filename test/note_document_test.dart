@@ -43,4 +43,15 @@ void main() {
   test('word count ignores common markdown punctuation', () {
     expect(NoteDocument.wordCount('# Заголовок\n\nДва важных слова.'), 4);
   });
+  test('content replacement preserves front matter byte structure', () {
+    const original = '---\nstatus: draft\ncustom: value\n---\n\nOld text';
+
+    final replaced = NoteDocument.replaceContent(original, 'New text');
+
+    expect(
+      replaced,
+      '---\nstatus: draft\ncustom: value\n---\n\nNew text',
+    );
+  });
+
 }

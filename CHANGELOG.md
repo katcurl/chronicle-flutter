@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.23.4+52
+
+- Added a preview-first workflow for renaming notes that already have incoming wiki links.
+- Rewrites only links that resolve unambiguously to the renamed note and blocks the safe batch action until ambiguous references are reviewed.
+- Converts updated references to exact `[[id:note-id|label]]` targets so later title changes cannot silently redirect them.
+- Preserves custom labels and heading anchors while refreshing automatic title labels.
+- Creates persistent note versions before every affected note is changed and offers immediate undo after the operation.
+- Added a global link-health dialog for missing and ambiguous links, with direct creation or explicit target selection.
+- Added exact-link repair with a safety version and no database migration.
+- Ignored Chronicle patch backups in Git so local recovery files no longer clutter `git status`.
+- Added deterministic tests for exact-ID links, anchors, rename planning, apply/undo behavior, and link-health classification.
+
 ## 0.23.3+51
 
 - Added the required project emoji to two wiki-navigation test fixtures.

@@ -43,6 +43,19 @@ class NoteDocument {
     return ParsedNoteDocument(content: content, frontMatter: properties);
   }
 
+  static String replaceContent(String body, String content) {
+    final normalized = body.replaceAll('\r\n', '\n');
+    if (!normalized.startsWith('---\n')) {
+      return content;
+    }
+    final closing = normalized.indexOf('\n---\n', 4);
+    if (closing < 0) {
+      return content;
+    }
+    final frontMatter = normalized.substring(0, closing + 5);
+    return '$frontMatter\n$content';
+  }
+
   static String serialize(Note note, String content) {
     final properties = <String, String>{
       ...note.properties,

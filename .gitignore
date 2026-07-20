@@ -7,3 +7,5 @@ android/.gradle/
 android/local.properties
 .idea/
 *.iml
+.chronicle_last_patch
+.chronicle_patch_backups/

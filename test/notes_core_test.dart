@@ -101,7 +101,7 @@ void main() {
       store.resolveWikiTarget('Research B :: RMSD', source: source)?.id,
       targetB.id,
     );
-    expect(store.wikiTargetFor(targetB), 'Research B :: RMSD');
+    expect(store.wikiTargetFor(targetB), 'id:target-b');
     expect(store.backlinksFor(targetA), hasLength(1));
     expect(store.backlinksFor(targetB), hasLength(1));
 
