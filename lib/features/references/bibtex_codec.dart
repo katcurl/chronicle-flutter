@@ -199,7 +199,9 @@ class BibTexCodec {
         index += 1;
       }
       if (name.isEmpty || index >= body.length || body[index] != '=') {
-        while (index < body.length && body[index] != ',') index += 1;
+        while (index < body.length && body[index] != ',') {
+          index += 1;
+        }
         continue;
       }
       index += 1;
@@ -228,10 +230,14 @@ class BibTexCodec {
           index += 1;
         }
       } else {
-        while (index < body.length && body[index] != ',') index += 1;
+        while (index < body.length && body[index] != ',') {
+          index += 1;
+        }
       }
       fields[name] = body.substring(start, index).trim();
-      while (index < body.length && body[index] != ',') index += 1;
+      while (index < body.length && body[index] != ',') {
+        index += 1;
+      }
       if (index < body.length) index += 1;
     }
     return fields;

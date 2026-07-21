@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.24.1+54
+
+- Migrated the PDF chooser to the static `FilePicker.pickFiles` API required by file_picker 12.
+- Added explicit braces to the BibTeX parser loops required by Chronicle's strict Flutter lint configuration.
+- Restored clean `flutter analyze` execution without changing citation parsing, source-library data, Markdown, Vault files, synchronization, wiki links, or themes.
+
 ## 0.24.0+53
 
 - Added a separate local research-source library reachable from the Notes screen.
