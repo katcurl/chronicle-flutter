@@ -18,6 +18,7 @@ class DriftAppRepository implements AppRepository {
   static const _syncPreferencesKey = 'sync_preferences';
   static const _syncJournalBootstrappedKey = 'sync_journal_bootstrapped';
   static const _deviceKeyMaterialKey = 'device_key_material_v1';
+  static const _citationSourcesKey = 'citation_sources_v1';
 
   final ChronicleDatabase _database;
   final Uuid _uuid = const Uuid();
@@ -49,6 +50,8 @@ class DriftAppRepository implements AppRepository {
       _readRows('SELECT * FROM note_versions ORDER BY created_at DESC'),
     ]);
 
+    final citationSources = await _loadCitationSources();
+
     return AppData(
       projects: results[0].map(Project.fromDb).toList(),
       tasks: results[1].map(WorkTask.fromDb).toList(),
@@ -56,6 +59,7 @@ class DriftAppRepository implements AppRepository {
       entries: results[3].map(TimeEntry.fromDb).toList(),
       noteLinks: results[4].map(NoteLink.fromDb).toList(),
       noteVersions: results[5].map(NoteVersion.fromDb).toList(),
+      citationSources: citationSources,
     );
   }
 
@@ -88,6 +92,7 @@ class DriftAppRepository implements AppRepository {
         await _upsert('time_entries', entry.toDb());
       }
     });
+    await saveCitationSources(data.citationSources);
 
     for (final project in data.projects) {
       await recordLocalChange(
@@ -180,6 +185,33 @@ class DriftAppRepository implements AppRepository {
     operation: 'append',
     payload: version.toJson(),
   );
+
+  @override
+  Future<void> saveCitationSources(List<CitationSource> sources) {
+    return _putState(
+      _citationSourcesKey,
+      jsonEncode([for (final source in sources) source.toJson()]),
+    );
+  }
+
+  Future<List<CitationSource>> _loadCitationSources() async {
+    final raw = await _readState(_citationSourcesKey);
+    if (raw == null || raw.trim().isEmpty) return <CitationSource>[];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return <CitationSource>[];
+      return decoded
+          .whereType<Map>()
+          .map(
+            (item) => CitationSource.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList();
+    } on Object {
+      return <CitationSource>[];
+    }
+  }
 
   @override
   Future<void> replaceNoteLinks(String noteId, List<NoteLink> links) async {

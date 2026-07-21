@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.24.0+53
+
+- Added a separate local research-source library reachable from the Notes screen.
+- Added articles, books, conference papers, theses and web sources with authors, year, venue, DOI, PMID, arXiv ID, URL, local PDF path, tags and notes.
+- Added citation-key and DOI duplicate protection before manual saves and BibTeX imports.
+- Added preview-first BibTeX import, warning-only duplicate handling, and BibTeX export through the clipboard.
+- Added multi-source citation insertion in portable Markdown form such as `[@Jaffe2005; @Smith2023]`.
+- Added the `:::bibliography` block, which renders only sources actually cited in the current note and preserves first-use order.
+- Added author-year citation rendering in preview while keeping the raw Markdown unchanged.
+- Stored the source library in Chronicle backup JSON and local database state without a schema migration or changes to wiki links, Vault files or LAN attachment synchronization.
+- Added deterministic tests for citation parsing, fenced-code safety, bibliography order, BibTeX round-tripping and repository persistence.
+
 ## 0.23.4+52
 
 - Added a preview-first workflow for renaming notes that already have incoming wiki links.

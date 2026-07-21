@@ -9,6 +9,7 @@ import '../data/repositories/drift_app_repository.dart';
 import '../features/notes/note_document.dart';
 import '../features/notes/note_wiki_link_syntax.dart';
 import '../features/notes/note_wiki_rename.dart';
+import '../features/references/citation_syntax.dart';
 import '../models/app_models.dart';
 import '../reliability/reliability_models.dart';
 import '../reliability/reliability_service.dart';
@@ -181,6 +182,7 @@ class AppStore extends ChangeNotifier {
           'projects': data.projects.length,
           'tasks': data.tasks.length,
           'notes': data.notes.length,
+          'citationSources': data.citationSources.length,
           'timeEntries': data.entries.length,
         },
         notify: false,
@@ -832,6 +834,66 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     unawaited(_repository.saveProject(project));
     _scheduleSyncOverviewRefresh();
     notifyListeners();
+  }
+
+  int citationUsageCount(String citationKey) {
+    return data.notes.fold<int>(
+      0,
+      (sum, note) => sum + CitationSyntax.countKey(note.body, citationKey),
+    );
+  }
+
+  void addCitationSource(CitationSource source) {
+    data.citationSources.insert(0, source);
+    unawaited(_repository.saveCitationSources(data.citationSources));
+    notifyListeners();
+  }
+
+  void updateCitationSource(CitationSource source) {
+    source.updatedAt = DateTime.now();
+    final index = data.citationSources.indexWhere((item) => item.id == source.id);
+    if (index < 0) {
+      data.citationSources.insert(0, source);
+    } else {
+      data.citationSources[index] = source;
+    }
+    unawaited(_repository.saveCitationSources(data.citationSources));
+    notifyListeners();
+  }
+
+  void deleteCitationSource(String id) {
+    data.citationSources.removeWhere((source) => source.id == id);
+    unawaited(_repository.saveCitationSources(data.citationSources));
+    notifyListeners();
+  }
+
+  int importCitationSources(Iterable<CitationSource> sources) {
+    final keys = data.citationSources
+        .map((source) => source.normalizedCitationKey)
+        .toSet();
+    final dois = data.citationSources
+        .map((source) => source.normalizedDoi)
+        .where((doi) => doi.isNotEmpty)
+        .toSet();
+    var imported = 0;
+    for (final source in sources) {
+      final key = source.normalizedCitationKey;
+      final doi = source.normalizedDoi;
+      if (key.isEmpty || keys.contains(key)) continue;
+      if (doi.isNotEmpty && dois.contains(doi)) continue;
+      data.citationSources.add(source);
+      keys.add(key);
+      if (doi.isNotEmpty) dois.add(doi);
+      imported += 1;
+    }
+    if (imported > 0) {
+      data.citationSources.sort(
+        (left, right) => right.updatedAt.compareTo(left.updatedAt),
+      );
+      unawaited(_repository.saveCitationSources(data.citationSources));
+      notifyListeners();
+    }
+    return imported;
   }
 
   void addNote(Note note) {

@@ -473,6 +473,94 @@ class NoteVersion {
   }
 }
 
+
+class CitationSource {
+  CitationSource({
+    required this.id,
+    required this.citationKey,
+    required this.title,
+    this.sourceType = 'article',
+    List<String> authors = const [],
+    this.year,
+    this.containerTitle = '',
+    this.doi = '',
+    this.pmid = '',
+    this.arxivId = '',
+    this.url = '',
+    this.pdfPath = '',
+    List<String> tags = const [],
+    this.note = '',
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) : authors = List<String>.from(authors),
+       tags = List<String>.from(tags),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
+
+  final String id;
+  String citationKey;
+  String title;
+  String sourceType;
+  List<String> authors;
+  int? year;
+  String containerTitle;
+  String doi;
+  String pmid;
+  String arxivId;
+  String url;
+  String pdfPath;
+  List<String> tags;
+  String note;
+  DateTime createdAt;
+  DateTime updatedAt;
+
+  String get normalizedCitationKey => citationKey.trim().toLowerCase();
+
+  String get normalizedDoi {
+    var value = doi.trim().toLowerCase();
+    value = value.replaceFirst(RegExp(r'^https?://(?:dx\.)?doi\.org/'), '');
+    return value.replaceFirst(RegExp(r'^doi:\s*'), '');
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'citationKey': citationKey,
+    'title': title,
+    'sourceType': sourceType,
+    'authors': authors,
+    'year': year,
+    'containerTitle': containerTitle,
+    'doi': doi,
+    'pmid': pmid,
+    'arxivId': arxivId,
+    'url': url,
+    'pdfPath': pdfPath,
+    'tags': tags,
+    'note': note,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
+
+  factory CitationSource.fromJson(Map<String, dynamic> json) => CitationSource(
+    id: json['id'] as String,
+    citationKey: json['citationKey'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    sourceType: json['sourceType'] as String? ?? 'article',
+    authors: List<String>.from(json['authors'] as List? ?? const []),
+    year: json['year'] == null ? null : _readInt(json['year']),
+    containerTitle: json['containerTitle'] as String? ?? '',
+    doi: json['doi'] as String? ?? '',
+    pmid: json['pmid'] as String? ?? '',
+    arxivId: json['arxivId'] as String? ?? '',
+    url: json['url'] as String? ?? '',
+    pdfPath: json['pdfPath'] as String? ?? '',
+    tags: List<String>.from(json['tags'] as List? ?? const []),
+    note: json['note'] as String? ?? '',
+    createdAt: _readDate(json['createdAt']),
+    updatedAt: _readDate(json['updatedAt']),
+  );
+}
+
 class TimeEntry {
   TimeEntry({
     required this.id,
@@ -580,8 +668,10 @@ class AppData {
     required this.entries,
     List<NoteLink>? noteLinks,
     List<NoteVersion>? noteVersions,
+    List<CitationSource>? citationSources,
   }) : noteLinks = noteLinks ?? [],
-       noteVersions = noteVersions ?? [];
+       noteVersions = noteVersions ?? [],
+       citationSources = citationSources ?? [];
 
   factory AppData.empty() =>
       AppData(projects: [], tasks: [], notes: [], entries: []);
@@ -592,10 +682,11 @@ class AppData {
   List<TimeEntry> entries;
   List<NoteLink> noteLinks;
   List<NoteVersion> noteVersions;
+  List<CitationSource> citationSources;
 
   String encode() => jsonEncode({
     'format': 'chronicle-backup',
-    'version': 3,
+    'version': 4,
     'exportedAt': DateTime.now().toIso8601String(),
     'projects': projects.map((item) => item.toJson()).toList(),
     'tasks': tasks.map((item) => item.toJson()).toList(),
@@ -603,6 +694,7 @@ class AppData {
     'entries': entries.map((item) => item.toJson()).toList(),
     'noteLinks': noteLinks.map((item) => item.toJson()).toList(),
     'noteVersions': noteVersions.map((item) => item.toJson()).toList(),
+    'citationSources': citationSources.map((item) => item.toJson()).toList(),
   });
 
   factory AppData.decode(String raw) {
@@ -631,6 +723,14 @@ class AppData {
       noteVersions:
           (json['noteVersions'] as List<dynamic>? ?? const [])
               .map((item) => NoteVersion.fromJson(item as Map<String, dynamic>))
+              .toList(),
+      citationSources:
+          (json['citationSources'] as List<dynamic>? ?? const [])
+              .map(
+                (item) => CitationSource.fromJson(
+                  item as Map<String, dynamic>,
+                ),
+              )
               .toList(),
     );
   }

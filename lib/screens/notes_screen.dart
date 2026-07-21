@@ -16,9 +16,11 @@ import '../features/notes/note_markdown_view.dart';
 import '../features/notes/note_templates.dart';
 import '../features/notes/note_wiki_link_syntax.dart';
 import '../features/notes/note_wiki_rename.dart';
+import '../features/references/citation_syntax.dart';
 import '../features/tasks/task_editor_sheet.dart';
 import '../models/app_models.dart';
 import '../services/app_store.dart';
+import 'sources_screen.dart';
 
 class NotesScreen extends StatefulWidget {
   const NotesScreen({super.key, required this.store});
@@ -76,6 +78,11 @@ class _NotesScreenState extends State<NotesScreen> {
       appBar: AppBar(
         title: const Text('Заметки'),
         actions: [
+          IconButton(
+            tooltip: 'Источники',
+            onPressed: _openSources,
+            icon: const Icon(Icons.library_books_outlined),
+          ),
           IconButton(
             tooltip: 'Карта знаний',
             onPressed: _openKnowledgeGraph,
@@ -321,6 +328,15 @@ class _NotesScreenState extends State<NotesScreen> {
       rawTarget: issue.rawTarget,
       target: target,
     );
+  }
+
+  Future<void> _openSources() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SourcesScreen(store: widget.store),
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
   Future<void> _openKnowledgeGraph() async {
@@ -816,6 +832,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           onConfigureColumns: _configureColumnsAtCursor,
           onReorderBlocks: _reorderBlocks,
           onBlockAction: _handleBlockAction,
+          onInsertCitation: _insertCitation,
+          onInsertBibliography: _insertBibliography,
         ),
         _WikiLinkSuggestionsBar(
           controller: contentController,
@@ -861,6 +879,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           onEditColumns: _editColumnsReference,
           onResizeColumns: _replaceColumnsWidths,
           assetListenable: widget.store,
+          citationSources: widget.store.data.citationSources,
           vaultRootPath: widget.store.vaultStatus.rootPath,
         );
       },
@@ -1332,6 +1351,47 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       pinned = result.pinned;
       dirty = true;
     });
+  }
+
+  Future<void> _insertCitation() async {
+    if (widget.store.data.citationSources.isEmpty) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => SourcesScreen(store: widget.store),
+        ),
+      );
+      if (!mounted || widget.store.data.citationSources.isEmpty) return;
+    }
+    final selected = await showDialog<List<CitationSource>>(
+      context: context,
+      builder: (context) => _CitationPickerDialog(
+        sources: widget.store.data.citationSources,
+      ),
+    );
+    if (selected == null || selected.isEmpty || !mounted) return;
+    _insertInlineMarkdown(CitationSyntax.markdownFor(selected));
+  }
+
+  void _insertBibliography() {
+    if (contentController.text.contains(CitationSyntax.bibliographyMarker)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Блок библиографии уже есть в заметке.')),
+      );
+      return;
+    }
+    _insertMarkdownAtSelection(CitationSyntax.bibliographyMarker);
+  }
+
+  void _insertInlineMarkdown(String markdown) {
+    final value = contentController.value;
+    final selection = value.selection;
+    final start = selection.isValid ? selection.start : value.text.length;
+    final end = selection.isValid ? selection.end : value.text.length;
+    contentController.value = value.copyWith(
+      text: value.text.replaceRange(start, end, markdown),
+      selection: TextSelection.collapsed(offset: start + markdown.length),
+      composing: TextRange.empty,
+    );
   }
 
   Future<void> _attachFile() async {
@@ -2077,6 +2137,8 @@ class _EditorToolbar extends StatefulWidget {
     required this.onConfigureColumns,
     required this.onReorderBlocks,
     required this.onBlockAction,
+    required this.onInsertCitation,
+    required this.onInsertBibliography,
   });
 
   final TextEditingController controller;
@@ -2085,6 +2147,8 @@ class _EditorToolbar extends StatefulWidget {
   final VoidCallback onConfigureColumns;
   final VoidCallback onReorderBlocks;
   final ValueChanged<_NoteBlockAction> onBlockAction;
+  final VoidCallback onInsertCitation;
+  final VoidCallback onInsertBibliography;
 
   @override
   State<_EditorToolbar> createState() => _EditorToolbarState();
@@ -2338,6 +2402,16 @@ class _EditorToolbarState extends State<_EditorToolbar> {
           _button(Icons.format_list_bulleted_rounded, '- ', ''),
           _button(Icons.check_box_outlined, '- [ ] ', ''),
           _button(Icons.link_rounded, '[[', ']]'),
+          IconButton(
+            tooltip: 'Вставить научную цитату',
+            onPressed: widget.onInsertCitation,
+            icon: const Icon(Icons.format_quote_rounded),
+          ),
+          IconButton(
+            tooltip: 'Вставить блок библиографии',
+            onPressed: widget.onInsertBibliography,
+            icon: const Icon(Icons.library_books_outlined),
+          ),
           _button(Icons.functions_rounded, r'$', r'$'),
           _button(Icons.calculate_outlined, '\n\\[\n', '\n\\]\n'),
           IconButton(
@@ -2382,6 +2456,111 @@ class _EditorToolbarState extends State<_EditorToolbar> {
         offset: start + before.length + selected.length,
       ),
       composing: TextRange.empty,
+    );
+  }
+}
+
+class _CitationPickerDialog extends StatefulWidget {
+  const _CitationPickerDialog({required this.sources});
+
+  final List<CitationSource> sources;
+
+  @override
+  State<_CitationPickerDialog> createState() => _CitationPickerDialogState();
+}
+
+class _CitationPickerDialogState extends State<_CitationPickerDialog> {
+  String query = '';
+  final Set<String> selectedIds = <String>{};
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = query.trim().toLowerCase();
+    final sources = widget.sources.where((source) {
+      if (normalized.isEmpty) return true;
+      return [
+        source.citationKey,
+        source.title,
+        source.authors.join(' '),
+        source.containerTitle,
+        source.doi,
+      ].join(' ').toLowerCase().contains(normalized);
+    }).toList()
+      ..sort((left, right) => left.citationKey.toLowerCase().compareTo(
+        right.citationKey.toLowerCase(),
+      ));
+
+    return AlertDialog(
+      title: const Text('Вставить цитату'),
+      content: SizedBox(
+        width: 680,
+        height: 520,
+        child: Column(
+          children: [
+            SearchBar(
+              hintText: 'Citation key, название или автор',
+              leading: const Icon(Icons.search_rounded),
+              onChanged: (value) => setState(() => query = value),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: sources.isEmpty
+                  ? const Center(child: Text('Источники не найдены'))
+                  : ListView.builder(
+                      itemCount: sources.length,
+                      itemBuilder: (context, index) {
+                        final source = sources[index];
+                        final selected = selectedIds.contains(source.id);
+                        final subtitleParts = <String>[
+                          '@${source.citationKey}',
+                          if (source.year != null) source.year.toString(),
+                          if (source.authors.isNotEmpty) source.authors.first,
+                        ];
+                        return CheckboxListTile(
+                          value: selected,
+                          onChanged: (value) {
+                            setState(() {
+                              if (value == true) {
+                                selectedIds.add(source.id);
+                              } else {
+                                selectedIds.remove(source.id);
+                              }
+                            });
+                          },
+                          title: Text(source.title),
+                          subtitle: Text(subtitleParts.join(' · ')),
+                          secondary: const Icon(Icons.article_outlined),
+                          controlAffinity: ListTileControlAffinity.trailing,
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton.icon(
+          onPressed: selectedIds.isEmpty
+              ? null
+              : () => Navigator.pop(
+                    context,
+                    [
+                      for (final source in widget.sources)
+                        if (selectedIds.contains(source.id)) source,
+                    ],
+                  ),
+          icon: const Icon(Icons.format_quote_rounded),
+          label: Text(
+            selectedIds.length <= 1
+                ? 'Вставить'
+                : 'Вставить ${selectedIds.length}',
+          ),
+        ),
+      ],
     );
   }
 }

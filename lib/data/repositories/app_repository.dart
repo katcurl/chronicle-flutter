@@ -21,6 +21,8 @@ abstract class AppRepository {
 
   Future<void> saveNoteVersion(NoteVersion version);
 
+  Future<void> saveCitationSources(List<CitationSource> sources);
+
   Future<void> replaceNoteLinks(String noteId, List<NoteLink> links);
 
   Future<void> saveTimeEntry(TimeEntry entry);

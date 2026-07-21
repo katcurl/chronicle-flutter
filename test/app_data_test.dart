@@ -17,6 +17,15 @@ void main() {
       projectId: project.id,
       noteId: note.id,
     );
+    final source = CitationSource(
+      id: 'source-1',
+      citationKey: 'Jaffe2005',
+      title: 'Multistate proteins',
+      authors: const ['Jaffe, Eileen'],
+      year: 2005,
+      doi: '10.1000/example',
+    );
+
     final entry = TimeEntry(
       id: 'entry-1',
       description: 'Работа',
@@ -33,6 +42,7 @@ void main() {
         tasks: [task],
         notes: [note],
         entries: [entry],
+        citationSources: [source],
       ).encode(),
     );
 
@@ -40,5 +50,7 @@ void main() {
     expect(restored.tasks.single.noteId, 'note-1');
     expect(restored.notes.single.tags, ['test']);
     expect(restored.entries.single.durationSeconds, 1200);
+    expect(restored.citationSources.single.citationKey, 'Jaffe2005');
+    expect(restored.citationSources.single.normalizedDoi, '10.1000/example');
   });
 }

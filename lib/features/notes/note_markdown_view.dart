@@ -7,7 +7,9 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown/markdown.dart' as md;
 
+import '../../models/app_models.dart';
 import '../../vault/vault_asset_loader.dart';
+import '../references/citation_syntax.dart';
 import 'note_columns_syntax.dart';
 import 'note_document.dart';
 import 'note_image_syntax.dart';
@@ -39,6 +41,7 @@ class NoteMarkdownView extends StatelessWidget {
     this.onResizeColumns,
     this.assetListenable,
     this.assetLoader,
+    this.citationSources = const [],
     this.vaultRootPath = '',
     this.padding = const EdgeInsets.fromLTRB(20, 18, 20, 120),
   });
@@ -51,14 +54,24 @@ class NoteMarkdownView extends StatelessWidget {
   final NoteColumnsResizeCallback? onResizeColumns;
   final Listenable? assetListenable;
   final VaultAttachmentBytesLoader? assetLoader;
+  final List<CitationSource> citationSources;
   final String vaultRootPath;
   final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
+    final bibliography = CitationSyntax.bibliographyFor(
+      markdown,
+      citationSources,
+    );
     return ListView(
       padding: padding,
-      children: _buildContentChunks(context, markdown, baseOffset: 0),
+      children: _buildContentChunks(
+        context,
+        markdown,
+        baseOffset: 0,
+        bibliography: bibliography,
+      ),
     );
   }
 
@@ -66,6 +79,7 @@ class NoteMarkdownView extends StatelessWidget {
     BuildContext context,
     String source, {
     required int baseOffset,
+    required List<CitationSource> bibliography,
   }) {
     final chunks = _splitDocument(source, baseOffset: baseOffset);
     return [
@@ -79,18 +93,27 @@ class NoteMarkdownView extends StatelessWidget {
           _DocumentChunkKind.columns => _buildManagedColumns(
             context,
             chunk.columns!,
+            bibliography,
           ),
           _DocumentChunkKind.markdown =>
             chunk.value.trim().isEmpty
                 ? const SizedBox.shrink()
-                : _buildMarkdownBody(chunk.value),
+                : _buildMarkdownBody(chunk.value, bibliography),
         },
     ];
   }
 
-  Widget _buildMarkdownBody(String value) {
+  Widget _buildMarkdownBody(
+    String value,
+    List<CitationSource> bibliography,
+  ) {
+    final rendered = CitationSyntax.renderMarkdownChunk(
+      value,
+      citationSources,
+      bibliography: bibliography,
+    );
     return MarkdownBody(
-      data: NoteDocument.convertWikiLinksToMarkdown(value),
+      data: NoteDocument.convertWikiLinksToMarkdown(rendered),
       selectable: true,
       extensionSet: md.ExtensionSet.gitHubFlavored,
       inlineSyntaxes: [InlineMathSyntax()],
@@ -113,6 +136,7 @@ class NoteMarkdownView extends StatelessWidget {
   Widget _buildManagedColumns(
     BuildContext context,
     NoteColumnsReference reference,
+    List<CitationSource> bibliography,
   ) {
     return _ManagedNoteColumns(
       reference: reference,
@@ -132,6 +156,7 @@ class NoteMarkdownView extends StatelessWidget {
               context,
               column.markdown,
               baseOffset: column.start,
+              bibliography: bibliography,
             ),
           ),
       ],

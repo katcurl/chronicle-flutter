@@ -136,6 +136,14 @@ class InMemoryAppRepository implements AppRepository {
   }
 
   @override
+  Future<void> saveCitationSources(List<CitationSource> sources) async {
+    _data.citationSources =
+        sources
+            .map((source) => CitationSource.fromJson(source.toJson()))
+            .toList();
+  }
+
+  @override
   Future<void> replaceNoteLinks(String noteId, List<NoteLink> links) async {
     _data.noteLinks.removeWhere((link) => link.sourceNoteId == noteId);
     _data.noteLinks.addAll(links);

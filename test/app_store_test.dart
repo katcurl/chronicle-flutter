@@ -24,4 +24,24 @@ void main() {
       isTrue,
     );
   });
+
+  test('citation library is persisted by the repository', () async {
+    final repository = InMemoryAppRepository();
+    final firstStore = AppStore(repository: repository);
+    await firstStore.load();
+
+    firstStore.addCitationSource(
+      CitationSource(
+        id: 'source-1',
+        citationKey: 'Jaffe2005',
+        title: 'Multistate proteins',
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final secondStore = AppStore(repository: repository);
+    await secondStore.load();
+
+    expect(secondStore.data.citationSources.single.citationKey, 'Jaffe2005');
+  });
 }
