@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.24.5+58
+
+- Added a **Лабораторный шаблон** command to the Markdown editor toolbar.
+- Added an in-editor picker for all six laboratory templates with a complete Markdown preview before application.
+- Kept appending to the end as the safe default for non-empty notes and required a separate confirmation before either appending or replacing content.
+- Added immediate undo when the editor text has not been changed after template application.
+- Kept the current note type, tags, properties, title and project unchanged; no database migration was introduced.
+- Preserved the visual theme, Vault files, synchronization, attachments and all notes unless a user explicitly applies a template in the editor.
+- Added deterministic tests for empty-note insertion, safe append, explicit replacement and newline normalization.
+
 ## 0.24.4+57
 
 - Added six built-in laboratory note templates: laboratory day, experiment, sample passport, protein expression and purification, NMR experiment, and buffer or solution.

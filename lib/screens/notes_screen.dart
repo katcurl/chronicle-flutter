@@ -11,6 +11,7 @@ import '../features/notes/note_columns_syntax.dart';
 import '../features/notes/note_document.dart';
 import '../features/notes/note_image_editor_dialog.dart';
 import '../features/notes/note_image_syntax.dart';
+import '../features/notes/laboratory_template_dialog.dart';
 import '../features/notes/note_graph_screen.dart';
 import '../features/notes/note_markdown_view.dart';
 import '../features/notes/note_templates.dart';
@@ -839,6 +840,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           onInsertScientificTable: _insertScientificTable,
           onInsertScientificReference: _insertScientificReference,
           onInspectScientificObjects: _inspectScientificObjects,
+          onApplyLaboratoryTemplate: _applyLaboratoryTemplate,
         ),
         _WikiLinkSuggestionsBar(
           controller: contentController,
@@ -1356,6 +1358,68 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       pinned = result.pinned;
       dirty = true;
     });
+  }
+
+  Future<void> _applyLaboratoryTemplate() async {
+    final originalValue = contentController.value;
+    final wasDirty = dirty;
+    final application = await LaboratoryTemplateDialog.show(
+      context,
+      currentText: originalValue.text,
+    );
+    if (application == null || !mounted) {
+      return;
+    }
+
+    final updatedText = applyLaboratoryTemplateContent(
+      currentText: originalValue.text,
+      templateContent: application.template.content,
+      placement: application.placement,
+    );
+    if (updatedText == originalValue.text) {
+      return;
+    }
+
+    final appliedValue = originalValue.copyWith(
+      text: updatedText,
+      selection: TextSelection.collapsed(offset: updatedText.length),
+      composing: TextRange.empty,
+    );
+    contentController.value = appliedValue;
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          application.placement == LaboratoryTemplatePlacement.replace
+              ? 'Содержимое заменено шаблоном «${application.template.title}».'
+              : 'Шаблон «${application.template.title}» добавлен в конец.',
+        ),
+        action: SnackBarAction(
+          label: 'Отменить',
+          onPressed: () {
+            if (!mounted) {
+              return;
+            }
+            if (contentController.value != appliedValue) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'После вставки текст уже изменён; автоматическая отмена не выполнена.',
+                  ),
+                ),
+              );
+              return;
+            }
+            contentController.value = originalValue;
+            if (!wasDirty) {
+              setState(() => dirty = false);
+            }
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _insertScientificTable() async {
@@ -2198,6 +2262,7 @@ class _EditorToolbar extends StatefulWidget {
     required this.onInsertScientificTable,
     required this.onInsertScientificReference,
     required this.onInspectScientificObjects,
+    required this.onApplyLaboratoryTemplate,
   });
 
   final TextEditingController controller;
@@ -2211,6 +2276,7 @@ class _EditorToolbar extends StatefulWidget {
   final VoidCallback onInsertScientificTable;
   final VoidCallback onInsertScientificReference;
   final VoidCallback onInspectScientificObjects;
+  final VoidCallback onApplyLaboratoryTemplate;
 
   @override
   State<_EditorToolbar> createState() => _EditorToolbarState();
@@ -2458,6 +2524,11 @@ class _EditorToolbarState extends State<_EditorToolbar> {
             icon: const Icon(Icons.more_horiz_rounded),
           ),
           const VerticalDivider(indent: 10, endIndent: 10),
+          IconButton(
+            tooltip: 'Лабораторный шаблон',
+            onPressed: widget.onApplyLaboratoryTemplate,
+            icon: const Icon(Icons.science_outlined),
+          ),
           _button(Icons.title_rounded, '# ', ''),
           _button(Icons.format_bold_rounded, '**', '**'),
           _button(Icons.format_italic_rounded, '_', '_'),
