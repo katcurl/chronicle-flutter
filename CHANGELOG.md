@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.24.4+57
+
+- Added six built-in laboratory note templates: laboratory day, experiment, sample passport, protein expression and purification, NMR experiment, and buffer or solution.
+- Added structured default metadata, checklists and portable Markdown tables without introducing a database migration.
+- Kept all existing templates and existing notes unchanged.
+- Preserved the visual theme, Vault files, synchronization, attachments and application data.
+- Added deterministic tests for template identifiers, metadata, headings, labels and icons.
+
 ## 0.24.3+56
 
 - Added the missing scientific figure ID to the Markdown round-trip test fixture.
