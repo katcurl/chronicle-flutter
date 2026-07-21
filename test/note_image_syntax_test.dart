@@ -23,6 +23,7 @@ void main() {
       widthPercent: 55,
       alignment: NoteImageAlignment.right,
       caption: 'Метастабильное состояние Orf9b — кадр 1200',
+      figureId: 'orf9b-frame-1200',
     );
     const source = '![Orf9b](../../Attachments/orf9b.png)';
     final initial = NoteImageSyntax.first(source)!;

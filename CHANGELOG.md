@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.24.3+56
+
+- Added the missing scientific figure ID to the Markdown round-trip test fixture.
+- Kept production image parsing and serialization unchanged because figure IDs were already written and restored correctly.
+- Preserved existing notes, images, citations, wiki links, Vault files, synchronization and themes.
+
 ## 0.24.2+55
 
 - Added optional scientific IDs to managed images so selected images can become automatically numbered figures without changing ordinary images.
