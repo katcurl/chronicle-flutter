@@ -261,4 +261,25 @@ B
     expect(gap!.raw, 'Текст блока 973');
   });
 
+  test('keeps a scientific table marker and Markdown table together', () {
+    const source = '''До
+
+<!-- chronicle-table id=conditions caption=Experiment -->
+| Parameter | Value |
+| --- | --- |
+| Temperature | 300 K |
+
+После''';
+
+    final blocks = NoteBlockSyntax.all(source);
+
+    expect(blocks.map((block) => block.type), [
+      NoteBlockType.paragraph,
+      NoteBlockType.table,
+      NoteBlockType.paragraph,
+    ]);
+    expect(blocks[1].raw, contains('Temperature | 300 K'));
+  });
+
+
 }

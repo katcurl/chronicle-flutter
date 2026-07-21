@@ -37,7 +37,9 @@ void main() {
       'Метастабильное состояние Orf9b — кадр 1200',
     );
     expect(markdown, contains('chronicle-image'));
+    expect(restored.presentation.figureId, 'orf9b-frame-1200');
     expect(markdown, contains('caption='));
+    expect(markdown, contains('figure=orf9b-frame-1200'));
   });
 
   test('image on current editor line can be found and relocated', () {

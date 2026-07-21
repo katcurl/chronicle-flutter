@@ -1,21 +1,25 @@
 import 'package:flutter/material.dart';
 
 import 'note_image_syntax.dart';
+import 'scientific_reference_syntax.dart';
 
 class NoteImageEditorDialog extends StatefulWidget {
   const NoteImageEditorDialog({
     super.key,
     required this.initial,
     required this.imageLabel,
+    this.existingFigureIds = const <String>{},
   });
 
   final NoteImagePresentation initial;
   final String imageLabel;
+  final Set<String> existingFigureIds;
 
   static Future<NoteImagePresentation?> show(
     BuildContext context, {
     required NoteImagePresentation initial,
     required String imageLabel,
+    Set<String> existingFigureIds = const <String>{},
   }) {
     return showDialog<NoteImagePresentation>(
       context: context,
@@ -23,6 +27,7 @@ class NoteImageEditorDialog extends StatefulWidget {
           (context) => NoteImageEditorDialog(
             initial: initial,
             imageLabel: imageLabel,
+            existingFigureIds: existingFigureIds,
           ),
     );
   }
@@ -36,6 +41,9 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
   late double widthPercent;
   late NoteImageAlignment alignment;
   late final TextEditingController captionController;
+  late final TextEditingController figureIdController;
+  late bool numberedFigure;
+  String? figureIdError;
 
   @override
   void initState() {
@@ -43,11 +51,14 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
     widthPercent = widget.initial.widthPercent.toDouble();
     alignment = widget.initial.alignment;
     captionController = TextEditingController(text: widget.initial.caption);
+    numberedFigure = widget.initial.figureId.trim().isNotEmpty;
+    figureIdController = TextEditingController(text: widget.initial.figureId);
   }
 
   @override
   void dispose() {
     captionController.dispose();
+    figureIdController.dispose();
     super.dispose();
   }
 
@@ -151,6 +162,43 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
                   prefixIcon: Icon(Icons.short_text_rounded),
                 ),
               ),
+              const SizedBox(height: 14),
+              SwitchListTile.adaptive(
+                value: numberedFigure,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Нумерованный научный рисунок'),
+                subtitle: const Text(
+                  'Chronicle добавит номер и позволит ссылаться через @fig(id).',
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    numberedFigure = value;
+                    figureIdError = null;
+                    if (value && figureIdController.text.trim().isEmpty) {
+                      final suggestion = ScientificReferenceSyntax.normalizeId(
+                        widget.imageLabel,
+                      );
+                      figureIdController.text =
+                          suggestion == 'object' ? 'figure' : suggestion;
+                    }
+                  });
+                },
+              ),
+              if (numberedFigure) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: figureIdController,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  decoration: InputDecoration(
+                    labelText: 'Устойчивый ID рисунка',
+                    hintText: 'orf9b-rmsd',
+                    prefixIcon: const Icon(Icons.tag_rounded),
+                    errorText: figureIdError,
+                    helperText: 'Латинские буквы, цифры, точка, дефис и подчёркивание.',
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Text(
                 'В предпросмотре размер также можно менять, перетаскивая маркер в правом нижнем углу изображения.',
@@ -169,12 +217,37 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
         ),
         FilledButton(
           onPressed: () {
+            final rawFigureId = figureIdController.text.trim();
+            final normalizedFigureId = numberedFigure
+                ? ScientificReferenceSyntax.normalizeId(rawFigureId)
+                : '';
+            if (numberedFigure && rawFigureId.isEmpty) {
+              setState(() {
+                figureIdError = 'ID рисунка не может быть пустым.';
+              });
+              return;
+            }
+            if (numberedFigure &&
+                !ScientificReferenceSyntax.isValidId(normalizedFigureId)) {
+              setState(() {
+                figureIdError = 'Укажи корректный ID рисунка.';
+              });
+              return;
+            }
+            if (numberedFigure &&
+                widget.existingFigureIds.contains(normalizedFigureId)) {
+              setState(() {
+                figureIdError = 'Такой ID рисунка уже используется.';
+              });
+              return;
+            }
             Navigator.pop(
               context,
               NoteImagePresentation(
                 widthPercent: roundedWidth.clamp(20, 100).toInt(),
                 alignment: alignment,
                 caption: captionController.text.trim(),
+                figureId: normalizedFigureId,
               ),
             );
           },

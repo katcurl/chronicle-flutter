@@ -2,6 +2,7 @@ import '../../models/app_models.dart';
 import 'note_columns_syntax.dart';
 import 'note_image_syntax.dart';
 import 'note_wiki_link_syntax.dart';
+import 'scientific_reference_syntax.dart';
 
 class ParsedNoteDocument {
   const ParsedNoteDocument({required this.content, required this.frontMatter});
@@ -94,7 +95,9 @@ class NoteDocument {
 
   static int wordCount(String markdown) {
     final withoutSyntax = _replaceImagesWithReadableText(
-      NoteColumnsSyntax.stripMarkers(markdown),
+      ScientificReferenceSyntax.stripMarkersForWordCount(
+        NoteColumnsSyntax.stripMarkers(markdown),
+      ),
     )
         .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
         .replaceAll(RegExp(r'\$\$[\s\S]*?\$\$'), ' ')

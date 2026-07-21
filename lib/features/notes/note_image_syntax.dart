@@ -5,21 +5,25 @@ class NoteImagePresentation {
     this.widthPercent = 100,
     this.alignment = NoteImageAlignment.center,
     this.caption = '',
+    this.figureId = '',
   });
 
   final int widthPercent;
   final NoteImageAlignment alignment;
   final String caption;
+  final String figureId;
 
   NoteImagePresentation copyWith({
     int? widthPercent,
     NoteImageAlignment? alignment,
     String? caption,
+    String? figureId,
   }) {
     return NoteImagePresentation(
       widthPercent: _normalizeWidth(widthPercent ?? this.widthPercent),
       alignment: alignment ?? this.alignment,
       caption: caption ?? this.caption,
+      figureId: figureId ?? this.figureId,
     );
   }
 
@@ -33,6 +37,10 @@ class NoteImagePresentation {
     if (normalizedCaption.isNotEmpty) {
       parts.add('caption=${Uri.encodeComponent(normalizedCaption)}');
     }
+    final normalizedFigureId = figureId.trim();
+    if (normalizedFigureId.isNotEmpty) {
+      parts.add('figure=${Uri.encodeComponent(normalizedFigureId)}');
+    }
     return parts.join(' ');
   }
 
@@ -45,6 +53,7 @@ class NoteImagePresentation {
     var width = 100;
     var alignment = NoteImageAlignment.center;
     var caption = '';
+    var figureId = '';
 
     for (final token in value.split(RegExp(r'\s+')).skip(1)) {
       final separator = token.indexOf('=');
@@ -70,6 +79,13 @@ class NoteImagePresentation {
             caption = raw;
           }
           break;
+        case 'figure':
+          try {
+            figureId = Uri.decodeComponent(raw);
+          } on Object {
+            figureId = raw;
+          }
+          break;
       }
     }
 
@@ -77,6 +93,7 @@ class NoteImagePresentation {
       widthPercent: _normalizeWidth(width),
       alignment: alignment,
       caption: caption,
+      figureId: figureId,
     );
   }
 

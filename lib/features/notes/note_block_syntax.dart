@@ -1,4 +1,5 @@
 import 'note_image_syntax.dart';
+import 'scientific_reference_syntax.dart';
 
 enum NoteBlockType {
   paragraph,
@@ -9,6 +10,7 @@ enum NoteBlockType {
   code,
   math,
   image,
+  table,
   columns,
   divider,
 }
@@ -55,6 +57,7 @@ class NoteBlockReference {
     NoteBlockType.code => 'Код',
     NoteBlockType.math => 'Формула',
     NoteBlockType.image => 'Изображение',
+    NoteBlockType.table => 'Таблица',
     NoteBlockType.columns => 'Колонки',
     NoteBlockType.divider => 'Разделитель',
   };
@@ -99,6 +102,10 @@ class NoteBlockSyntax {
       return const [];
     }
     final lines = _LineSpan.parse(source);
+    final tablesByStart = {
+      for (final table in ScientificReferenceSyntax.tables(source))
+        table.start: table,
+    };
     final blocks = <NoteBlockReference>[];
     var lineIndex = 0;
 
@@ -123,6 +130,17 @@ class NoteBlockSyntax {
       }
 
       final text = lines[lineIndex].text;
+      final table = tablesByStart[lines[lineIndex].start];
+      if (table != null) {
+        var endLine = lineIndex;
+        while (endLine + 1 < lines.length &&
+            lines[endLine].contentEnd < table.end) {
+          endLine += 1;
+        }
+        addBlock(lineIndex, endLine, NoteBlockType.table);
+        lineIndex = endLine + 1;
+        continue;
+      }
       if (_columnsStart.hasMatch(text)) {
         var endLine = lineIndex;
         while (endLine + 1 < lines.length) {
@@ -471,7 +489,8 @@ class NoteBlockSyntax {
 
   static bool _startsIndependentBlock(String text) {
     final trimmed = text.trim();
-    return _columnsStart.hasMatch(text) ||
+    return ScientificReferenceSyntax.isTableMarkerLine(text) ||
+        _columnsStart.hasMatch(text) ||
         _fenceStart.hasMatch(text) ||
         trimmed == r'\[' ||
         _heading.hasMatch(text) ||

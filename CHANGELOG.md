@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.24.2+55
+
+- Added optional scientific IDs to managed images so selected images can become automatically numbered figures without changing ordinary images.
+- Added portable Markdown tables with readable Chronicle metadata, captions and numbering independent from figure numbering.
+- Added stable in-note references through `@fig(id)` and `@tbl(id)` that update their displayed number after objects move or are deleted.
+- Added a table-creation dialog, an object picker for cross-references and a read-only report of figures, tables, duplicate IDs and broken links.
+- Kept each scientific table together as one safe Markdown block for moving, duplicating, deleting and drag reordering.
+- Added duplicate-ID prevention in figure and table dialogs while preserving visible warnings for malformed hand-edited Markdown.
+- Kept existing images, citations, wiki links, Vault files, LAN synchronization, database schema and visual themes unchanged.
+- Added deterministic tests for numbering, reference rendering, broken and ambiguous targets, fenced-code safety, figure metadata and complete table blocks.
+
 ## 0.24.1+54
 
 - Migrated the PDF chooser to the static `FilePicker.pickFiles` API required by file_picker 12.

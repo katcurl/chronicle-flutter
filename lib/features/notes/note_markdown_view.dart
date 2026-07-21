@@ -13,6 +13,7 @@ import '../references/citation_syntax.dart';
 import 'note_columns_syntax.dart';
 import 'note_document.dart';
 import 'note_image_syntax.dart';
+import 'scientific_reference_syntax.dart';
 
 typedef VaultAttachmentBytesLoader = Future<Uint8List?> Function(
   String rootPath,
@@ -64,6 +65,7 @@ class NoteMarkdownView extends StatelessWidget {
       markdown,
       citationSources,
     );
+    final scientificIndex = ScientificReferenceSyntax.index(markdown);
     return ListView(
       padding: padding,
       children: _buildContentChunks(
@@ -71,6 +73,7 @@ class NoteMarkdownView extends StatelessWidget {
         markdown,
         baseOffset: 0,
         bibliography: bibliography,
+        scientificIndex: scientificIndex,
       ),
     );
   }
@@ -80,6 +83,7 @@ class NoteMarkdownView extends StatelessWidget {
     String source, {
     required int baseOffset,
     required List<CitationSource> bibliography,
+    required ScientificReferenceIndex scientificIndex,
   }) {
     final chunks = _splitDocument(source, baseOffset: baseOffset);
     return [
@@ -89,16 +93,22 @@ class NoteMarkdownView extends StatelessWidget {
           _DocumentChunkKind.image => _buildManagedImage(
             context,
             chunk.image!,
+            scientificIndex,
           ),
           _DocumentChunkKind.columns => _buildManagedColumns(
             context,
             chunk.columns!,
             bibliography,
+            scientificIndex,
           ),
           _DocumentChunkKind.markdown =>
             chunk.value.trim().isEmpty
                 ? const SizedBox.shrink()
-                : _buildMarkdownBody(chunk.value, bibliography),
+                : _buildMarkdownBody(
+                    chunk.value,
+                    bibliography,
+                    scientificIndex,
+                  ),
         },
     ];
   }
@@ -106,11 +116,16 @@ class NoteMarkdownView extends StatelessWidget {
   Widget _buildMarkdownBody(
     String value,
     List<CitationSource> bibliography,
+    ScientificReferenceIndex scientificIndex,
   ) {
-    final rendered = CitationSyntax.renderMarkdownChunk(
+    final citationRendered = CitationSyntax.renderMarkdownChunk(
       value,
       citationSources,
       bibliography: bibliography,
+    );
+    final rendered = ScientificReferenceSyntax.renderMarkdownChunk(
+      citationRendered,
+      scientificIndex,
     );
     return MarkdownBody(
       data: NoteDocument.convertWikiLinksToMarkdown(rendered),
@@ -137,6 +152,7 @@ class NoteMarkdownView extends StatelessWidget {
     BuildContext context,
     NoteColumnsReference reference,
     List<CitationSource> bibliography,
+    ScientificReferenceIndex scientificIndex,
   ) {
     return _ManagedNoteColumns(
       reference: reference,
@@ -157,6 +173,7 @@ class NoteMarkdownView extends StatelessWidget {
               column.markdown,
               baseOffset: column.start,
               bibliography: bibliography,
+              scientificIndex: scientificIndex,
             ),
           ),
       ],
@@ -166,9 +183,15 @@ class NoteMarkdownView extends StatelessWidget {
   Widget _buildManagedImage(
     BuildContext context,
     NoteImageReference reference,
+    ScientificReferenceIndex scientificIndex,
   ) {
     return _ManagedNoteImage(
       reference: reference,
+      scientificObject: scientificIndex.figureFor(reference),
+      duplicateFigureId: scientificIndex.isDuplicate(
+        ScientificObjectType.figure,
+        reference.presentation.figureId,
+      ),
       onEdit:
           reference.raw.isEmpty || onEditImage == null
               ? null
@@ -467,12 +490,16 @@ class _ManagedNoteImage extends StatefulWidget {
   const _ManagedNoteImage({
     required this.reference,
     required this.child,
+    required this.scientificObject,
+    required this.duplicateFigureId,
     this.onEdit,
     this.onResize,
   });
 
   final NoteImageReference reference;
   final Widget child;
+  final ScientificObjectReference? scientificObject;
+  final bool duplicateFigureId;
   final VoidCallback? onEdit;
   final ValueChanged<NoteImagePresentation>? onResize;
 
@@ -649,14 +676,22 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
                         ],
                       ),
                     ),
-                    if (presentation.caption.trim().isNotEmpty) ...[
+                    if (presentation.caption.trim().isNotEmpty ||
+                        widget.scientificObject != null ||
+                        widget.duplicateFigureId) ...[
                       const SizedBox(height: 7),
                       Text(
-                        presentation.caption.trim(),
+                        _captionText(presentation),
                         textAlign: textAlign,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: widget.duplicateFigureId
+                              ? Theme.of(context).colorScheme.error
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
                           fontStyle: FontStyle.italic,
+                          fontWeight: widget.scientificObject != null ||
+                                  widget.duplicateFigureId
+                              ? FontWeight.w700
+                              : null,
                         ),
                       ),
                     ],
@@ -668,6 +703,21 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
         },
       ),
     );
+  }
+
+
+
+  String _captionText(NoteImagePresentation presentation) {
+    final caption = presentation.caption.trim();
+    if (widget.duplicateFigureId) {
+      final id = presentation.figureId.trim();
+      return '[повторяющийся ID рисунка: $id]${caption.isEmpty ? '' : ' — $caption'}';
+    }
+    final object = widget.scientificObject;
+    if (object != null) {
+      return '${object.label}${caption.isEmpty ? '' : ' — $caption'}';
+    }
+    return caption;
   }
 
   void _finishResize() {

@@ -16,6 +16,8 @@ import '../features/notes/note_markdown_view.dart';
 import '../features/notes/note_templates.dart';
 import '../features/notes/note_wiki_link_syntax.dart';
 import '../features/notes/note_wiki_rename.dart';
+import '../features/notes/scientific_object_dialogs.dart';
+import '../features/notes/scientific_reference_syntax.dart';
 import '../features/references/citation_syntax.dart';
 import '../features/tasks/task_editor_sheet.dart';
 import '../models/app_models.dart';
@@ -834,6 +836,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           onBlockAction: _handleBlockAction,
           onInsertCitation: _insertCitation,
           onInsertBibliography: _insertBibliography,
+          onInsertScientificTable: _insertScientificTable,
+          onInsertScientificReference: _insertScientificReference,
+          onInspectScientificObjects: _inspectScientificObjects,
         ),
         _WikiLinkSuggestionsBar(
           controller: contentController,
@@ -1353,6 +1358,50 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     });
   }
 
+  Future<void> _insertScientificTable() async {
+    final index = ScientificReferenceSyntax.index(contentController.text);
+    final draft = await ScientificTableDialog.show(
+      context,
+      existingKeys: {for (final object in index.objects) object.key},
+    );
+    if (draft == null || !mounted) {
+      return;
+    }
+    _insertMarkdownAtSelection('\n${draft.toMarkdown()}\n');
+    _save(createVersion: false);
+  }
+
+  Future<void> _insertScientificReference() async {
+    final index = ScientificReferenceSyntax.index(contentController.text);
+    final available = [
+      for (final object in index.objects)
+        if (!index.duplicateKeys.contains(object.key)) object,
+    ];
+    if (available.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Сначала добавь нумерованный рисунок или научную таблицу.',
+          ),
+        ),
+      );
+      return;
+    }
+    final target = await ScientificReferencePickerDialog.show(
+      context,
+      objects: available,
+    );
+    if (target == null || !mounted) {
+      return;
+    }
+    _insertInlineMarkdown(target.markdownReference);
+  }
+
+  Future<void> _inspectScientificObjects() async {
+    final index = ScientificReferenceSyntax.index(contentController.text);
+    await ScientificObjectsDialog.show(context, index: index);
+  }
+
   Future<void> _insertCitation() async {
     if (widget.store.data.citationSources.isEmpty) {
       await Navigator.of(context).push<void>(
@@ -1483,10 +1532,17 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (current == null) {
       return;
     }
+    final existingFigureIds = <String>{
+      for (final image in NoteImageSyntax.all(contentController.text))
+        if (image.start != current.start &&
+            image.presentation.figureId.trim().isNotEmpty)
+          image.presentation.figureId.trim(),
+    };
     final result = await NoteImageEditorDialog.show(
       context,
       initial: current.presentation,
       imageLabel: current.alt,
+      existingFigureIds: existingFigureIds,
     );
     if (result == null || !mounted) {
       return;
@@ -2139,6 +2195,9 @@ class _EditorToolbar extends StatefulWidget {
     required this.onBlockAction,
     required this.onInsertCitation,
     required this.onInsertBibliography,
+    required this.onInsertScientificTable,
+    required this.onInsertScientificReference,
+    required this.onInspectScientificObjects,
   });
 
   final TextEditingController controller;
@@ -2149,6 +2208,9 @@ class _EditorToolbar extends StatefulWidget {
   final ValueChanged<_NoteBlockAction> onBlockAction;
   final VoidCallback onInsertCitation;
   final VoidCallback onInsertBibliography;
+  final VoidCallback onInsertScientificTable;
+  final VoidCallback onInsertScientificReference;
+  final VoidCallback onInspectScientificObjects;
 
   @override
   State<_EditorToolbar> createState() => _EditorToolbarState();
@@ -2411,6 +2473,21 @@ class _EditorToolbarState extends State<_EditorToolbar> {
             tooltip: 'Вставить блок библиографии',
             onPressed: widget.onInsertBibliography,
             icon: const Icon(Icons.library_books_outlined),
+          ),
+          IconButton(
+            tooltip: 'Добавить нумерованную таблицу',
+            onPressed: widget.onInsertScientificTable,
+            icon: const Icon(Icons.table_chart_outlined),
+          ),
+          IconButton(
+            tooltip: 'Вставить ссылку на рисунок или таблицу',
+            onPressed: widget.onInsertScientificReference,
+            icon: const Icon(Icons.numbers_rounded),
+          ),
+          IconButton(
+            tooltip: 'Проверить рисунки, таблицы и ссылки',
+            onPressed: widget.onInspectScientificObjects,
+            icon: const Icon(Icons.fact_check_outlined),
           ),
           _button(Icons.functions_rounded, r'$', r'$'),
           _button(Icons.calculate_outlined, '\n\\[\n', '\n\\]\n'),
