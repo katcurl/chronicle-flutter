@@ -6,7 +6,9 @@ import 'package:uuid/uuid.dart';
 import '../data/migration/legacy_preferences_importer.dart';
 import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
+import '../features/notes/custom_note_template_store.dart';
 import '../features/notes/note_document.dart';
+import '../features/notes/note_templates.dart';
 import '../features/notes/note_wiki_link_syntax.dart';
 import '../features/notes/note_wiki_rename.dart';
 import '../features/references/citation_syntax.dart';
@@ -33,12 +35,14 @@ class AppStore extends ChangeNotifier {
     PairingService? pairingService,
     LanSyncService? lanSyncService,
     ReliabilityService? reliabilityService,
+    CustomNoteTemplateStore? customNoteTemplateStore,
     bool enableAutomaticLanSync = false,
     bool enableReliabilityFeatures = false,
   }) : _repository = repository,
        _legacyImporter = legacyImporter,
        _vaultService = vaultService ?? VaultService(),
        _reliabilityService = reliabilityService ?? ReliabilityService(),
+       _customNoteTemplateStore = customNoteTemplateStore,
        pairingService =
            pairingService ?? PairingService(repository: repository),
        _automaticLanSyncEnabled = enableAutomaticLanSync,
@@ -63,6 +67,7 @@ class AppStore extends ChangeNotifier {
   factory AppStore.production() => AppStore(
     repository: DriftAppRepository(),
     legacyImporter: LegacyPreferencesImporter(),
+    customNoteTemplateStore: CustomNoteTemplateStore(),
     enableAutomaticLanSync: true,
     enableReliabilityFeatures: true,
   );
@@ -71,6 +76,7 @@ class AppStore extends ChangeNotifier {
   final LegacyPreferencesImporter? _legacyImporter;
   final VaultService _vaultService;
   final ReliabilityService _reliabilityService;
+  final CustomNoteTemplateStore? _customNoteTemplateStore;
   final PairingService pairingService;
   late final LanSyncService lanSyncService;
   final bool _automaticLanSyncEnabled;
@@ -79,6 +85,7 @@ class AppStore extends ChangeNotifier {
   final _uuid = const Uuid();
 
   AppData data = AppData.empty();
+  List<NoteTemplate> customNoteTemplates = const <NoteTemplate>[];
   bool ready = false;
   Object? loadError;
 
@@ -154,6 +161,7 @@ class AppStore extends ChangeNotifier {
         data = await _repository.load();
       }
 
+      await _loadCustomNoteTemplates();
       await _hydrateNoteMetadata();
       await rebuildAllNoteLinks();
       await refreshSyncFoundation(notify: false);
@@ -303,6 +311,143 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       notes: [n1, n2],
       entries: [],
     );
+  }
+
+  List<NoteTemplate> get availableNoteTemplates =>
+      List<NoteTemplate>.unmodifiable(<NoteTemplate>[
+        ...noteTemplates,
+        ...customNoteTemplates,
+      ]);
+
+  List<NoteTemplate> get applicableNoteTemplates =>
+      List<NoteTemplate>.unmodifiable(
+        availableNoteTemplates.where((template) => template.id != 'blank'),
+      );
+
+  Future<void> _loadCustomNoteTemplates() async {
+    final store = _customNoteTemplateStore;
+    if (store == null) {
+      customNoteTemplates = const <NoteTemplate>[];
+      return;
+    }
+    customNoteTemplates = await store.load();
+  }
+
+  Future<NoteTemplate> createCustomNoteTemplate({
+    required String title,
+    required String icon,
+    required String noteType,
+    required String content,
+    List<String> defaultTags = const <String>[],
+    Map<String, String> defaultProperties = const <String, String>{},
+  }) async {
+    if (customNoteTemplates.length >= CustomNoteTemplateStore.maxTemplateCount) {
+      throw StateError('Достигнут лимит пользовательских шаблонов.');
+    }
+    final template = _normalizeCustomNoteTemplate(
+      id: 'custom_${_uuid.v4()}',
+      title: title,
+      icon: icon,
+      noteType: noteType,
+      content: content,
+      defaultTags: defaultTags,
+      defaultProperties: defaultProperties,
+    );
+    await _replaceCustomTemplates(<NoteTemplate>[
+      ...customNoteTemplates,
+      template,
+    ]);
+    return template;
+  }
+
+  Future<NoteTemplate> updateCustomNoteTemplate({
+    required String id,
+    required String title,
+    required String icon,
+    required String noteType,
+    required String content,
+    List<String> defaultTags = const <String>[],
+    Map<String, String> defaultProperties = const <String, String>{},
+  }) async {
+    final index = customNoteTemplates.indexWhere((template) => template.id == id);
+    if (index < 0) {
+      throw StateError('Пользовательский шаблон не найден.');
+    }
+    final template = _normalizeCustomNoteTemplate(
+      id: id,
+      title: title,
+      icon: icon,
+      noteType: noteType,
+      content: content,
+      defaultTags: defaultTags,
+      defaultProperties: defaultProperties,
+    );
+    final next = List<NoteTemplate>.from(customNoteTemplates);
+    next[index] = template;
+    await _replaceCustomTemplates(next);
+    return template;
+  }
+
+  Future<void> deleteCustomNoteTemplate(String id) async {
+    final next = customNoteTemplates
+        .where((template) => template.id != id)
+        .toList(growable: false);
+    if (next.length == customNoteTemplates.length) {
+      return;
+    }
+    await _replaceCustomTemplates(next);
+  }
+
+  NoteTemplate _normalizeCustomNoteTemplate({
+    required String id,
+    required String title,
+    required String icon,
+    required String noteType,
+    required String content,
+    required List<String> defaultTags,
+    required Map<String, String> defaultProperties,
+  }) {
+    final normalizedTags = <String>[];
+    final seenTags = <String>{};
+    for (final rawTag in defaultTags) {
+      final tag = rawTag.trim();
+      if (tag.isNotEmpty && seenTags.add(tag.toLowerCase())) {
+        normalizedTags.add(tag);
+      }
+    }
+    final normalizedProperties = <String, String>{};
+    for (final entry in defaultProperties.entries) {
+      final key = entry.key.trim();
+      if (key.isNotEmpty) {
+        normalizedProperties[key] = entry.value.trim();
+      }
+    }
+    final template = NoteTemplate(
+      id: id,
+      title: title.trim(),
+      icon: icon.trim().isEmpty ? '📝' : icon.trim(),
+      noteType: noteType.trim().isEmpty ? 'note' : noteType.trim(),
+      content: '${content.trimRight()}\n',
+      defaultTags: List<String>.unmodifiable(normalizedTags),
+      defaultProperties: Map<String, String>.unmodifiable(normalizedProperties),
+      isCustom: true,
+    );
+    if (!CustomNoteTemplateStore.isValid(template)) {
+      throw ArgumentError(
+        'Шаблон должен иметь название и непустое содержимое допустимого размера.',
+      );
+    }
+    return template;
+  }
+
+  Future<void> _replaceCustomTemplates(List<NoteTemplate> next) async {
+    final normalized = List<NoteTemplate>.unmodifiable(next);
+    final store = _customNoteTemplateStore;
+    if (store != null) {
+      await store.save(normalized);
+    }
+    customNoteTemplates = normalized;
+    notifyListeners();
   }
 
   List<Project> get activeProjects =>

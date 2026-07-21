@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
+import '../features/notes/custom_note_template_dialog.dart';
 import '../features/notes/note_block_reorder_dialog.dart';
 import '../features/notes/note_block_syntax.dart';
 import '../features/notes/note_columns_editor_dialog.dart';
@@ -24,6 +25,35 @@ import '../features/tasks/task_editor_sheet.dart';
 import '../models/app_models.dart';
 import '../services/app_store.dart';
 import 'sources_screen.dart';
+
+Future<void> _showCustomNoteTemplateManager(
+  BuildContext context,
+  AppStore store,
+) {
+  return CustomNoteTemplateManagerDialog.show(
+    context,
+    templates: store.customNoteTemplates,
+    onCreate:
+        (draft) => store.createCustomNoteTemplate(
+          title: draft.title,
+          icon: draft.icon,
+          noteType: draft.noteType,
+          content: draft.content,
+          defaultTags: draft.defaultTags,
+        ),
+    onUpdate:
+        (template, draft) => store.updateCustomNoteTemplate(
+          id: template.id,
+          title: draft.title,
+          icon: draft.icon,
+          noteType: draft.noteType,
+          content: draft.content,
+          defaultTags: draft.defaultTags,
+          defaultProperties: template.defaultProperties,
+        ),
+    onDelete: (template) => store.deleteCustomNoteTemplate(template.id),
+  );
+}
 
 class NotesScreen extends StatefulWidget {
   const NotesScreen({super.key, required this.store});
@@ -360,11 +390,11 @@ class _NotesScreenState extends State<NotesScreen> {
   Future<void> _add() async {
     final request = await _NewNoteSheet.show(
       context,
-      projects: widget.store.activeProjects,
+      store: widget.store,
     );
     if (request == null || !mounted) return;
 
-    final template = noteTemplates.firstWhere(
+    final template = widget.store.availableNoteTemplates.firstWhere(
       (item) => item.id == request.templateId,
     );
     final note = Note(
@@ -841,6 +871,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           onInsertScientificReference: _insertScientificReference,
           onInspectScientificObjects: _inspectScientificObjects,
           onApplyLaboratoryTemplate: _applyLaboratoryTemplate,
+          onSaveAsTemplate: _saveCurrentNoteAsTemplate,
+          onManageTemplates: _manageCustomTemplates,
         ),
         _WikiLinkSuggestionsBar(
           controller: contentController,
@@ -1360,12 +1392,18 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     });
   }
 
+  Future<void> _manageCustomTemplates() async {
+    await _showCustomNoteTemplateManager(context, widget.store);
+    if (mounted) setState(() {});
+  }
+
   Future<void> _applyLaboratoryTemplate() async {
     final originalValue = contentController.value;
     final wasDirty = dirty;
     final application = await LaboratoryTemplateDialog.show(
       context,
       currentText: originalValue.text,
+      templates: widget.store.applicableNoteTemplates,
     );
     if (application == null || !mounted) {
       return;
@@ -1420,6 +1458,46 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _saveCurrentNoteAsTemplate() async {
+    final draft = await CustomNoteTemplateEditorDialog.show(
+      context,
+      initialTitle: titleController.text.trim(),
+      initialIcon: noteTypeIcon(noteType),
+      initialNoteType: noteType,
+      initialContent: contentController.text,
+      initialTags: tags,
+    );
+    if (draft == null || !mounted) return;
+    try {
+      final template = await widget.store.createCustomNoteTemplate(
+        title: draft.title,
+        icon: draft.icon,
+        noteType: draft.noteType,
+        content: draft.content,
+        defaultTags: draft.defaultTags,
+        defaultProperties: properties,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Создан пользовательский шаблон «${template.title}».'),
+          action: SnackBarAction(
+            label: 'Открыть',
+            onPressed:
+                () => unawaited(
+                  _showCustomNoteTemplateManager(context, widget.store),
+                ),
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось создать шаблон: $error')),
+      );
+    }
   }
 
   Future<void> _insertScientificTable() async {
@@ -2263,6 +2341,8 @@ class _EditorToolbar extends StatefulWidget {
     required this.onInsertScientificReference,
     required this.onInspectScientificObjects,
     required this.onApplyLaboratoryTemplate,
+    required this.onSaveAsTemplate,
+    required this.onManageTemplates,
   });
 
   final TextEditingController controller;
@@ -2277,6 +2357,8 @@ class _EditorToolbar extends StatefulWidget {
   final VoidCallback onInsertScientificReference;
   final VoidCallback onInspectScientificObjects;
   final VoidCallback onApplyLaboratoryTemplate;
+  final VoidCallback onSaveAsTemplate;
+  final VoidCallback onManageTemplates;
 
   @override
   State<_EditorToolbar> createState() => _EditorToolbarState();
@@ -2525,9 +2607,19 @@ class _EditorToolbarState extends State<_EditorToolbar> {
           ),
           const VerticalDivider(indent: 10, endIndent: 10),
           IconButton(
-            tooltip: 'Лабораторный шаблон',
+            tooltip: 'Применить шаблон заметки',
             onPressed: widget.onApplyLaboratoryTemplate,
-            icon: const Icon(Icons.science_outlined),
+            icon: const Icon(Icons.dashboard_customize_outlined),
+          ),
+          IconButton(
+            tooltip: 'Сохранить заметку как шаблон',
+            onPressed: widget.onSaveAsTemplate,
+            icon: const Icon(Icons.bookmark_add_outlined),
+          ),
+          IconButton(
+            tooltip: 'Мои шаблоны',
+            onPressed: widget.onManageTemplates,
+            icon: const Icon(Icons.settings_outlined),
           ),
           _button(Icons.title_rounded, '# ', ''),
           _button(Icons.format_bold_rounded, '**', '**'),
@@ -3494,20 +3586,20 @@ class _LinkHealthDialog extends StatelessWidget {
 }
 
 class _NewNoteSheet extends StatefulWidget {
-  const _NewNoteSheet({required this.projects});
+  const _NewNoteSheet({required this.store});
 
-  final List<Project> projects;
+  final AppStore store;
 
   static Future<_NewNoteRequest?> show(
     BuildContext context, {
-    required List<Project> projects,
+    required AppStore store,
   }) {
     return showModalBottomSheet<_NewNoteRequest>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       constraints: const BoxConstraints(maxWidth: 700),
-      builder: (_) => _NewNoteSheet(projects: projects),
+      builder: (_) => _NewNoteSheet(store: store),
     );
   }
 
@@ -3524,7 +3616,7 @@ class _NewNoteSheetState extends State<_NewNoteSheet> {
   @override
   void initState() {
     super.initState();
-    projectId = widget.projects.first.id;
+    projectId = widget.store.activeProjects.first.id;
   }
 
   @override
@@ -3532,6 +3624,17 @@ class _NewNoteSheetState extends State<_NewNoteSheet> {
     titleController.dispose();
     folderController.dispose();
     super.dispose();
+  }
+
+  Future<void> _manageTemplates() async {
+    await _showCustomNoteTemplateManager(context, widget.store);
+    if (!mounted) return;
+    final availableIds = widget.store.availableNoteTemplates
+        .map((template) => template.id)
+        .toSet();
+    setState(() {
+      if (!availableIds.contains(templateId)) templateId = 'blank';
+    });
   }
 
   @override
@@ -3566,7 +3669,7 @@ class _NewNoteSheetState extends State<_NewNoteSheet> {
                 initialValue: projectId,
                 decoration: const InputDecoration(labelText: 'Проект'),
                 items:
-                    widget.projects
+                    widget.store.activeProjects
                         .map(
                           (project) => DropdownMenuItem(
                             value: project.id,
@@ -3598,7 +3701,7 @@ class _NewNoteSheetState extends State<_NewNoteSheet> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final template in noteTemplates)
+                  for (final template in widget.store.availableNoteTemplates)
                     ChoiceChip(
                       avatar: Text(template.icon),
                       label: Text(template.title),
@@ -3607,6 +3710,12 @@ class _NewNoteSheetState extends State<_NewNoteSheet> {
                           (_) => setState(() => templateId = template.id),
                     ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _manageTemplates,
+                icon: const Icon(Icons.dashboard_customize_outlined),
+                label: const Text('Мои шаблоны'),
               ),
               const SizedBox(height: 20),
               SizedBox(

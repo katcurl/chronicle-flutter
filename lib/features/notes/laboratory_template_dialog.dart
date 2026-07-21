@@ -37,17 +37,24 @@ class LaboratoryTemplateDialog extends StatefulWidget {
   const LaboratoryTemplateDialog({
     super.key,
     required this.currentText,
+    this.templates = laboratoryNoteTemplates,
   });
 
   final String currentText;
+  final List<NoteTemplate> templates;
 
   static Future<LaboratoryTemplateApplication?> show(
     BuildContext context, {
     required String currentText,
+    List<NoteTemplate> templates = laboratoryNoteTemplates,
   }) {
     return showDialog<LaboratoryTemplateApplication>(
       context: context,
-      builder: (_) => LaboratoryTemplateDialog(currentText: currentText),
+      builder:
+          (_) => LaboratoryTemplateDialog(
+            currentText: currentText,
+            templates: templates,
+          ),
     );
   }
 
@@ -62,14 +69,15 @@ class _LaboratoryTemplateDialogState extends State<LaboratoryTemplateDialog> {
 
   bool get _hasExistingContent => widget.currentText.trim().isNotEmpty;
 
-  NoteTemplate get _selectedTemplate => laboratoryNoteTemplates.firstWhere(
+  NoteTemplate get _selectedTemplate => widget.templates.firstWhere(
     (template) => template.id == _selectedTemplateId,
   );
 
   @override
   void initState() {
     super.initState();
-    _selectedTemplateId = laboratoryNoteTemplates.first.id;
+    assert(widget.templates.isNotEmpty);
+    _selectedTemplateId = widget.templates.first.id;
     _placement =
         _hasExistingContent
             ? LaboratoryTemplatePlacement.append
@@ -97,11 +105,11 @@ class _LaboratoryTemplateDialogState extends State<LaboratoryTemplateDialog> {
               padding: EdgeInsets.fromLTRB(20, 16, 16, 14),
               child: Row(
                 children: [
-                  Icon(Icons.science_outlined),
+                  Icon(Icons.dashboard_customize_outlined),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Лабораторный шаблон',
+                      'Шаблон заметки',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
@@ -162,6 +170,7 @@ class _LaboratoryTemplateDialogState extends State<LaboratoryTemplateDialog> {
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           final templates = _TemplateList(
+                            templates: widget.templates,
                             selectedTemplateId: _selectedTemplateId,
                             onSelected: (id) {
                               setState(() => _selectedTemplateId = id);
@@ -187,7 +196,7 @@ class _LaboratoryTemplateDialogState extends State<LaboratoryTemplateDialog> {
                                   labelText: 'Шаблон',
                                 ),
                                 items: [
-                                  for (final item in laboratoryNoteTemplates)
+                                  for (final item in widget.templates)
                                     DropdownMenuItem<String>(
                                       value: item.id,
                                       child: Text(
@@ -225,7 +234,7 @@ class _LaboratoryTemplateDialogState extends State<LaboratoryTemplateDialog> {
                   const SizedBox(width: 8),
                   FilledButton.icon(
                     onPressed: _submit,
-                    icon: const Icon(Icons.science_outlined),
+                    icon: const Icon(Icons.dashboard_customize_outlined),
                     label: Text(
                       _hasExistingContent ? 'Применить' : 'Вставить шаблон',
                     ),
@@ -327,20 +336,22 @@ class _ExistingContentWarning extends StatelessWidget {
 
 class _TemplateList extends StatelessWidget {
   const _TemplateList({
+    required this.templates,
     required this.selectedTemplateId,
     required this.onSelected,
   });
 
+  final List<NoteTemplate> templates;
   final String selectedTemplateId;
   final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
-      itemCount: laboratoryNoteTemplates.length,
+      itemCount: templates.length,
       separatorBuilder: (_, __) => const SizedBox(height: 6),
       itemBuilder: (context, index) {
-        final template = laboratoryNoteTemplates[index];
+        final template = templates[index];
         return ListTile(
           selected: template.id == selectedTemplateId,
           selectedTileColor:
@@ -351,8 +362,10 @@ class _TemplateList extends StatelessWidget {
           leading: Text(template.icon, style: const TextStyle(fontSize: 22)),
           title: Text(template.title),
           subtitle: Text(
-            '${template.defaultTags.length} тегов · '
-            '${template.defaultProperties.length} свойств',
+            template.isCustom
+                ? 'Пользовательский · ${template.defaultTags.length} тегов'
+                : '${template.defaultTags.length} тегов · '
+                    '${template.defaultProperties.length} свойств',
           ),
           onTap: () => onSelected(template.id),
         );

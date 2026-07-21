@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.24.6+59
+
+- Added locally persisted user-created note templates without a database migration.
+- Added creation, editing and deletion of custom templates with a title, icon, note type, Markdown body and default tags.
+- Added **Сохранить заметку как шаблон** in the Markdown editor, preserving the current note content, type, tags and custom properties as template defaults.
+- Added **Мои шаблоны** management from the editor toolbar and the new-note sheet.
+- Included custom templates in both new-note creation and the safe in-editor template picker.
+- Kept all built-in templates immutable and preserved existing notes when a custom template is edited or deleted.
+- Stored custom templates only in Chronicle local preferences; Vault files, synchronization, attachments, database schema and visual themes remain unchanged.
+- Added deterministic tests for JSON round-tripping, corrupt-payload recovery and in-memory create/update/delete behavior.
+
 ## 0.24.5+58
 
 - Added a **Лабораторный шаблон** command to the Markdown editor toolbar.

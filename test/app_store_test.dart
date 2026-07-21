@@ -44,4 +44,35 @@ void main() {
 
     expect(secondStore.data.citationSources.single.citationKey, 'Jaffe2005');
   });
+
+  test('custom note templates can be created, updated and deleted in memory', () async {
+    final repository = InMemoryAppRepository();
+    final store = AppStore(repository: repository);
+    await store.load();
+
+    final created = await store.createCustomNoteTemplate(
+      title: 'Мой протокол',
+      icon: '🧪',
+      noteType: 'experiment',
+      content: '# Мой протокол\n\n## Ход работы',
+      defaultTags: const <String>['лаборатория', 'лаборатория'],
+    );
+
+    expect(created.isCustom, isTrue);
+    expect(store.customNoteTemplates, hasLength(1));
+    expect(created.defaultTags, <String>['лаборатория']);
+    expect(store.availableNoteTemplates, contains(created));
+
+    final updated = await store.updateCustomNoteTemplate(
+      id: created.id,
+      title: 'Обновлённый протокол',
+      icon: '⚗️',
+      noteType: 'experiment',
+      content: '# Обновлённый протокол',
+    );
+
+    expect(store.customNoteTemplates.single.title, updated.title);
+    await store.deleteCustomNoteTemplate(created.id);
+    expect(store.customNoteTemplates, isEmpty);
+  });
 }

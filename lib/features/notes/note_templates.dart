@@ -7,6 +7,7 @@ class NoteTemplate {
     required this.content,
     this.defaultTags = const [],
     this.defaultProperties = const {},
+    this.isCustom = false,
   });
 
   final String id;
@@ -16,6 +17,46 @@ class NoteTemplate {
   final String content;
   final List<String> defaultTags;
   final Map<String, String> defaultProperties;
+  final bool isCustom;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'id': id,
+    'title': title,
+    'icon': icon,
+    'noteType': noteType,
+    'content': content,
+    'defaultTags': defaultTags,
+    'defaultProperties': defaultProperties,
+    'isCustom': isCustom,
+  };
+
+  factory NoteTemplate.fromJson(Map<String, Object?> json) {
+    final rawTags = json['defaultTags'];
+    final rawProperties = json['defaultProperties'];
+    return NoteTemplate(
+      id: (json['id'] ?? '').toString().trim(),
+      title: (json['title'] ?? '').toString().trim(),
+      icon: (json['icon'] ?? '📝').toString().trim(),
+      noteType: (json['noteType'] ?? 'note').toString().trim(),
+      content: (json['content'] ?? '').toString(),
+      defaultTags:
+          rawTags is Iterable
+              ? rawTags
+                  .map((item) => item.toString().trim())
+                  .where((item) => item.isNotEmpty)
+                  .toList(growable: false)
+              : const <String>[],
+      defaultProperties:
+          rawProperties is Map
+              ? <String, String>{
+                for (final entry in rawProperties.entries)
+                  if (entry.key.toString().trim().isNotEmpty)
+                    entry.key.toString().trim(): entry.value.toString(),
+              }
+              : const <String, String>{},
+      isCustom: json['isCustom'] == true,
+    );
+  }
 }
 
 const laboratoryNoteTemplates = <NoteTemplate>[
@@ -30,7 +71,7 @@ const laboratoryNoteTemplates = <NoteTemplate>[
 
 ## Цели на день
 
-- [ ] 
+- [ ]
 
 ## Образцы и материалы
 
@@ -48,13 +89,13 @@ const laboratoryNoteTemplates = <NoteTemplate>[
 
 ## Полученные файлы и данные
 
-- 
+-
 
 ## Итоги
 
 ## Следующий шаг
 
-- [ ] 
+- [ ]
 ''',
   ),
   NoteTemplate(
@@ -89,7 +130,7 @@ const laboratoryNoteTemplates = <NoteTemplate>[
 
 ## Протокол
 
-1. 
+1.
 
 ## Наблюдения по ходу работы
 
@@ -103,7 +144,7 @@ const laboratoryNoteTemplates = <NoteTemplate>[
 
 ## Следующий эксперимент
 
-- [ ] 
+- [ ]
 ''',
   ),
   NoteTemplate(
@@ -226,7 +267,7 @@ const laboratoryNoteTemplates = <NoteTemplate>[
 
 ## Следующий шаг
 
-- [ ] 
+- [ ]
 ''',
   ),
   NoteTemplate(
@@ -296,7 +337,7 @@ const laboratoryNoteTemplates = <NoteTemplate>[
 
 ## Следующий шаг
 
-- [ ] 
+- [ ]
 ''',
   ),
   NoteTemplate(
@@ -327,7 +368,7 @@ const laboratoryNoteTemplates = <NoteTemplate>[
 
 ## Приготовление
 
-1. 
+1.
 
 ## Контроль
 
@@ -369,8 +410,8 @@ const noteTemplates = <NoteTemplate>[
 
 После занятия ученики должны уметь:
 
-- 
-- 
+-
+-
 
 ## План
 
@@ -418,7 +459,7 @@ E = mc^2
 
 ## Следующий шаг
 
-- [ ] 
+- [ ]
 ''',
   ),
   NoteTemplate(
@@ -464,7 +505,7 @@ E = mc^2
 
 ## Следующие действия
 
-- [ ] 
+- [ ]
 ''',
   ),
   ...laboratoryNoteTemplates,
