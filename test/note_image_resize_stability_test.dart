@@ -32,10 +32,25 @@ void main() {
 
     final image = find.byType(Image).first;
     final initialWidth = tester.getSize(image).width;
-    final resizeHandle = find.byIcon(Icons.drag_handle_rounded);
+    final resizeGesture = find.byWidgetPredicate(
+      (widget) =>
+          widget is GestureDetector &&
+          widget.onHorizontalDragUpdate != null &&
+          widget.onHorizontalDragEnd != null,
+      description: 'image resize gesture detector',
+    );
 
-    expect(resizeHandle, findsOneWidget);
-    await tester.drag(resizeHandle, Offset(-initialWidth / 2, 0));
+    expect(resizeGesture, findsOneWidget);
+    final detector = tester.widget<GestureDetector>(resizeGesture);
+    detector.onHorizontalDragUpdate!(
+      DragUpdateDetails(
+        globalPosition: Offset(initialWidth, 0),
+        delta: Offset(-initialWidth / 2, 0),
+        primaryDelta: -initialWidth / 2,
+      ),
+    );
+    await tester.pump();
+    detector.onHorizontalDragEnd!(const DragEndDetails());
     await tester.pumpAndSettle();
 
     expect(requestedPresentation?.widthPercent, 50);
