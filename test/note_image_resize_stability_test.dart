@@ -54,7 +54,7 @@ void main() {
 
     expect(tester.getSize(image).width, closeTo(initialWidth / 2, 1));
 
-    detector.onHorizontalDragEnd!(const DragEndDetails());
+    detector.onHorizontalDragEnd!(DragEndDetails());
     await tester.pumpAndSettle();
 
     expect(requestedPresentation?.widthPercent, 50);
