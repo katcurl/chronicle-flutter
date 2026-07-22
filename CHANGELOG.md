@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.26.7+73
+
+- Expanded the existing knowledge graph into an interactive exploration workspace without changing the note-link index, Vault format or database schema.
+- Added project, note-type and tag filters plus an option to hide isolated notes while keeping text search as a non-destructive highlight.
+- Added persistent node selection with incoming/outgoing link counts, neighboring-note navigation and direct note opening.
+- Added one-step and two-step focus modes that reveal the local neighborhood of a selected note across project boundaries.
+- Added optional direction arrows so the graph distinguishes a note that references another note from the referenced target.
+- Added graph-structure insights for connected components, isolated notes, unresolved targets and the most connected notes.
+- Dimmed unrelated nodes while a note is selected and highlighted every edge touching the selected or hovered note.
+- Added deterministic graph-analysis tests for degree counts, duplicate links, components, bounded neighborhoods, shortest paths and unresolved targets.
+- Preserved existing notes, wiki links, stable-ID links, projects, workspaces, synchronization, exports and all user data without migration.
+
 ## 0.26.6+72
 
 - Added a searchable multi-select note-link picker with inline and bulleted insertion modes.
