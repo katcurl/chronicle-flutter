@@ -17,9 +17,11 @@ import '../features/notes/laboratory_template_dialog.dart';
 import '../features/notes/note_graph_screen.dart';
 import '../features/notes/note_markdown_view.dart';
 import '../features/notes/note_templates.dart';
+import '../features/notes/note_table_syntax.dart';
 import '../features/notes/note_wiki_link_syntax.dart';
 import '../features/notes/note_wiki_rename.dart';
 import '../features/notes/scientific_object_dialogs.dart';
+import '../features/notes/scientific_table_editor_dialog.dart';
 import '../features/notes/scientific_reference_syntax.dart';
 import '../features/references/citation_syntax.dart';
 import '../features/tasks/task_editor_sheet.dart';
@@ -1551,15 +1553,69 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   }
 
   Future<void> _insertScientificTable() async {
-    final index = ScientificReferenceSyntax.index(contentController.text);
-    final draft = await ScientificTableDialog.show(
+    final value = contentController.value;
+    final selection = value.selection;
+    final offset = selection.isValid ? selection.extentOffset : value.text.length;
+    ScientificTableReference? currentReference;
+    for (final table in ScientificReferenceSyntax.tables(value.text)) {
+      final selectionIntersects = selection.isValid &&
+          !selection.isCollapsed &&
+          selection.start < table.end &&
+          selection.end > table.start;
+      if ((offset >= table.start && offset <= table.end) || selectionIntersects) {
+        currentReference = table;
+        break;
+      }
+    }
+
+    NoteTableModel? initialTable;
+    if (currentReference != null) {
+      initialTable = NoteTableSyntax.parseReference(currentReference);
+      if (initialTable == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Не удалось безопасно разобрать текущую Markdown-таблицу.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
+    final index = ScientificReferenceSyntax.index(value.text);
+    final currentKey = currentReference == null
+        ? null
+        : '${ScientificObjectType.table.name}:${currentReference.id}';
+    final table = await ScientificTableEditorDialog.show(
       context,
-      existingKeys: {for (final object in index.objects) object.key},
+      existingKeys: {
+        for (final object in index.objects)
+          if (object.key != currentKey) object.key,
+      },
+      initialTable: initialTable,
     );
-    if (draft == null || !mounted) {
+    if (table == null || !mounted) {
       return;
     }
-    _insertMarkdownAtSelection('\n${draft.toMarkdown()}\n');
+
+    final markdown = table.toMarkdown();
+    if (currentReference == null) {
+      _insertMarkdownAtSelection('\n$markdown\n');
+    } else {
+      contentController.value = value.copyWith(
+        text: value.text.replaceRange(
+          currentReference.start,
+          currentReference.end,
+          markdown,
+        ),
+        selection: TextSelection(
+          baseOffset: currentReference.start,
+          extentOffset: currentReference.start + markdown.length,
+        ),
+        composing: TextRange.empty,
+      );
+    }
     _save(createVersion: false);
   }
 
@@ -2804,7 +2860,7 @@ class _EditorToolbarState extends State<_EditorToolbar> {
             icon: const Icon(Icons.library_books_outlined),
           ),
           IconButton(
-            tooltip: 'Добавить нумерованную таблицу',
+            tooltip: 'Добавить или редактировать научную таблицу',
             onPressed: widget.onInsertScientificTable,
             icon: const Icon(Icons.table_chart_outlined),
           ),

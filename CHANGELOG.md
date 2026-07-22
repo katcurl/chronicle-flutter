@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.25.1+65
+
+- Added a visual editor for creating and updating the existing portable scientific Markdown tables.
+- Opened the current table for editing when the cursor or selection is inside its `chronicle-table` block, while keeping the same toolbar action for new tables.
+- Added direct paste of tab-separated spreadsheet ranges and quoted CSV or semicolon-separated data from the system clipboard.
+- Added explicit row and column insertion and removal, editable headers and cells, and per-column left, center or right alignment.
+- Preserved stable table IDs, captions, automatic numbering and `@tbl(id)` cross-references without a database migration or hidden table format.
+- Refused to rewrite tables that cannot be parsed safely and left all existing notes unchanged until the user explicitly saves the table editor.
+- Preserved themes, Vault layout, attachments, synchronization payloads, templates and existing notes.
+- Added deterministic syntax tests for Markdown round-tripping, escaped cells, spreadsheet paste and quoted CSV parsing.
+
 ## 0.25.0+64
 
 - Added direct image pasting from the Windows clipboard into the Markdown editor with `Ctrl+V`.
