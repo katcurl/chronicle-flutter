@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
 import '../features/notes/custom_note_template_dialog.dart';
+import '../features/notes/debounced_text_notifier.dart';
 import '../features/notes/note_block_reorder_dialog.dart';
 import '../features/notes/note_block_syntax.dart';
 import '../features/notes/note_columns_editor_dialog.dart';
@@ -570,7 +571,10 @@ class NoteWorkspaceScreen extends StatefulWidget {
 class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   late final TextEditingController titleController;
   late final TextEditingController contentController;
-  late final ValueNotifier<String> _contentTextNotifier;
+  late final DebouncedTextNotifier _previewTextNotifier;
+  late final DebouncedTextNotifier _statisticsTextNotifier;
+  late final ScrollController _previewScrollController;
+  Timer? _previewScrollResumeTimer;
   late String projectId;
   late String status;
   late String folderPath;
@@ -591,7 +595,15 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     final parsed = NoteDocument.parse(widget.note.body);
     titleController = TextEditingController(text: widget.note.title);
     contentController = TextEditingController(text: parsed.content);
-    _contentTextNotifier = ValueNotifier<String>(parsed.content);
+    _previewTextNotifier = DebouncedTextNotifier(
+      parsed.content,
+      delay: const Duration(milliseconds: 260),
+    );
+    _statisticsTextNotifier = DebouncedTextNotifier(
+      parsed.content,
+      delay: const Duration(milliseconds: 420),
+    );
+    _previewScrollController = ScrollController();
     projectId = widget.note.projectId;
     status = parsed.frontMatter['status'] ?? widget.note.status;
     folderPath = parsed.frontMatter['folder'] ?? widget.note.folderPath;
@@ -617,7 +629,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   void dispose() {
     titleController.dispose();
     contentController.dispose();
-    _contentTextNotifier.dispose();
+    _previewScrollResumeTimer?.cancel();
+    _previewScrollController.dispose();
+    _previewTextNotifier.dispose();
+    _statisticsTextNotifier.dispose();
     super.dispose();
   }
 
@@ -635,7 +650,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     _lastTitleText = nextTitle;
     _lastContentText = nextContent;
     if (contentChanged) {
-      _contentTextNotifier.value = nextContent;
+      _statisticsTextNotifier.schedule(nextContent);
+      if (mode != 0) {
+        _previewTextNotifier.schedule(nextContent);
+      }
     }
     if (!dirty && mounted) {
       setState(() => dirty = true);
@@ -806,6 +824,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (dirty) {
       _save(createVersion: false);
     }
+    if (nextMode != 0) {
+      _previewTextNotifier.setImmediate(contentController.text);
+    }
+    _statisticsTextNotifier.flush();
     if (!mounted) {
       return;
     }
@@ -907,22 +929,43 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   }
 
   Widget _previewPane() {
-    return ValueListenableBuilder<String>(
-      valueListenable: _contentTextNotifier,
-      builder: (context, text, _) {
-        return NoteMarkdownView(
-          markdown: text,
-          onWikiLink: _openWikiLink,
-          onEditImage: _editImageReference,
-          onResizeImage: _replaceImagePresentation,
-          onEditColumns: _editColumnsReference,
-          onResizeColumns: _replaceColumnsWidths,
-          assetListenable: widget.store,
-          citationSources: widget.store.data.citationSources,
-          vaultRootPath: widget.store.vaultStatus.rootPath,
-        );
-      },
+    return NotificationListener<ScrollNotification>(
+      onNotification: _handlePreviewScrollNotification,
+      child: ValueListenableBuilder<String>(
+        valueListenable: _previewTextNotifier,
+        builder: (context, text, _) {
+          return RepaintBoundary(
+            child: NoteMarkdownView(
+              key: PageStorageKey<String>('note-preview-${widget.note.id}'),
+              markdown: text,
+              controller: _previewScrollController,
+              onWikiLink: _openWikiLink,
+              onEditImage: _editImageReference,
+              onResizeImage: _replaceImagePresentation,
+              onEditColumns: _editColumnsReference,
+              onResizeColumns: _replaceColumnsWidths,
+              assetListenable: widget.store,
+              citationSources: widget.store.data.citationSources,
+              vaultRootPath: widget.store.vaultStatus.rootPath,
+            ),
+          );
+        },
+      ),
     );
+  }
+
+  bool _handlePreviewScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification) {
+      _previewScrollResumeTimer?.cancel();
+      _previewTextNotifier.pause();
+    } else if (notification is ScrollEndNotification) {
+      _previewScrollResumeTimer?.cancel();
+      _previewScrollResumeTimer = Timer(
+        const Duration(milliseconds: 140),
+        () => _previewTextNotifier.resume(),
+      );
+    }
+    return false;
   }
 
   Widget _contextPanel({
@@ -982,7 +1025,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         _ContextCard(
           title: 'Статистика',
           child: ValueListenableBuilder<String>(
-            valueListenable: _contentTextNotifier,
+            valueListenable: _statisticsTextNotifier,
             builder: (context, text, _) {
               final words = NoteDocument.wordCount(text);
               final minutes = NoteDocument.readingMinutes(text);
@@ -1328,7 +1371,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     _suppressTextChangeTracking = false;
     _lastTitleText = titleController.text;
     _lastContentText = contentController.text;
-    _contentTextNotifier.value = _lastContentText;
+    _previewTextNotifier.setImmediate(_lastContentText);
+    _statisticsTextNotifier.setImmediate(_lastContentText);
     if (mounted) {
       setState(() => dirty = false);
     }
@@ -2305,7 +2349,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     _suppressTextChangeTracking = false;
     _lastTitleText = titleController.text;
     _lastContentText = contentController.text;
-    _contentTextNotifier.value = _lastContentText;
+    _previewTextNotifier.setImmediate(_lastContentText);
+    _statisticsTextNotifier.setImmediate(_lastContentText);
     setState(() {
       projectId = widget.note.projectId;
       status = widget.note.status;
@@ -2371,7 +2416,7 @@ class _EditorToolbar extends StatefulWidget {
 }
 
 class _EditorToolbarState extends State<_EditorToolbar> {
-  static const _parseDelay = Duration(milliseconds: 90);
+  static const _parseDelay = Duration(milliseconds: 220);
 
   Timer? _parseTimer;
   String _parsedText = '';

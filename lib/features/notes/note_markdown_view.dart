@@ -38,6 +38,7 @@ class NoteMarkdownView extends StatelessWidget {
   const NoteMarkdownView({
     super.key,
     required this.markdown,
+    this.controller,
     this.onWikiLink,
     this.onEditImage,
     this.onResizeImage,
@@ -51,6 +52,7 @@ class NoteMarkdownView extends StatelessWidget {
   });
 
   final String markdown;
+  final ScrollController? controller;
   final ValueChanged<String>? onWikiLink;
   final NoteImageEditCallback? onEditImage;
   final NoteImageResizeCallback? onResizeImage;
@@ -69,15 +71,20 @@ class NoteMarkdownView extends StatelessWidget {
       citationSources,
     );
     final scientificIndex = ScientificReferenceSyntax.index(markdown);
-    return ListView(
+    final chunks = _splitDocument(markdown, baseOffset: 0);
+    return ListView.builder(
+      controller: controller,
       padding: padding,
-      children: _buildContentChunks(
-        context,
-        markdown,
-        baseOffset: 0,
-        bibliography: bibliography,
-        scientificIndex: scientificIndex,
-      ),
+      cacheExtent: 640,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      itemCount: chunks.length,
+      itemBuilder:
+          (context, index) => _buildContentChunk(
+            context,
+            chunks[index],
+            bibliography,
+            scientificIndex,
+          ),
     );
   }
 
@@ -91,29 +98,43 @@ class NoteMarkdownView extends StatelessWidget {
     final chunks = _splitDocument(source, baseOffset: baseOffset);
     return [
       for (final chunk in chunks)
-        switch (chunk.kind) {
-          _DocumentChunkKind.math => _DisplayMath(source: chunk.value),
-          _DocumentChunkKind.image => _buildManagedImage(
-            context,
-            chunk.image!,
-            scientificIndex,
-          ),
-          _DocumentChunkKind.columns => _buildManagedColumns(
-            context,
-            chunk.columns!,
-            bibliography,
-            scientificIndex,
-          ),
-          _DocumentChunkKind.markdown =>
-            chunk.value.trim().isEmpty
-                ? const SizedBox.shrink()
-                : _buildMarkdownBody(
-                    chunk.value,
-                    bibliography,
-                    scientificIndex,
-                  ),
-        },
+        _buildContentChunk(
+          context,
+          chunk,
+          bibliography,
+          scientificIndex,
+        ),
     ];
+  }
+
+  Widget _buildContentChunk(
+    BuildContext context,
+    _DocumentChunk chunk,
+    List<CitationSource> bibliography,
+    ScientificReferenceIndex scientificIndex,
+  ) {
+    return switch (chunk.kind) {
+      _DocumentChunkKind.math => _DisplayMath(source: chunk.value),
+      _DocumentChunkKind.image => _buildManagedImage(
+        context,
+        chunk.image!,
+        scientificIndex,
+      ),
+      _DocumentChunkKind.columns => _buildManagedColumns(
+        context,
+        chunk.columns!,
+        bibliography,
+        scientificIndex,
+      ),
+      _DocumentChunkKind.markdown =>
+        chunk.value.trim().isEmpty
+            ? const SizedBox.shrink()
+            : _buildMarkdownBody(
+              chunk.value,
+              bibliography,
+              scientificIndex,
+            ),
+    };
   }
 
   Widget _buildMarkdownBody(

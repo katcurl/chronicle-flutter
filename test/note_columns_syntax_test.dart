@@ -144,6 +144,44 @@ void main() {
     expect(restored.columns[1].markdown, contains('- [x] Проверено'));
   });
 
+  test('column cards can be moved with their exact content', () {
+    final moved = NoteColumnsSyntax.moveItem(
+      const ['Рисунок', 'Текст', 'Вывод'],
+      0,
+      2,
+    );
+
+    expect(moved, ['Текст', 'Вывод', 'Рисунок']);
+  });
+
+  test('a column can be duplicated only while a third slot is available', () {
+    expect(
+      NoteColumnsSyntax.duplicateContent(const ['Рисунок', 'Текст'], 0),
+      ['Рисунок', 'Рисунок', 'Текст'],
+    );
+    expect(
+      NoteColumnsSyntax.duplicateContent(const ['A', 'B', 'C'], 1),
+      ['A', 'B', 'C'],
+    );
+  });
+
+  test('safe column removal preserves Markdown reading order', () {
+    expect(
+      NoteColumnsSyntax.removeContentSafely(
+        const ['Рисунок', 'Подпись', 'Интерпретация'],
+        0,
+      ),
+      ['Рисунок\n\nПодпись', 'Интерпретация'],
+    );
+    expect(
+      NoteColumnsSyntax.removeContentSafely(
+        const ['Рисунок', 'Подпись', 'Интерпретация'],
+        2,
+      ),
+      ['Рисунок', 'Подпись\n\nИнтерпретация'],
+    );
+  });
+
   test('column control markers do not inflate word count', () {
     final markdown = NoteColumnsSyntax.build(
       widths: const [40, 60],

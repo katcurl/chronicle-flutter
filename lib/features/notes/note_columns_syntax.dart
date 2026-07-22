@@ -282,6 +282,51 @@ class NoteColumnsSyntax {
     return normalized;
   }
 
+  static List<T> moveItem<T>(List<T> values, int from, int to) {
+    if (from < 0 ||
+        from >= values.length ||
+        to < 0 ||
+        to >= values.length ||
+        from == to) {
+      return List<T>.from(values);
+    }
+    final moved = List<T>.from(values);
+    final item = moved.removeAt(from);
+    moved.insert(to, item);
+    return moved;
+  }
+
+  static List<String> duplicateContent(List<String> values, int index) {
+    if (values.length >= 3 || index < 0 || index >= values.length) {
+      return List<String>.from(values);
+    }
+    final duplicated = List<String>.from(values);
+    duplicated.insert(index + 1, values[index]);
+    return duplicated;
+  }
+
+  static List<String> removeContentSafely(List<String> values, int index) {
+    if (values.length <= 2 || index < 0 || index >= values.length) {
+      return List<String>.from(values);
+    }
+    final reduced = List<String>.from(values);
+    if (index == 0) {
+      reduced[1] = _joinMarkdown(values[0], values[1]);
+      reduced.removeAt(0);
+    } else {
+      reduced[index - 1] = _joinMarkdown(values[index - 1], values[index]);
+      reduced.removeAt(index);
+    }
+    return reduced;
+  }
+
+  static String _joinMarkdown(String first, String second) {
+    return [
+      first.trim(),
+      second.trim(),
+    ].where((value) => value.isNotEmpty).join('\n\n');
+  }
+
   static List<int> normalizeOrder(List<int> values, int count) {
     final identity = [for (var index = 0; index < count; index += 1) index];
     if (values.length != count) {

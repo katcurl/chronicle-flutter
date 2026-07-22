@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.24.9+62
+
+- Added direct drag-and-drop reordering for complete columns while preserving their Markdown content and responsive width.
+- Added a clearly highlighted active column, one-click two-column swapping, a third-column add action and per-column duplication.
+- Added safe column removal that merges the removed Markdown into the nearest neighbor in reading order instead of deleting it.
+- Debounced live Markdown preview, note statistics and full block parsing so normal typing no longer triggers repeated expensive document work.
+- Paused pending preview refreshes during active scrolling, preserved the preview scroll controller across Markdown updates and resumed rendering only after scrolling settles.
+- Changed the top-level preview to lazy chunk construction and isolated it behind a repaint boundary to reduce work for long notes with images, equations and column blocks.
+- Preserved the existing portable Markdown column format, themes, Vault files, attachments, synchronization, database schema and existing notes without migration.
+- Added deterministic tests for delayed refresh coalescing, scroll-time pausing, immediate synchronization, column movement, duplication and lossless removal.
+
 ## 0.24.8+61
 
 - Replaced the layout-only column dialog with a visual Markdown composer for each two- or three-column body.
