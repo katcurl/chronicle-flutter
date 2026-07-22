@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
@@ -1798,6 +1799,20 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     if (result != null) {
       _notifyAttachmentRefresh();
     }
+    return result;
+  }
+
+  Future<AttachmentImportResult> storeAttachmentBytesForNote(
+    Note note, {
+    required String fileName,
+    required Uint8List bytes,
+  }) async {
+    final result = await _vaultService.storeAttachmentBytes(
+      note: note,
+      originalName: fileName,
+      bytes: bytes,
+    );
+    _notifyAttachmentRefresh();
     return result;
   }
 

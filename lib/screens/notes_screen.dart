@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,6 +25,7 @@ import '../features/notes/scientific_reference_syntax.dart';
 import '../features/references/citation_syntax.dart';
 import '../features/tasks/task_editor_sheet.dart';
 import '../models/app_models.dart';
+import '../platform/clipboard_image_reader.dart';
 import '../services/app_store.dart';
 import 'sources_screen.dart';
 
@@ -587,6 +589,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   bool _suppressTextChangeTracking = false;
   bool dirty = false;
   bool _renameReviewBusy = false;
+  bool _clipboardPasteBusy = false;
   int mode = 0;
 
   @override
@@ -883,6 +886,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         _EditorToolbar(
           controller: contentController,
           onAttach: _attachFile,
+          onPasteImage: () => unawaited(_pasteImageFromClipboard()),
           onConfigureImage: _editImageAtCursor,
           onConfigureColumns: _configureColumnsAtCursor,
           onReorderBlocks: _reorderBlocks,
@@ -905,22 +909,25 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         ),
         const Divider(height: 1),
         Expanded(
-          child: TextField(
-            controller: contentController,
-            expands: true,
-            maxLines: null,
-            minLines: null,
-            textAlignVertical: TextAlignVertical.top,
-            style: const TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 15,
-              height: 1.6,
-            ),
-            decoration: const InputDecoration(
-              contentPadding: EdgeInsets.all(20),
-              border: InputBorder.none,
-              filled: false,
-              hintText: r'Markdown, $LaTeX$, [[ссылки]], изображения…',
+          child: Focus(
+            onKeyEvent: _handleEditorKeyEvent,
+            child: TextField(
+              controller: contentController,
+              expands: true,
+              maxLines: null,
+              minLines: null,
+              textAlignVertical: TextAlignVertical.top,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 15,
+                height: 1.6,
+              ),
+              decoration: const InputDecoration(
+                contentPadding: EdgeInsets.all(20),
+                border: InputBorder.none,
+                filled: false,
+                hintText: r'Markdown, $LaTeX$, [[ссылки]], изображения…',
+              ),
             ),
           ),
         ),
@@ -1626,6 +1633,108 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       text: value.text.replaceRange(start, end, markdown),
       selection: TextSelection.collapsed(offset: start + markdown.length),
       composing: TextRange.empty,
+    );
+  }
+
+  KeyEventResult _handleEditorKeyEvent(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.keyV) {
+      return KeyEventResult.ignored;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    if (!keyboard.isControlPressed && !keyboard.isMetaPressed) {
+      return KeyEventResult.ignored;
+    }
+    unawaited(_pasteClipboardContent());
+    return KeyEventResult.handled;
+  }
+
+  Future<void> _pasteClipboardContent() async {
+    if (_clipboardPasteBusy) {
+      return;
+    }
+    _clipboardPasteBusy = true;
+    try {
+      final imageBytes = await readClipboardPngImage();
+      if (imageBytes != null && imageBytes.isNotEmpty) {
+        await _storeClipboardImage(imageBytes);
+        return;
+      }
+      await _pasteClipboardText();
+    } on Object catch (error) {
+      var pastedText = false;
+      try {
+        pastedText = await _pasteClipboardText();
+      } on Object {
+        pastedText = false;
+      }
+      if (!pastedText && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось прочитать буфер обмена: $error')),
+        );
+      }
+    } finally {
+      _clipboardPasteBusy = false;
+    }
+  }
+
+  Future<void> _pasteImageFromClipboard() async {
+    if (_clipboardPasteBusy) {
+      return;
+    }
+    _clipboardPasteBusy = true;
+    try {
+      final imageBytes = await readClipboardPngImage();
+      if (!mounted) {
+        return;
+      }
+      if (imageBytes == null || imageBytes.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('В буфере обмена нет изображения.')),
+        );
+        return;
+      }
+      await _storeClipboardImage(imageBytes);
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось вставить изображение: $error')),
+      );
+    } finally {
+      _clipboardPasteBusy = false;
+    }
+  }
+
+  Future<bool> _pasteClipboardText() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text == null || text.isEmpty || !mounted) {
+      return false;
+    }
+    _insertInlineMarkdown(text);
+    return true;
+  }
+
+  Future<void> _storeClipboardImage(Uint8List bytes) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final attachment = await widget.store.storeAttachmentBytesForNote(
+      widget.note,
+      fileName: clipboardImageFileName(DateTime.now()),
+      bytes: bytes,
+    );
+    if (!mounted) {
+      return;
+    }
+    _insertMarkdownAtSelection(attachment.markdown);
+    _save(createVersion: false);
+    final status =
+        attachment.alreadyExisted
+            ? 'Изображение уже было в Vault; добавлена ссылка'
+            : 'Изображение из буфера добавлено';
+    messenger.showSnackBar(
+      SnackBar(content: Text('$status: ${attachment.fileName}')),
     );
   }
 
@@ -2387,6 +2496,7 @@ class _EditorToolbar extends StatefulWidget {
   const _EditorToolbar({
     required this.controller,
     required this.onAttach,
+    required this.onPasteImage,
     required this.onConfigureImage,
     required this.onConfigureColumns,
     required this.onReorderBlocks,
@@ -2403,6 +2513,7 @@ class _EditorToolbar extends StatefulWidget {
 
   final TextEditingController controller;
   final VoidCallback onAttach;
+  final VoidCallback onPasteImage;
   final VoidCallback onConfigureImage;
   final VoidCallback onConfigureColumns;
   final VoidCallback onReorderBlocks;
@@ -2714,6 +2825,11 @@ class _EditorToolbarState extends State<_EditorToolbar> {
             tooltip: 'Добавить локальное вложение',
             onPressed: widget.onAttach,
             icon: const Icon(Icons.attach_file_rounded),
+          ),
+          IconButton(
+            tooltip: 'Вставить изображение из буфера (Ctrl+V)',
+            onPressed: widget.onPasteImage,
+            icon: const Icon(Icons.content_paste_rounded),
           ),
           IconButton(
             tooltip: 'Размер, выравнивание и подпись изображения',

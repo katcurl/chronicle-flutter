@@ -293,28 +293,52 @@ class VaultService {
   }
 
   Future<AttachmentImportResult?> pickAndStoreAttachment(Note note) async {
-    final rootPath = await _backend.resolveRootPath();
-    if (rootPath == null || rootPath.isEmpty) {
-      throw UnsupportedError('Не удалось определить папку Vault.');
-    }
+    final rootPath = await _requireVaultRoot();
     final picked = await _backend.pickAttachment();
     if (picked == null) {
       return null;
     }
+    return _storeAttachmentBytes(
+      rootPath: rootPath,
+      note: note,
+      originalName: picked.name,
+      bytes: picked.bytes,
+    );
+  }
 
-    final originalExtension = p.extension(picked.name).toLowerCase();
-    final originalBase = p.basenameWithoutExtension(picked.name);
+  Future<AttachmentImportResult> storeAttachmentBytes({
+    required Note note,
+    required String originalName,
+    required Uint8List bytes,
+  }) async {
+    final rootPath = await _requireVaultRoot();
+    return _storeAttachmentBytes(
+      rootPath: rootPath,
+      note: note,
+      originalName: originalName,
+      bytes: bytes,
+    );
+  }
+
+  Future<AttachmentImportResult> _storeAttachmentBytes({
+    required String rootPath,
+    required Note note,
+    required String originalName,
+    required Uint8List bytes,
+  }) async {
+    final originalExtension = p.extension(originalName).toLowerCase();
+    final originalBase = p.basenameWithoutExtension(originalName);
     final safeBase =
         _safeSegment(originalBase).isEmpty
             ? 'attachment'
             : _safeSegment(originalBase);
-    if (picked.bytes.length > maxAttachmentBytes) {
+    if (bytes.length > maxAttachmentBytes) {
       throw FormatException(
         'Вложение больше 100 МБ. Выбери файл меньшего размера.',
       );
     }
 
-    final contentHash = sha256.convert(picked.bytes).toString();
+    final contentHash = sha256.convert(bytes).toString();
     final records = await _readAttachmentRecords(rootPath);
     VaultAttachmentRecord? duplicate;
     for (final record in records) {
@@ -336,7 +360,7 @@ class VaultService {
       await _backend.writeBinaryFile(
         rootPath: rootPath,
         relativePath: relativePath,
-        bytes: picked.bytes,
+        bytes: bytes,
       );
     }
 
@@ -346,10 +370,10 @@ class VaultService {
       rootPath,
       VaultAttachmentRecord(
         relativePath: relativePath,
-        originalName: duplicate?.originalName ?? picked.name,
+        originalName: duplicate?.originalName ?? originalName,
         sha256: contentHash,
         mimeType: mimeType,
-        byteLength: picked.bytes.length,
+        byteLength: bytes.length,
         createdAt: DateTime.now().toUtc(),
       ),
     );
@@ -363,7 +387,7 @@ class VaultService {
     final prefix = List.filled(noteDirectoryDepth, '../').join();
     final encodedName = Uri.encodeComponent(fileName);
     final linkTarget = '${prefix}Attachments/$encodedName';
-    final label = picked.name.replaceAll(']', r'\]');
+    final label = originalName.replaceAll(']', r'\]');
     final isImage = _imageExtensions.contains(originalExtension);
     final markdown =
         isImage ? '![$label]($linkTarget)' : '[$label]($linkTarget)';
@@ -372,7 +396,7 @@ class VaultService {
       fileName: fileName,
       relativePath: relativePath,
       markdown: markdown,
-      byteLength: picked.bytes.length,
+      byteLength: bytes.length,
       isImage: isImage,
       sha256: contentHash,
       mimeType: mimeType,

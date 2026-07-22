@@ -51,6 +51,44 @@ void main() {
     expect(manifest.entries.single.sha256, first.sha256);
   });
 
+  test('clipboard PNG bytes import without opening the file picker', () async {
+    final backend = _AttachmentBackend(const <PickedVaultFile>[]);
+    final service = VaultService(backend: backend);
+    final note = Note(
+      id: 'note-clipboard',
+      title: 'Clipboard image',
+      projectId: 'project-1',
+      body: '# Clipboard image',
+      folderPath: 'Experiments/Run 1',
+    );
+    final bytes = Uint8List.fromList(<int>[
+      0x89,
+      0x50,
+      0x4e,
+      0x47,
+      0x0d,
+      0x0a,
+      0x1a,
+      0x0a,
+      1,
+      2,
+      3,
+    ]);
+
+    final imported = await service.storeAttachmentBytes(
+      note: note,
+      originalName: 'clipboard-image-20260722-130405.png',
+      bytes: bytes,
+    );
+
+    expect(imported.isImage, isTrue);
+    expect(imported.mimeType, 'image/png');
+    expect(imported.markdown, startsWith('![clipboard-image-'));
+    expect(imported.markdown, contains('../../../Attachments/'));
+    expect(backend.binaryWriteCount, 1);
+    expect(backend.binaryFiles[imported.relativePath], orderedEquals(bytes));
+  });
+
   test('managed delete removes file and preserves tombstone', () async {
     final backend = _AttachmentBackend(<PickedVaultFile>[
       PickedVaultFile(

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.25.0+64
+
+- Added direct image pasting from the Windows clipboard into the Markdown editor with `Ctrl+V`.
+- Added a dedicated **Вставить изображение из буфера** toolbar action for discoverability.
+- Converted native Windows DIB/DIBv5 clipboard images and copied image files to PNG without changing the original clipboard contents.
+- Stored pasted images through the existing content-addressed Vault attachment pipeline, including deduplication, the attachment index, backup support and LAN synchronization.
+- Inserted the generated Markdown image reference at the current cursor or selection while preserving ordinary text paste when no clipboard image is present.
+- Kept clipboard work asynchronous and guarded against concurrent paste operations so the editor remains responsive.
+- Preserved themes, Vault layout, synchronization formats, database schema, existing attachments and existing notes without migration.
+- Added deterministic tests for clipboard file names and direct in-memory PNG attachment import.
+
 ## 0.24.10+63
 
 - Stabilized image resizing in preview and split mode by retaining the requested width until the updated Markdown is rendered, eliminating the visible snap back to the old size.
