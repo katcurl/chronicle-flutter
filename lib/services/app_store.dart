@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../data/migration/legacy_preferences_importer.dart';
 import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
+import '../features/notes/custom_note_template_library.dart';
 import '../features/notes/custom_note_template_store.dart';
 import '../features/notes/note_document.dart';
 import '../features/notes/note_templates.dart';
@@ -343,6 +344,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     required String icon,
     required String noteType,
     required String content,
+    String category = '',
     List<String> defaultTags = const <String>[],
     Map<String, String> defaultProperties = const <String, String>{},
   }) async {
@@ -355,6 +357,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       icon: icon,
       noteType: noteType,
       content: content,
+      category: category,
       defaultTags: defaultTags,
       defaultProperties: defaultProperties,
     );
@@ -371,6 +374,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     required String icon,
     required String noteType,
     required String content,
+    String category = '',
     List<String> defaultTags = const <String>[],
     Map<String, String> defaultProperties = const <String, String>{},
   }) async {
@@ -384,6 +388,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       icon: icon,
       noteType: noteType,
       content: content,
+      category: category,
       defaultTags: defaultTags,
       defaultProperties: defaultProperties,
     );
@@ -391,6 +396,61 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     next[index] = template;
     await _replaceCustomTemplates(next);
     return template;
+  }
+
+  Future<NoteTemplate> duplicateCustomNoteTemplate(String id) async {
+    final index = customNoteTemplates.indexWhere((template) => template.id == id);
+    if (index < 0) {
+      throw StateError('Пользовательский шаблон не найден.');
+    }
+    final source = customNoteTemplates[index];
+    return createCustomNoteTemplate(
+      title: _copyTemplateTitle(source.title),
+      icon: source.icon,
+      noteType: source.noteType,
+      content: source.content,
+      category: source.category,
+      defaultTags: source.defaultTags,
+      defaultProperties: source.defaultProperties,
+    );
+  }
+
+  Future<List<NoteTemplate>> importCustomNoteTemplates(
+    List<NoteTemplate> imported,
+  ) async {
+    if (imported.isEmpty) return const <NoteTemplate>[];
+    final remaining = CustomNoteTemplateStore.maxTemplateCount -
+        customNoteTemplates.length;
+    if (remaining <= 0) {
+      throw StateError('Достигнут лимит пользовательских шаблонов.');
+    }
+
+    final next = List<NoteTemplate>.from(customNoteTemplates);
+    final added = <NoteTemplate>[];
+    for (final source in imported) {
+      if (added.length >= remaining) break;
+      if (next.any(
+        (template) => CustomNoteTemplateLibrary.equivalent(template, source),
+      )) {
+        continue;
+      }
+      final importedTemplate = _normalizeCustomNoteTemplate(
+        id: 'custom_${_uuid.v4()}',
+        title: source.title,
+        icon: source.icon,
+        noteType: source.noteType,
+        content: source.content,
+        category: source.category,
+        defaultTags: source.defaultTags,
+        defaultProperties: source.defaultProperties,
+      );
+      next.add(importedTemplate);
+      added.add(importedTemplate);
+    }
+    if (added.isNotEmpty) {
+      await _replaceCustomTemplates(next);
+    }
+    return List<NoteTemplate>.unmodifiable(added);
   }
 
   Future<void> deleteCustomNoteTemplate(String id) async {
@@ -403,12 +463,32 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     await _replaceCustomTemplates(next);
   }
 
+  String _copyTemplateTitle(String title) {
+    final normalized = title.trim();
+    var index = 1;
+    while (true) {
+      final prefix = index == 1 ? 'Копия — ' : 'Копия $index — ';
+      final maxSourceLength = 120 - prefix.length;
+      final source = normalized.length <= maxSourceLength
+          ? normalized
+          : normalized.substring(0, maxSourceLength).trimRight();
+      final candidate = '$prefix$source';
+      final exists = customNoteTemplates.any(
+        (template) => template.title.trim().toLowerCase() ==
+            candidate.toLowerCase(),
+      );
+      if (!exists) return candidate;
+      index += 1;
+    }
+  }
+
   NoteTemplate _normalizeCustomNoteTemplate({
     required String id,
     required String title,
     required String icon,
     required String noteType,
     required String content,
+    required String category,
     required List<String> defaultTags,
     required Map<String, String> defaultProperties,
   }) {
@@ -433,6 +513,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       icon: icon.trim().isEmpty ? '📝' : icon.trim(),
       noteType: noteType.trim().isEmpty ? 'note' : noteType.trim(),
       content: '${content.trimRight()}\n',
+      category: category.trim(),
       defaultTags: List<String>.unmodifiable(normalizedTags),
       defaultProperties: Map<String, String>.unmodifiable(normalizedProperties),
       isCustom: true,

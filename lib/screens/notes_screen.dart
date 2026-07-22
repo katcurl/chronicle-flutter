@@ -44,6 +44,7 @@ Future<void> _showCustomNoteTemplateManager(
           icon: draft.icon,
           noteType: draft.noteType,
           content: draft.content,
+          category: draft.category,
           defaultTags: draft.defaultTags,
         ),
     onUpdate:
@@ -53,10 +54,14 @@ Future<void> _showCustomNoteTemplateManager(
           icon: draft.icon,
           noteType: draft.noteType,
           content: draft.content,
+          category: draft.category,
           defaultTags: draft.defaultTags,
           defaultProperties: template.defaultProperties,
         ),
     onDelete: (template) => store.deleteCustomNoteTemplate(template.id),
+    onDuplicate:
+        (template) => store.duplicateCustomNoteTemplate(template.id),
+    onImport: store.importCustomNoteTemplates,
   );
 }
 
@@ -1605,6 +1610,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         icon: draft.icon,
         noteType: draft.noteType,
         content: draft.content,
+        category: draft.category,
         defaultTags: draft.defaultTags,
         defaultProperties: properties,
       );

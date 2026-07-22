@@ -5,6 +5,7 @@ class NoteTemplate {
     required this.icon,
     required this.noteType,
     required this.content,
+    this.category = '',
     this.defaultTags = const [],
     this.defaultProperties = const {},
     this.isCustom = false,
@@ -15,6 +16,7 @@ class NoteTemplate {
   final String icon;
   final String noteType;
   final String content;
+  final String category;
   final List<String> defaultTags;
   final Map<String, String> defaultProperties;
   final bool isCustom;
@@ -25,6 +27,7 @@ class NoteTemplate {
     'icon': icon,
     'noteType': noteType,
     'content': content,
+    'category': category,
     'defaultTags': defaultTags,
     'defaultProperties': defaultProperties,
     'isCustom': isCustom,
@@ -39,6 +42,7 @@ class NoteTemplate {
       icon: (json['icon'] ?? '📝').toString().trim(),
       noteType: (json['noteType'] ?? 'note').toString().trim(),
       content: (json['content'] ?? '').toString(),
+      category: (json['category'] ?? '').toString().trim(),
       defaultTags:
           rawTags is Iterable
               ? rawTags

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.26.1+67
+
+- Expanded **Мои шаблоны** into a searchable custom-template library with category filtering and a visible result count.
+- Added an optional category to every user template while keeping existing uncategorized templates fully compatible.
+- Added one-click duplication with collision-safe copy names and preservation of Markdown, note type, tags, properties and category.
+- Added portable JSON export for one template or the full custom library through the native save dialog.
+- Added JSON import through the native file picker, including support for the previous raw-list format and safe rejection of foreign or unsupported bundles.
+- Skipped exact template copies during repeated imports and assigned fresh internal IDs to imported templates so existing entries are never overwritten.
+- Kept built-in templates immutable and preserved themes, Vault layout, synchronization, attachments, database schema and existing notes without migration.
+- Added deterministic tests for category persistence, library search and filtering, duplicate equivalence, portable bundle decoding and import deduplication.
+
 ## 0.25.2+66
 
 - Added Chronicle-managed undo and redo for typed and programmatic Markdown edits, including templates, images, tables, columns and block actions.
