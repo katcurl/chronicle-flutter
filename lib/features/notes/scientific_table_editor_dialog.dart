@@ -240,7 +240,7 @@ class _ScientificTableEditorDialogState
                     children: [
                       Padding(
                         padding: const EdgeInsets.only(top: 14),
-                        child: Text('${row}.'),
+                        child: Text('$row.'),
                       ),
                       IconButton(
                         tooltip: 'Удалить строку',
