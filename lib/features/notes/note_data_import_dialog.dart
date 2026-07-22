@@ -55,6 +55,7 @@ class _NoteDataImportDialogState extends State<NoteDataImportDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final preview = tablePreview;
     final totalBytes = widget.files.fold<int>(
       0,
       (sum, file) => sum + file.bytes.length,
@@ -138,14 +139,14 @@ class _NoteDataImportDialogState extends State<NoteDataImportDialog> {
                   },
                 ),
                 if (mode == NoteDataImportMode.tableWithSource &&
-                    tablePreview != null) ...[
+                    preview != null) ...[
                   const SizedBox(height: 12),
-                  _TablePreview(data: tablePreview),
+                  _TablePreview(data: preview),
                   const SizedBox(height: 8),
                   Text(
                     'В заметку попадут максимум '
-                    '${tablePreview.rows.length.clamp(1, 41)} строк и '
-                    '${tablePreview.columnCount.clamp(2, 8)} столбцов; '
+                    '${preview.rows.length.clamp(1, 41)} строк и '
+                    '${preview.columnCount.clamp(2, 8)} столбцов; '
                     'исходный файл сохранится во вложениях.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
