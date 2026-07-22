@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.25.2+66
+
+- Added Chronicle-managed undo and redo for typed and programmatic Markdown edits, including templates, images, tables, columns and block actions.
+- Coalesced rapid typing into bounded history snapshots while preserving cursor selections and clearing obsolete redo branches after a new edit.
+- Added visible undo and redo controls plus `Ctrl+Z`, `Ctrl+Y` and `Ctrl+Shift+Z` shortcuts in the note editor.
+- Preserved the editor scroll position when switching between editor, preview and split modes.
+- Removed the synchronous full-note save from mode switching and replaced it with a quiet save after two seconds of inactivity.
+- Paused pending saves while either the editor or preview is actively scrolling so persistence work does not interrupt navigation through long notes.
+- Reset edit history safely after note rename reloads and version restoration instead of allowing undo into a different document state.
+- Pinned Windows and Android CI to Flutter 3.44.7 and added workflow concurrency protection so builds use one known toolchain and obsolete branch runs are cancelled.
+- Preserved themes, Vault layout, synchronization, attachments, templates, database schema and existing notes without migration.
+- Added deterministic tests for coalesced history, programmatic edits, cursor restoration, redo invalidation and history reset.
+
 ## 0.25.1+65
 
 - Added a visual editor for creating and updating the existing portable scientific Markdown tables.

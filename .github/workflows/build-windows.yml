@@ -1,17 +1,26 @@
 name: Build Windows desktop
 
+permissions:
+  contents: read
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
 
 jobs:
   build-windows:
     runs-on: windows-latest
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.44.7'
           channel: stable
           cache: true
 
@@ -21,6 +30,9 @@ jobs:
           if (-not (Test-Path windows)) {
             flutter create --platforms=windows .
           }
+
+      - name: Show toolchain
+        run: flutter --version
 
       - name: Get dependencies
         run: flutter pub get

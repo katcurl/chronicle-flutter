@@ -11,6 +11,7 @@ import '../features/notes/note_block_syntax.dart';
 import '../features/notes/note_columns_editor_dialog.dart';
 import '../features/notes/note_columns_syntax.dart';
 import '../features/notes/note_document.dart';
+import '../features/notes/note_edit_history.dart';
 import '../features/notes/note_image_editor_dialog.dart';
 import '../features/notes/note_image_syntax.dart';
 import '../features/notes/laboratory_template_dialog.dart';
@@ -574,10 +575,14 @@ class NoteWorkspaceScreen extends StatefulWidget {
 class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   late final TextEditingController titleController;
   late final TextEditingController contentController;
+  late final NoteEditHistory _editHistory;
   late final DebouncedTextNotifier _previewTextNotifier;
   late final DebouncedTextNotifier _statisticsTextNotifier;
+  late final ScrollController _editorScrollController;
   late final ScrollController _previewScrollController;
   Timer? _previewScrollResumeTimer;
+  Timer? _autosaveTimer;
+  double _editorScrollOffset = 0;
   late String projectId;
   late String status;
   late String folderPath;
@@ -599,6 +604,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     final parsed = NoteDocument.parse(widget.note.body);
     titleController = TextEditingController(text: widget.note.title);
     contentController = TextEditingController(text: parsed.content);
+    _editHistory = NoteEditHistory(controller: contentController);
     _previewTextNotifier = DebouncedTextNotifier(
       parsed.content,
       delay: const Duration(milliseconds: 260),
@@ -607,6 +613,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       parsed.content,
       delay: const Duration(milliseconds: 420),
     );
+    _editorScrollController = ScrollController()
+      ..addListener(_rememberEditorScrollOffset);
     _previewScrollController = ScrollController();
     projectId = widget.note.projectId;
     status = parsed.frontMatter['status'] ?? widget.note.status;
@@ -631,9 +639,14 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
 
   @override
   void dispose() {
+    _autosaveTimer?.cancel();
+    _previewScrollResumeTimer?.cancel();
+    _editHistory.dispose();
     titleController.dispose();
     contentController.dispose();
-    _previewScrollResumeTimer?.cancel();
+    _editorScrollController
+      ..removeListener(_rememberEditorScrollOffset)
+      ..dispose();
     _previewScrollController.dispose();
     _previewTextNotifier.dispose();
     _statisticsTextNotifier.dispose();
@@ -659,9 +672,46 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         _previewTextNotifier.schedule(nextContent);
       }
     }
+    _scheduleAutosave();
     if (!dirty && mounted) {
       setState(() => dirty = true);
     }
+  }
+
+  void _scheduleAutosave() {
+    _autosaveTimer?.cancel();
+    if (_proposedTitle != widget.note.title || _renameReviewBusy) {
+      return;
+    }
+    _autosaveTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted || !dirty || _renameReviewBusy) {
+        return;
+      }
+      if (_proposedTitle == widget.note.title) {
+        _save(createVersion: false);
+      }
+    });
+  }
+
+  void _rememberEditorScrollOffset() {
+    if (_editorScrollController.hasClients) {
+      _editorScrollOffset = _editorScrollController.offset;
+    }
+  }
+
+  void _restoreEditorScrollOffset() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_editorScrollController.hasClients) {
+        return;
+      }
+      final position = _editorScrollController.position;
+      final target = _editorScrollOffset
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
+      if ((position.pixels - target).abs() > 0.5) {
+        _editorScrollController.jumpTo(target);
+      }
+    });
   }
 
   @override
@@ -825,9 +875,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (nextMode == mode) {
       return;
     }
-    if (dirty) {
-      _save(createVersion: false);
-    }
+    _rememberEditorScrollOffset();
     if (nextMode != 0) {
       _previewTextNotifier.setImmediate(contentController.text);
     }
@@ -836,6 +884,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       return;
     }
     setState(() => mode = nextMode);
+    if (nextMode != 1) {
+      _restoreEditorScrollOffset();
+    }
   }
 
   Widget _editorPane() {
@@ -886,6 +937,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         ),
         _EditorToolbar(
           controller: contentController,
+          history: _editHistory,
+          onUndo: () => _editHistory.undo(),
+          onRedo: () => _editHistory.redo(),
           onAttach: _attachFile,
           onPasteImage: () => unawaited(_pasteImageFromClipboard()),
           onConfigureImage: _editImageAtCursor,
@@ -910,24 +964,28 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         ),
         const Divider(height: 1),
         Expanded(
-          child: Focus(
-            onKeyEvent: _handleEditorKeyEvent,
-            child: TextField(
-              controller: contentController,
-              expands: true,
-              maxLines: null,
-              minLines: null,
-              textAlignVertical: TextAlignVertical.top,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 15,
-                height: 1.6,
-              ),
-              decoration: const InputDecoration(
-                contentPadding: EdgeInsets.all(20),
-                border: InputBorder.none,
-                filled: false,
-                hintText: r'Markdown, $LaTeX$, [[ссылки]], изображения…',
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _handleEditorScrollNotification,
+            child: Focus(
+              onKeyEvent: _handleEditorKeyEvent,
+              child: TextField(
+                controller: contentController,
+                scrollController: _editorScrollController,
+                expands: true,
+                maxLines: null,
+                minLines: null,
+                textAlignVertical: TextAlignVertical.top,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 15,
+                  height: 1.6,
+                ),
+                decoration: const InputDecoration(
+                  contentPadding: EdgeInsets.all(20),
+                  border: InputBorder.none,
+                  filled: false,
+                  hintText: r'Markdown, $LaTeX$, [[ссылки]], изображения…',
+                ),
               ),
             ),
           ),
@@ -962,15 +1020,30 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     );
   }
 
+  bool _handleEditorScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification) {
+      _autosaveTimer?.cancel();
+    } else if (notification is ScrollEndNotification && dirty) {
+      _scheduleAutosave();
+    }
+    return false;
+  }
+
   bool _handlePreviewScrollNotification(ScrollNotification notification) {
     if (notification is ScrollStartNotification) {
+      _autosaveTimer?.cancel();
       _previewScrollResumeTimer?.cancel();
       _previewTextNotifier.pause();
     } else if (notification is ScrollEndNotification) {
       _previewScrollResumeTimer?.cancel();
       _previewScrollResumeTimer = Timer(
         const Duration(milliseconds: 140),
-        () => _previewTextNotifier.resume(),
+        () {
+          _previewTextNotifier.resume();
+          if (dirty) {
+            _scheduleAutosave();
+          }
+        },
       );
     }
     return false;
@@ -1174,6 +1247,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   }
 
   void _save({required bool createVersion}) {
+    _autosaveTimer?.cancel();
+    _autosaveTimer = null;
+    _editHistory.flush();
     if (!dirty && !createVersion) return;
     final proposedTitle = _proposedTitle;
     final titleChanged = proposedTitle != widget.note.title;
@@ -1379,6 +1455,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     _suppressTextChangeTracking = false;
     _lastTitleText = titleController.text;
     _lastContentText = contentController.text;
+    _editHistory.reset();
     _previewTextNotifier.setImmediate(_lastContentText);
     _statisticsTextNotifier.setImmediate(_lastContentText);
     if (mounted) {
@@ -1692,16 +1769,31 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   }
 
   KeyEventResult _handleEditorKeyEvent(FocusNode _, KeyEvent event) {
-    if (event is! KeyDownEvent ||
-        event.logicalKey != LogicalKeyboardKey.keyV) {
+    if (event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
     final keyboard = HardwareKeyboard.instance;
     if (!keyboard.isControlPressed && !keyboard.isMetaPressed) {
       return KeyEventResult.ignored;
     }
-    unawaited(_pasteClipboardContent());
-    return KeyEventResult.handled;
+
+    if (event.logicalKey == LogicalKeyboardKey.keyZ) {
+      if (keyboard.isShiftPressed) {
+        _editHistory.redo();
+      } else {
+        _editHistory.undo();
+      }
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.keyY) {
+      _editHistory.redo();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.keyV) {
+      unawaited(_pasteClipboardContent());
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   Future<void> _pasteClipboardContent() async {
@@ -2518,6 +2610,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     _suppressTextChangeTracking = false;
     _lastTitleText = titleController.text;
     _lastContentText = contentController.text;
+    _editHistory.reset();
     _previewTextNotifier.setImmediate(_lastContentText);
     _statisticsTextNotifier.setImmediate(_lastContentText);
     setState(() {
@@ -2550,6 +2643,9 @@ enum _NoteBlockAction {
 class _EditorToolbar extends StatefulWidget {
   const _EditorToolbar({
     required this.controller,
+    required this.history,
+    required this.onUndo,
+    required this.onRedo,
     required this.onAttach,
     required this.onPasteImage,
     required this.onConfigureImage,
@@ -2567,6 +2663,9 @@ class _EditorToolbar extends StatefulWidget {
   });
 
   final TextEditingController controller;
+  final NoteEditHistory history;
+  final VoidCallback onUndo;
+  final VoidCallback onRedo;
   final VoidCallback onAttach;
   final VoidCallback onPasteImage;
   final VoidCallback onConfigureImage;
@@ -2691,6 +2790,27 @@ class _EditorToolbarState extends State<_EditorToolbar> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         children: [
+          AnimatedBuilder(
+            animation: widget.history,
+            builder: (context, _) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Отменить (Ctrl+Z)',
+                    onPressed: widget.history.canUndo ? widget.onUndo : null,
+                    icon: const Icon(Icons.undo_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Повторить (Ctrl+Y)',
+                    onPressed: widget.history.canRedo ? widget.onRedo : null,
+                    icon: const Icon(Icons.redo_rounded),
+                  ),
+                ],
+              );
+            },
+          ),
+          const VerticalDivider(indent: 10, endIndent: 10),
           Tooltip(
             message:
                 block == null
