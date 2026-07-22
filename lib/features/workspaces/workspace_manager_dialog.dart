@@ -358,7 +358,7 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
           child: ReorderableListView.builder(
             buildDefaultDragHandles: false,
             itemCount: profile.panelOrder.length,
-            onReorder: _reorderPanels,
+            onReorderItem: _reorderPanels,
             itemBuilder: (context, index) {
               final panel = profile.panelOrder[index];
               final visible = profile.visiblePanels.contains(panel);
@@ -472,7 +472,6 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
 
   void _reorderPanels(int oldIndex, int newIndex) {
     final order = List<WorkspacePanel>.from(selected.panelOrder);
-    if (newIndex > oldIndex) newIndex -= 1;
     final panel = order.removeAt(oldIndex);
     order.insert(newIndex, panel);
     _replaceSelected(selected.copyWith(panelOrder: order));

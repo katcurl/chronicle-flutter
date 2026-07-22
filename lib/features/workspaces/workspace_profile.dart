@@ -89,14 +89,14 @@ class WorkspaceProfile {
       startSection: AppSection.notes,
       showContextPanel: true,
       extendedNavigation: true,
-      panelOrder: const <WorkspacePanel>[
+      panelOrder: <WorkspacePanel>[
         WorkspacePanel.timer,
         WorkspacePanel.recentSessions,
         WorkspacePanel.metrics,
         WorkspacePanel.shortcuts,
         WorkspacePanel.localFirst,
       ],
-      visiblePanels: const <WorkspacePanel>{
+      visiblePanels: <WorkspacePanel>{
         WorkspacePanel.timer,
         WorkspacePanel.recentSessions,
         WorkspacePanel.metrics,

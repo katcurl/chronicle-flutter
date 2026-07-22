@@ -260,10 +260,11 @@ class _HomeShellState extends State<HomeShell> {
       }
     }
     if (profile == null) return;
+    final selectedProfile = profile;
     final next = _workspacePreferences.copyWith(activeWorkspaceId: id);
     setState(() {
       _workspacePreferences = next;
-      section = profile.startSection;
+      section = selectedProfile.startSection;
     });
     await _saveWorkspacePreferences(next);
   }
