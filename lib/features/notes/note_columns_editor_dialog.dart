@@ -5,12 +5,12 @@ import 'note_columns_syntax.dart';
 class NoteColumnsEditorResult {
   const NoteColumnsEditorResult({
     required this.layout,
-    required this.contentOrder,
+    required this.contents,
     this.unwrap = false,
   });
 
   final NoteColumnsLayout layout;
-  final List<int> contentOrder;
+  final List<String> contents;
   final bool unwrap;
 }
 
@@ -18,15 +18,18 @@ class NoteColumnsEditorDialog extends StatefulWidget {
   const NoteColumnsEditorDialog({
     super.key,
     required this.initial,
+    required this.initialContents,
     required this.editingExisting,
   });
 
   final NoteColumnsLayout initial;
+  final List<String> initialContents;
   final bool editingExisting;
 
   static Future<NoteColumnsEditorResult?> show(
     BuildContext context, {
     required NoteColumnsLayout initial,
+    required List<String> initialContents,
     required bool editingExisting,
   }) {
     return showDialog<NoteColumnsEditorResult>(
@@ -34,6 +37,7 @@ class NoteColumnsEditorDialog extends StatefulWidget {
       builder:
           (context) => NoteColumnsEditorDialog(
             initial: initial,
+            initialContents: initialContents,
             editingExisting: editingExisting,
           ),
     );
@@ -47,7 +51,7 @@ class NoteColumnsEditorDialog extends StatefulWidget {
 class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
   late int columnCount;
   late List<int> widths;
-  late List<int> contentOrder;
+  final List<TextEditingController> contentControllers = [];
 
   @override
   void initState() {
@@ -57,24 +61,76 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
       widget.initial.widths,
       columnCount,
     );
-    contentOrder = [
-      for (var index = 0; index < columnCount; index += 1) index,
-    ];
+    _replaceContentControllers(
+      NoteColumnsSyntax.normalizeContents(
+        widget.initialContents,
+        columnCount,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    for (final controller in contentControllers) {
+      controller.dispose();
+    }
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final availableWidth = MediaQuery.sizeOf(context).width;
+    final dialogWidth = (availableWidth - 96).clamp(420.0, 920.0).toDouble();
+
     return AlertDialog(
       title: Text(
-        widget.editingExisting ? 'Управление колонками' : 'Добавить колонки',
+        widget.editingExisting
+            ? 'Редактор колонок'
+            : 'Создать блок колонок',
       ),
       content: SizedBox(
-        width: 520,
+        width: dialogWidth,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Text(
+                'Быстрые макеты',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _layoutPreset(
+                    icon: Icons.image_outlined,
+                    label: 'Рисунок слева + текст',
+                    count: 2,
+                    values: const [40, 60],
+                  ),
+                  _layoutPreset(
+                    icon: Icons.notes_rounded,
+                    label: 'Текст + рисунок справа',
+                    count: 2,
+                    values: const [60, 40],
+                  ),
+                  _layoutPreset(
+                    icon: Icons.view_column_outlined,
+                    label: 'Две равные',
+                    count: 2,
+                    values: const [50, 50],
+                  ),
+                  _layoutPreset(
+                    icon: Icons.view_week_outlined,
+                    label: 'Три равные',
+                    count: 3,
+                    values: const [34, 33, 33],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
               Text(
                 'Количество колонок',
                 style: Theme.of(context).textTheme.titleSmall,
@@ -95,34 +151,37 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
                 ],
                 selected: {columnCount},
                 onSelectionChanged: (selection) {
-                  final next = selection.first;
-                  setState(() {
-                    columnCount = next;
-                    widths = NoteColumnsSyntax.normalizeWidths(
-                      next == 2 ? const [50, 50] : const [34, 33, 33],
-                      next,
-                    );
-                  });
+                  _setColumnCount(selection.first);
                 },
               ),
-              if (widget.editingExisting) ...[
-                const SizedBox(height: 20),
-                Text(
-                  'Порядок существующего содержимого',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 10),
-                _contentOrderControls(context),
-                const SizedBox(height: 8),
-                Text(
-                  'Стрелки перемещают содержимое колонок, не изменяя сам текст. '
-                  'При переходе с трёх колонок на две последняя будет добавлена '
-                  'в конец второй.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Содержимое колонок',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
                   ),
+                  Text(
+                    'Markdown',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Каждую колонку можно редактировать отдельно. Стрелки меняют '
+                'порядок содержимого вместе с изображениями, подписями, '
+                'формулами и списками.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-              ],
+              ),
+              const SizedBox(height: 12),
+              _contentEditors(context),
               const SizedBox(height: 20),
               Text(
                 'Ширина колонок',
@@ -142,21 +201,22 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
                 children:
                     columnCount == 2
                         ? [
-                          _preset('50 / 50', const [50, 50]),
-                          _preset('40 / 60', const [40, 60]),
-                          _preset('60 / 40', const [60, 40]),
-                          _preset('35 / 65', const [35, 65]),
+                          _widthPreset('50 / 50', const [50, 50]),
+                          _widthPreset('40 / 60', const [40, 60]),
+                          _widthPreset('60 / 40', const [60, 40]),
+                          _widthPreset('35 / 65', const [35, 65]),
                         ]
                         : [
-                          _preset('Равные', const [34, 33, 33]),
-                          _preset('25 / 50 / 25', const [25, 50, 25]),
-                          _preset('40 / 30 / 30', const [40, 30, 30]),
-                          _preset('30 / 30 / 40', const [30, 30, 40]),
+                          _widthPreset('Равные', const [34, 33, 33]),
+                          _widthPreset('25 / 50 / 25', const [25, 50, 25]),
+                          _widthPreset('40 / 30 / 30', const [40, 30, 30]),
+                          _widthPreset('30 / 30 / 40', const [30, 30, 40]),
                         ],
               ),
               const SizedBox(height: 16),
               Text(
-                'На узком экране колонки автоматически расположатся одна под другой.',
+                'На узком экране колонки автоматически расположатся одна под '
+                'другой. Формат заметки остаётся переносимым Markdown.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -177,99 +237,190 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
           child: const Text('Отмена'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(
-            context,
-            NoteColumnsEditorResult(
-              layout: NoteColumnsLayout(
-                columnCount: columnCount,
-                widths: NoteColumnsSyntax.normalizeWidths(
-                  widths,
-                  columnCount,
-                ),
-              ),
-              contentOrder: List<int>.unmodifiable(contentOrder),
-            ),
-          ),
+          onPressed: () => Navigator.pop(context, _result()),
           child: Text(widget.editingExisting ? 'Применить' : 'Добавить'),
         ),
       ],
     );
   }
 
-  Widget _contentOrderControls(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (var position = 0; position < contentOrder.length; position += 1)
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(
-                right: position < contentOrder.length - 1 ? 8 : 0,
-              ),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(6, 10, 6, 6),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Колонка ${contentOrder[position] + 1}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          tooltip: 'Переместить левее',
-                          visualDensity: VisualDensity.compact,
-                          onPressed:
-                              position > 0
-                                  ? () => _moveContent(position, position - 1)
-                                  : null,
-                          icon: const Icon(Icons.arrow_back_rounded, size: 19),
-                        ),
-                        IconButton(
-                          tooltip: 'Переместить правее',
-                          visualDensity: VisualDensity.compact,
-                          onPressed:
-                              position < contentOrder.length - 1
-                                  ? () => _moveContent(position, position + 1)
-                                  : null,
-                          icon: const Icon(
-                            Icons.arrow_forward_rounded,
-                            size: 19,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+  Widget _contentEditors(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final horizontal = constraints.maxWidth >= 720;
+        final cards = [
+          for (var index = 0; index < contentControllers.length; index += 1)
+            _contentCard(context, index),
+        ];
+        if (!horizontal) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var index = 0; index < cards.length; index += 1) ...[
+                cards[index],
+                if (index < cards.length - 1) const SizedBox(height: 10),
+              ],
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var index = 0; index < cards.length; index += 1) ...[
+              Expanded(child: cards[index]),
+              if (index < cards.length - 1) const SizedBox(width: 10),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _contentCard(BuildContext context, int index) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Колонка ${index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
+              IconButton(
+                tooltip: 'Переместить левее',
+                visualDensity: VisualDensity.compact,
+                onPressed: index > 0 ? () => _moveContent(index, index - 1) : null,
+                icon: const Icon(Icons.arrow_back_rounded, size: 19),
+              ),
+              IconButton(
+                tooltip: 'Переместить правее',
+                visualDensity: VisualDensity.compact,
+                onPressed:
+                    index < contentControllers.length - 1
+                        ? () => _moveContent(index, index + 1)
+                        : null,
+                icon: const Icon(Icons.arrow_forward_rounded, size: 19),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: contentControllers[index],
+            minLines: 7,
+            maxLines: 12,
+            keyboardType: TextInputType.multiline,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontFamily: 'monospace',
+            ),
+            decoration: InputDecoration(
+              hintText:
+                  index == 0
+                      ? 'Изображение, таблица или текст'
+                      : 'Текст колонки ${index + 1}',
+              border: const OutlineInputBorder(),
+              isDense: true,
             ),
           ),
-      ],
+        ],
+      ),
     );
+  }
+
+  NoteColumnsEditorResult _result({bool unwrap = false}) {
+    return NoteColumnsEditorResult(
+      layout: NoteColumnsLayout(
+        columnCount: columnCount,
+        widths: NoteColumnsSyntax.normalizeWidths(widths, columnCount),
+      ),
+      contents: List<String>.unmodifiable(_currentContents()),
+      unwrap: unwrap,
+    );
+  }
+
+  List<String> _currentContents() {
+    return [for (final controller in contentControllers) controller.text];
+  }
+
+  void _setColumnCount(int next) {
+    final safeNext = next.clamp(2, 3).toInt();
+    _applyColumnCount(
+      safeNext,
+      safeNext == 2 ? const [50, 50] : const [34, 33, 33],
+    );
+  }
+
+  void _applyLayoutPreset(int count, List<int> values) {
+    _applyColumnCount(count.clamp(2, 3).toInt(), values);
+  }
+
+  void _applyColumnCount(int next, List<int> nextWidths) {
+    final normalized = NoteColumnsSyntax.normalizeContents(
+      _currentContents(),
+      next,
+    );
+    final removed = <TextEditingController>[];
+    setState(() {
+      final shared = contentControllers.length < next
+          ? contentControllers.length
+          : next;
+      for (var index = 0; index < shared; index += 1) {
+        contentControllers[index].text = normalized[index];
+      }
+      while (contentControllers.length < next) {
+        contentControllers.add(
+          TextEditingController(text: normalized[contentControllers.length]),
+        );
+      }
+      if (contentControllers.length > next) {
+        removed.addAll(contentControllers.sublist(next));
+        contentControllers.removeRange(next, contentControllers.length);
+      }
+      columnCount = next;
+      widths = NoteColumnsSyntax.normalizeWidths(nextWidths, next);
+    });
+    if (removed.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        for (final controller in removed) {
+          controller.dispose();
+        }
+      });
+    }
+  }
+
+  void _replaceContentControllers(List<String> contents) {
+    for (final controller in contentControllers) {
+      controller.dispose();
+    }
+    contentControllers
+      ..clear()
+      ..addAll([
+        for (final content in contents)
+          TextEditingController(text: content),
+      ]);
   }
 
   void _moveContent(int from, int to) {
     if (from < 0 ||
-        from >= contentOrder.length ||
+        from >= contentControllers.length ||
         to < 0 ||
-        to >= contentOrder.length ||
+        to >= contentControllers.length ||
         from == to) {
       return;
     }
     setState(() {
-      final value = contentOrder.removeAt(from);
-      contentOrder.insert(to, value);
+      final controller = contentControllers.removeAt(from);
+      contentControllers.insert(to, controller);
     });
   }
 
@@ -280,8 +431,8 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
           (dialogContext) => AlertDialog(
             title: const Text('Убрать колонки?'),
             content: const Text(
-              'Содержимое останется в заметке и будет расположено подряд '
-              'обычным Markdown-текстом.',
+              'Отредактированное содержимое останется в заметке и будет '
+              'расположено подряд обычным Markdown-текстом.',
             ),
             actions: [
               TextButton(
@@ -298,17 +449,7 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
     if (confirmed != true || !mounted) {
       return;
     }
-    Navigator.pop(
-      context,
-      NoteColumnsEditorResult(
-        layout: NoteColumnsLayout(
-          columnCount: columnCount,
-          widths: NoteColumnsSyntax.normalizeWidths(widths, columnCount),
-        ),
-        contentOrder: List<int>.unmodifiable(contentOrder),
-        unwrap: true,
-      ),
-    );
+    Navigator.pop(context, _result(unwrap: true));
   }
 
   Widget _twoColumnControls() {
@@ -385,7 +526,20 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
     );
   }
 
-  Widget _preset(String label, List<int> values) {
+  Widget _layoutPreset({
+    required IconData icon,
+    required String label,
+    required int count,
+    required List<int> values,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: () => _applyLayoutPreset(count, values),
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+    );
+  }
+
+  Widget _widthPreset(String label, List<int> values) {
     return OutlinedButton(
       onPressed: () {
         setState(() {

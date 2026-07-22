@@ -1746,34 +1746,44 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       return;
     }
 
+    final selected =
+        selection.isValid && !selection.isCollapsed
+            ? value.text.substring(selection.start, selection.end).trim()
+            : '';
     final result = await NoteColumnsEditorDialog.show(
       context,
       initial: const NoteColumnsLayout(
         columnCount: 2,
         widths: [40, 60],
       ),
+      initialContents: _initialColumnComposerContents(selected),
       editingExisting: false,
     );
     if (result == null || !mounted) {
       return;
     }
 
-    final selected =
-        selection.isValid && !selection.isCollapsed
-            ? value.text.substring(selection.start, selection.end).trim()
-            : '';
-    final layout = result.layout;
-    final contents = <String>[
-      'Изображение или текст',
-      selected.isEmpty ? 'Текст правой колонки' : selected,
-      if (layout.columnCount == 3) 'Текст третьей колонки',
-    ];
     final markdown = NoteColumnsSyntax.build(
-      widths: layout.widths,
-      contents: contents,
+      widths: result.layout.widths,
+      contents: result.contents,
     );
     _insertMarkdownAtSelection(markdown);
     _save(createVersion: false);
+  }
+
+  List<String> _initialColumnComposerContents(String selected) {
+    if (selected.isEmpty) {
+      return const ['Изображение или текст', 'Текст правой колонки'];
+    }
+    final image = NoteImageSyntax.first(selected);
+    if (image != null && image.start == 0) {
+      final remainder = selected.substring(image.end).trim();
+      return [
+        image.raw,
+        remainder.isEmpty ? 'Текст правой колонки' : remainder,
+      ];
+    }
+    return ['Изображение или текст', selected];
   }
 
   Future<void> _editColumnsReference(NoteColumnsReference reference) async {
@@ -1790,6 +1800,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         columnCount: current.columnCount,
         widths: current.widths,
       ),
+      initialContents: [
+        for (final column in current.columns) column.markdown,
+      ],
       editingExisting: true,
     );
     if (result == null || !mounted) {
@@ -1798,14 +1811,14 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (result.unwrap) {
       _unwrapColumnsReference(
         current,
-        contentOrder: result.contentOrder,
+        contents: result.contents,
       );
       return;
     }
     _replaceColumnsLayout(
       current,
       result.layout,
-      contentOrder: result.contentOrder,
+      contents: result.contents,
     );
   }
 
@@ -1830,7 +1843,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   void _replaceColumnsLayout(
     NoteColumnsReference reference,
     NoteColumnsLayout layout, {
-    List<int>? contentOrder,
+    required List<String> contents,
   }) {
     final current = NoteColumnsSyntax.relocate(
       contentController.text,
@@ -1839,27 +1852,19 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (current == null) {
       return;
     }
-    final contents = current.orderedContents(contentOrder);
-    if (layout.columnCount > contents.length) {
-      while (contents.length < layout.columnCount) {
-        contents.add('Новая колонка');
-      }
-    } else if (layout.columnCount < contents.length) {
-      final merged = contents.sublist(layout.columnCount - 1).join('\n\n');
-      contents
-        ..removeRange(layout.columnCount - 1, contents.length)
-        ..add(merged);
-    }
     _replaceColumnsBlock(
       current,
       widths: layout.widths,
-      contents: contents,
+      contents: NoteColumnsSyntax.normalizeContents(
+        contents,
+        layout.columnCount,
+      ),
     );
   }
 
   void _unwrapColumnsReference(
     NoteColumnsReference reference, {
-    List<int>? contentOrder,
+    required List<String> contents,
   }) {
     final current = NoteColumnsSyntax.relocate(
       contentController.text,
@@ -1868,10 +1873,11 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (current == null) {
       return;
     }
-    _replaceColumnsText(
-      current,
-      current.toPlainMarkdown(order: contentOrder),
-    );
+    final plainMarkdown = contents
+        .map((content) => content.trim())
+        .where((content) => content.isNotEmpty)
+        .join('\n\n');
+    _replaceColumnsText(current, plainMarkdown);
   }
 
   void _replaceColumnsBlock(

@@ -20,9 +20,15 @@ required.
 
 ## Editing
 
-The columns toolbar action inserts a two- or three-column block. If text is
-selected, Chronicle places it into the second column. Putting the cursor inside
-an existing block and invoking the same action opens its layout settings.
+The columns toolbar action opens a visual two- or three-column composer. If text
+is selected, Chronicle places it into the second column before the composer
+opens. Each column body can then be edited separately as Markdown without
+manually touching Chronicle's marker comments. Putting the cursor inside an
+existing block opens the same composer with all current column contents.
+
+Chronicle 0.24.8 adds one-click layouts for a figure on the left with explanatory
+text on the right, the mirrored text-and-figure arrangement, two equal columns
+and three equal columns.
 
 In preview mode, dividers can be dragged to resize adjacent columns. Layout
 changes are immediately persisted in the note Markdown. On narrow windows the
@@ -31,7 +37,7 @@ columns stack vertically to keep the content readable.
 Images retain their own size, alignment and caption metadata inside a column.
 The source attachment binary remains unchanged.
 
-## Limits of the first implementation
+## Limits
 
-Nested column blocks are intentionally unsupported. Column content is edited in
-the Markdown editor and rendered visually in preview and split modes.
+Nested column blocks are intentionally unsupported. Column bodies remain
+ordinary Markdown and are rendered visually in preview and split modes.

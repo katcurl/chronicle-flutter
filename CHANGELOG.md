@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.24.8+61
+
+- Replaced the layout-only column dialog with a visual Markdown composer for each two- or three-column body.
+- Added one-click layouts for figure-left/text-right, text-left/figure-right, equal two-column and equal three-column arrangements.
+- Added separate per-column editors with safe left/right content movement before the block is inserted or updated.
+- Preserved selected editor text in the composer, automatically separated a leading selected image from following explanatory text, and made existing column blocks editable without exposing Chronicle marker comments.
+- Kept automatic merge behavior when reducing three columns to two and added a placeholder without losing content when expanding to three.
+- Preserved draggable preview dividers, responsive vertical stacking, image metadata, Markdown portability, themes, Vault files, synchronization, database schema and existing notes.
+- Added deterministic tests for content expansion, content merging and Markdown preservation across layout changes.
+
 ## 0.24.7+60
 
 - Added a compact image-size menu directly on managed images in note preview.

@@ -19,3 +19,15 @@ becomes three columns, Chronicle creates a new placeholder column.
 Removing the column layout strips only Chronicle's HTML comment markers and
 joins the column bodies with blank lines, so the note remains readable and
 portable.
+
+## Visual composer in 0.24.8
+
+The same management dialog now exposes a separate Markdown editor for every
+column. Users can change text, images, captions, lists, tables and formulas in
+place, move a complete body left or right, select a quick layout and change
+widths before applying the result.
+
+Reducing a three-column composition to two columns merges the third body into
+the second with a blank line. Expanding to three columns adds a visible
+placeholder and never discards either existing body. Converting the block back
+to ordinary text uses the edited bodies shown in the composer.

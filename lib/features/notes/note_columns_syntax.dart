@@ -256,6 +256,32 @@ class NoteColumnsSyntax {
     return markdown.replaceAll(_allMarkerPattern, ' ');
   }
 
+  static List<String> normalizeContents(
+    List<String> values,
+    int count, {
+    String placeholder = 'Новая колонка',
+  }) {
+    if (count < 2 || count > 3) {
+      throw ArgumentError.value(count, 'count');
+    }
+
+    final normalized = List<String>.from(values);
+    if (normalized.length > count) {
+      final merged = normalized
+          .sublist(count - 1)
+          .map((content) => content.trim())
+          .where((content) => content.isNotEmpty)
+          .join('\n\n');
+      normalized
+        ..removeRange(count - 1, normalized.length)
+        ..add(merged);
+    }
+    while (normalized.length < count) {
+      normalized.add(placeholder);
+    }
+    return normalized;
+  }
+
   static List<int> normalizeOrder(List<int> values, int count) {
     final identity = [for (var index = 0; index < count; index += 1) index];
     if (values.length != count) {

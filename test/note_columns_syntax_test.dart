@@ -106,6 +106,44 @@ void main() {
     expect(NoteColumnsSyntax.normalizeOrder(const [1, 0], 2), [1, 0]);
   });
 
+  test('visual composer adds a third placeholder without losing content', () {
+    final contents = NoteColumnsSyntax.normalizeContents(
+      const ['Рисунок', 'Интерпретация'],
+      3,
+    );
+
+    expect(contents, ['Рисунок', 'Интерпретация', 'Новая колонка']);
+  });
+
+  test('visual composer merges the last body when reducing to two columns', () {
+    final contents = NoteColumnsSyntax.normalizeContents(
+      const ['Слева', 'В центре', 'Справа'],
+      2,
+    );
+
+    expect(contents, ['Слева', 'В центре\n\nСправа']);
+  });
+
+  test('visual composer preserves Markdown while changing column count', () {
+    final contents = NoteColumnsSyntax.normalizeContents(
+      const [
+        '![Orf9b](../../Attachments/orf9b.png)',
+        '## Результат\n\n\$R_g = 1.8\\,\\mathrm{nm}\$',
+        '- [x] Проверено',
+      ],
+      2,
+    );
+    final markdown = NoteColumnsSyntax.build(
+      widths: const [40, 60],
+      contents: contents,
+    );
+    final restored = NoteColumnsSyntax.first(markdown)!;
+
+    expect(restored.columns[0].markdown, contains('orf9b.png'));
+    expect(restored.columns[1].markdown, contains(r'$R_g'));
+    expect(restored.columns[1].markdown, contains('- [x] Проверено'));
+  });
+
   test('column control markers do not inflate word count', () {
     final markdown = NoteColumnsSyntax.build(
       widths: const [40, 60],
