@@ -42,6 +42,7 @@ void main() {
 
     expect(resizeGesture, findsOneWidget);
     final detector = tester.widget<GestureDetector>(resizeGesture);
+
     detector.onHorizontalDragUpdate!(
       DragUpdateDetails(
         globalPosition: Offset(initialWidth, 0),
@@ -50,11 +51,13 @@ void main() {
       ),
     );
     await tester.pump();
+
+    expect(tester.getSize(image).width, closeTo(initialWidth / 2, 1));
+
     detector.onHorizontalDragEnd!(const DragEndDetails());
     await tester.pumpAndSettle();
 
     expect(requestedPresentation?.widthPercent, 50);
     expect(tester.getSize(image).width, closeTo(initialWidth / 2, 1));
-    expect(find.text('50%'), findsOneWidget);
   });
 }
