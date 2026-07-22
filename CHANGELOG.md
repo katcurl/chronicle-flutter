@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.24.7+60
+
+- Added a compact image-size menu directly on managed images in note preview.
+- Added one-click responsive presets for 25%, 50%, 75% and 100% width without changing the image file.
+- Added keyboard-accessible 5% decrease and increase actions for precise sizing.
+- Added a clear **Сбросить размер** action in the image settings dialog that restores 100% width while preserving alignment, caption and scientific figure ID.
+- Centralized supported width presets, limits and step size in the existing Markdown image syntax layer.
+- Kept old Markdown images compatible and preserved image proportions, Vault attachments, synchronization, themes, database schema and existing notes.
+- Added deterministic tests for the public image-width limits, presets, step and normalization behavior.
+
 ## 0.24.6+59
 
 - Added locally persisted user-created note templates without a database migration.

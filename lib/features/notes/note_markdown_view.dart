@@ -31,6 +31,9 @@ typedef NoteColumnsEditCallback =
 typedef NoteColumnsResizeCallback =
     void Function(NoteColumnsReference reference, List<int> widths);
 
+const int _decreaseImageWidthAction = -1;
+const int _increaseImageWidthAction = -2;
+
 class NoteMarkdownView extends StatelessWidget {
   const NoteMarkdownView({
     super.key,
@@ -547,7 +550,11 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
                   ? constraints.maxWidth
                   : MediaQuery.sizeOf(context).width;
           final displayedWidth =
-              availableWidth * (effectivePercent.clamp(20, 100) / 100);
+              availableWidth * (effectivePercent.clamp(
+                    NoteImageSyntax.minWidthPercent,
+                    NoteImageSyntax.maxWidthPercent,
+                  ) /
+                  100);
 
           return SizedBox(
             width: double.infinity,
@@ -582,13 +589,107 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
                                     ).colorScheme.surfaceContainerHigh,
                                 borderRadius: BorderRadius.circular(999),
                                 elevation: 2,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(999),
-                                  onTap: widget.onEdit,
-                                  child: const Padding(
-                                    padding: EdgeInsets.all(7),
-                                    child: Icon(Icons.tune_rounded, size: 18),
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (widget.onResize != null)
+                                      PopupMenuButton<int>(
+                                        tooltip: 'Размер изображения',
+                                        onSelected: _applyQuickWidthAction,
+                                        itemBuilder:
+                                            (context) => <PopupMenuEntry<int>>[
+                                              for (final width
+                                                  in NoteImageSyntax
+                                                      .widthPresets)
+                                                CheckedPopupMenuItem<int>(
+                                                  value: width,
+                                                  checked:
+                                                      presentation
+                                                          .widthPercent ==
+                                                      width,
+                                                  child: Text(
+                                                    width ==
+                                                            NoteImageSyntax
+                                                                .maxWidthPercent
+                                                        ? '$width% · по ширине'
+                                                        : '$width%',
+                                                  ),
+                                                ),
+                                              const PopupMenuDivider(),
+                                              const PopupMenuItem<int>(
+                                                value:
+                                                    _decreaseImageWidthAction,
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.remove_rounded,
+                                                      size: 18,
+                                                    ),
+                                                    SizedBox(width: 10),
+                                                    Text('Уменьшить на 5%'),
+                                                  ],
+                                                ),
+                                              ),
+                                              const PopupMenuItem<int>(
+                                                value:
+                                                    _increaseImageWidthAction,
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.add_rounded,
+                                                      size: 18,
+                                                    ),
+                                                    SizedBox(width: 10),
+                                                    Text('Увеличить на 5%'),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                        child: Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            11,
+                                            7,
+                                            8,
+                                            7,
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(
+                                                Icons.aspect_ratio_rounded,
+                                                size: 17,
+                                              ),
+                                              const SizedBox(width: 5),
+                                              Text(
+                                                '${NoteImageSyntax.normalizeWidthPercent(effectivePercent)}%',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                              ),
+                                              const SizedBox(width: 2),
+                                              const Icon(
+                                                Icons.arrow_drop_down_rounded,
+                                                size: 18,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    if (widget.onEdit != null)
+                                      IconButton(
+                                        tooltip: 'Другие настройки изображения',
+                                        visualDensity: VisualDensity.compact,
+                                        onPressed: widget.onEdit,
+                                        icon: const Icon(
+                                          Icons.tune_rounded,
+                                          size: 18,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -609,7 +710,10 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
                                               details.delta.dx /
                                                   availableWidth *
                                                   100)
-                                          .clamp(20, 100)
+                                          .clamp(
+                                            NoteImageSyntax.minWidthPercent,
+                                            NoteImageSyntax.maxWidthPercent,
+                                          )
                                           .toDouble();
                                     });
                                   },
@@ -720,12 +824,31 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
     return caption;
   }
 
+  void _applyQuickWidthAction(int action) {
+    final current = NoteImageSyntax.normalizeWidthPercent(
+      widget.reference.presentation.widthPercent,
+    );
+    final next = switch (action) {
+      _decreaseImageWidthAction =>
+        current - NoteImageSyntax.widthStepPercent,
+      _increaseImageWidthAction =>
+        current + NoteImageSyntax.widthStepPercent,
+      _ => action,
+    };
+    widget.onResize?.call(
+      widget.reference.presentation.copyWith(widthPercent: next),
+    );
+  }
+
   void _finishResize() {
     final current = dragPercent;
     if (current == null) {
       return;
     }
-    final rounded = ((current / 5).round() * 5).clamp(20, 100).toInt();
+    final rounded = NoteImageSyntax.normalizeWidthPercent(
+      (current / NoteImageSyntax.widthStepPercent).round() *
+          NoteImageSyntax.widthStepPercent,
+    );
     setState(() => dragPercent = null);
     widget.onResize?.call(
       widget.reference.presentation.copyWith(widthPercent: rounded),

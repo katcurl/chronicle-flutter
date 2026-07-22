@@ -115,4 +115,33 @@ void main() {
     expect(tooSmall.widthPercent, 20);
     expect(tooLarge.widthPercent, 100);
   });
+
+  test('quick image width controls expose stable responsive values', () {
+    expect(NoteImageSyntax.minWidthPercent, 20);
+    expect(NoteImageSyntax.maxWidthPercent, 100);
+    expect(NoteImageSyntax.widthStepPercent, 5);
+    expect(NoteImageSyntax.widthPresets, <int>[25, 50, 75, 100]);
+
+    expect(NoteImageSyntax.normalizeWidthPercent(1), 20);
+    expect(NoteImageSyntax.normalizeWidthPercent(52.6), 53);
+    expect(NoteImageSyntax.normalizeWidthPercent(500), 100);
+  });
+
+  test('copyWith clamps quick width changes and preserves other metadata', () {
+    const initial = NoteImagePresentation(
+      widthPercent: 50,
+      alignment: NoteImageAlignment.right,
+      caption: 'RMSD distribution',
+      figureId: 'rmsd-distribution',
+    );
+
+    final smaller = initial.copyWith(widthPercent: 15);
+    final larger = initial.copyWith(widthPercent: 105);
+
+    expect(smaller.widthPercent, NoteImageSyntax.minWidthPercent);
+    expect(larger.widthPercent, NoteImageSyntax.maxWidthPercent);
+    expect(larger.alignment, NoteImageAlignment.right);
+    expect(larger.caption, 'RMSD distribution');
+    expect(larger.figureId, 'rmsd-distribution');
+  });
 }

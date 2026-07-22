@@ -20,7 +20,9 @@ class NoteImagePresentation {
     String? figureId,
   }) {
     return NoteImagePresentation(
-      widthPercent: _normalizeWidth(widthPercent ?? this.widthPercent),
+      widthPercent: NoteImageSyntax.normalizeWidthPercent(
+        widthPercent ?? this.widthPercent,
+      ),
       alignment: alignment ?? this.alignment,
       caption: caption ?? this.caption,
       figureId: figureId ?? this.figureId,
@@ -30,7 +32,7 @@ class NoteImagePresentation {
   String toMarkdownTitle() {
     final parts = <String>[
       NoteImageSyntax.metadataPrefix,
-      'width=${_normalizeWidth(widthPercent)}',
+      'width=${NoteImageSyntax.normalizeWidthPercent(widthPercent)}',
       'align=${alignment.name}',
     ];
     final normalizedCaption = caption.trim();
@@ -90,14 +92,12 @@ class NoteImagePresentation {
     }
 
     return NoteImagePresentation(
-      widthPercent: _normalizeWidth(width),
+      widthPercent: NoteImageSyntax.normalizeWidthPercent(width),
       alignment: alignment,
       caption: caption,
       figureId: figureId,
     );
   }
-
-  static int _normalizeWidth(int value) => value.clamp(20, 100).toInt();
 }
 
 class NoteImageReference {
@@ -144,6 +144,17 @@ class NoteImageSyntax {
   const NoteImageSyntax._();
 
   static const String metadataPrefix = 'chronicle-image';
+  static const int minWidthPercent = 20;
+  static const int maxWidthPercent = 100;
+  static const int widthStepPercent = 5;
+  static const List<int> widthPresets = <int>[25, 50, 75, 100];
+
+  static int normalizeWidthPercent(num value) {
+    return value
+        .round()
+        .clamp(minWidthPercent, maxWidthPercent)
+        .toInt();
+  }
 
   static final RegExp _imagePattern = RegExp(
     r'!\[((?:\\.|[^\]])*)\]\(\s*(<[^>]+>|[^\s)]+)(?:\s+"([^"]*)")?\s*\)',

@@ -65,7 +65,9 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final roundedWidth = (widthPercent / 5).round() * 5;
+    final roundedWidth =
+        (widthPercent / NoteImageSyntax.widthStepPercent).round() *
+        NoteImageSyntax.widthStepPercent;
 
     return AlertDialog(
       title: const Text('Настроить изображение'),
@@ -101,9 +103,12 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
               ),
               Slider(
                 value: widthPercent,
-                min: 20,
-                max: 100,
-                divisions: 16,
+                min: NoteImageSyntax.minWidthPercent.toDouble(),
+                max: NoteImageSyntax.maxWidthPercent.toDouble(),
+                divisions:
+                    (NoteImageSyntax.maxWidthPercent -
+                            NoteImageSyntax.minWidthPercent) ~/
+                        NoteImageSyntax.widthStepPercent,
                 label: '$roundedWidth%',
                 onChanged: (value) => setState(() => widthPercent = value),
               ),
@@ -111,7 +116,7 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final value in const [25, 50, 75, 100])
+                  for (final value in NoteImageSyntax.widthPresets)
                     ChoiceChip(
                       label: Text('$value%'),
                       selected: roundedWidth == value,
@@ -211,6 +216,18 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
         ),
       ),
       actions: [
+        TextButton.icon(
+          onPressed:
+              roundedWidth == NoteImageSyntax.maxWidthPercent
+                  ? null
+                  : () => setState(
+                    () =>
+                        widthPercent =
+                            NoteImageSyntax.maxWidthPercent.toDouble(),
+                  ),
+          icon: const Icon(Icons.fit_screen_rounded),
+          label: const Text('Сбросить размер'),
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Отмена'),
@@ -244,7 +261,9 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
             Navigator.pop(
               context,
               NoteImagePresentation(
-                widthPercent: roundedWidth.clamp(20, 100).toInt(),
+                widthPercent: NoteImageSyntax.normalizeWidthPercent(
+                  roundedWidth,
+                ),
                 alignment: alignment,
                 caption: captionController.text.trim(),
                 figureId: normalizedFigureId,
