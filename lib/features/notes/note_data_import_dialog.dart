@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'note_data_import.dart';
+import 'note_table_syntax.dart';
 
 class NoteDataImportDialog extends StatefulWidget {
   const NoteDataImportDialog({

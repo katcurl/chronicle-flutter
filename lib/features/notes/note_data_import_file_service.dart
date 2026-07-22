@@ -6,7 +6,6 @@ Future<List<NoteDataImportFile>?> pickNoteDataImportFiles() async {
   final result = await FilePicker.pickFiles(
     dialogTitle: 'Импортировать данные в заметку',
     type: FileType.any,
-    allowMultiple: true,
     lockParentWindow: true,
   );
   if (result == null) {
