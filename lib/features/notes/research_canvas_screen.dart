@@ -272,7 +272,7 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
                   ],
                 ),
               ),
-              if (showInspector && selected != null) ...[
+              if (showInspector) ...[
                 const VerticalDivider(width: 1),
                 SizedBox(
                   width: 330,
