@@ -11,6 +11,9 @@ import '../features/notes/note_block_syntax.dart';
 import '../features/notes/note_columns_editor_dialog.dart';
 import '../features/notes/note_columns_syntax.dart';
 import '../features/notes/note_document.dart';
+import '../features/notes/note_data_import.dart';
+import '../features/notes/note_data_import_dialog.dart';
+import '../features/notes/note_data_import_file_service.dart';
 import '../features/notes/note_edit_history.dart';
 import '../features/notes/note_image_editor_dialog.dart';
 import '../features/notes/note_image_syntax.dart';
@@ -602,6 +605,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   bool dirty = false;
   bool _renameReviewBusy = false;
   bool _clipboardPasteBusy = false;
+  bool _dataImportBusy = false;
   int mode = 0;
 
   @override
@@ -955,6 +959,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           onInsertCitation: _insertCitation,
           onInsertBibliography: _insertBibliography,
           onInsertScientificTable: _insertScientificTable,
+          onImportData: () => unawaited(_importDataFiles()),
           onInsertScientificReference: _insertScientificReference,
           onInspectScientificObjects: _inspectScientificObjects,
           onApplyLaboratoryTemplate: _applyLaboratoryTemplate,
@@ -1907,6 +1912,87 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     );
   }
 
+  Future<void> _importDataFiles() async {
+    if (_dataImportBusy) {
+      return;
+    }
+    _dataImportBusy = true;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final files = await pickNoteDataImportFiles();
+      if (files == null || files.isEmpty || !mounted) {
+        return;
+      }
+      final plan = await NoteDataImportDialog.show(context, files: files);
+      if (plan == null || !mounted) {
+        return;
+      }
+
+      NoteTableModel? table;
+      if (plan.mode == NoteDataImportMode.tableWithSource) {
+        final index = ScientificReferenceSyntax.index(contentController.text);
+        table = NoteDataImport.tableModelFor(
+          file: files.single,
+          existingObjectKeys: {
+            for (final object in index.objects) object.key,
+          },
+        );
+      }
+
+      final results = await widget.store.storeAttachmentBatchForNote(
+        widget.note,
+        fileNames: [for (final file in files) file.name],
+        fileBytes: [for (final file in files) file.bytes],
+      );
+      if (!mounted) {
+        return;
+      }
+      final attachments = <NoteDataImportAttachment>[
+        for (var index = 0; index < results.length; index += 1)
+          NoteDataImportAttachment(
+            sourceName: files[index].name,
+            result: results[index],
+          ),
+      ];
+      final markdown = switch (plan.mode) {
+        NoteDataImportMode.tableWithSource =>
+          NoteDataImport.buildTableImportMarkdown(
+            title: plan.title,
+            table: table!,
+            source: attachments.single,
+          ),
+        NoteDataImportMode.attachmentBundle =>
+          NoteDataImport.buildAttachmentBundleMarkdown(
+            title: plan.title,
+            attachments: attachments,
+            showImagePreviews: plan.showImagePreviews,
+          ),
+      };
+      _insertMarkdownAtSelection(markdown);
+      _save(createVersion: false);
+      final duplicateCount = results.where((result) => result.alreadyExisted).length;
+      final duplicateSuffix = duplicateCount == 0
+          ? ''
+          : '; $duplicateCount уже были в Vault';
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Импортировано файлов: ${results.length}$duplicateSuffix.',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось импортировать данные: $error')),
+      );
+    } finally {
+      _dataImportBusy = false;
+    }
+  }
+
   Future<void> _attachFile() async {
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -2726,6 +2812,7 @@ class _EditorToolbar extends StatefulWidget {
     required this.onInsertCitation,
     required this.onInsertBibliography,
     required this.onInsertScientificTable,
+    required this.onImportData,
     required this.onInsertScientificReference,
     required this.onInspectScientificObjects,
     required this.onApplyLaboratoryTemplate,
@@ -2746,6 +2833,7 @@ class _EditorToolbar extends StatefulWidget {
   final VoidCallback onInsertCitation;
   final VoidCallback onInsertBibliography;
   final VoidCallback onInsertScientificTable;
+  final VoidCallback onImportData;
   final VoidCallback onInsertScientificReference;
   final VoidCallback onInspectScientificObjects;
   final VoidCallback onApplyLaboratoryTemplate;
@@ -3049,6 +3137,11 @@ class _EditorToolbarState extends State<_EditorToolbar> {
             tooltip: 'Вставить блок библиографии',
             onPressed: widget.onInsertBibliography,
             icon: const Icon(Icons.library_books_outlined),
+          ),
+          IconButton(
+            tooltip: 'Импортировать данные из файлов',
+            onPressed: widget.onImportData,
+            icon: const Icon(Icons.upload_file_outlined),
           ),
           IconButton(
             tooltip: 'Добавить или редактировать научную таблицу',

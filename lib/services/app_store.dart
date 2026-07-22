@@ -1896,6 +1896,30 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     return result;
   }
 
+  Future<List<AttachmentImportResult>> storeAttachmentBatchForNote(
+    Note note, {
+    required List<String> fileNames,
+    required List<Uint8List> fileBytes,
+  }) async {
+    if (fileNames.length != fileBytes.length) {
+      throw ArgumentError('Количество имён и файлов должно совпадать.');
+    }
+    final results = <AttachmentImportResult>[];
+    for (var index = 0; index < fileNames.length; index += 1) {
+      results.add(
+        await _vaultService.storeAttachmentBytes(
+          note: note,
+          originalName: fileNames[index],
+          bytes: fileBytes[index],
+        ),
+      );
+    }
+    if (results.isNotEmpty) {
+      _notifyAttachmentRefresh();
+    }
+    return List<AttachmentImportResult>.unmodifiable(results);
+  }
+
   Future<VaultApplyResult> applyVaultChanges(
     VaultScanResult scan, {
     required VaultConflictResolution conflictResolution,

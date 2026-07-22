@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.26.3+69
+
+- Added a dedicated **Import data** action to the note editor for selecting one or many files through the native file picker.
+- Added direct CSV and TSV import as a numbered scientific Markdown table while preserving the original source file as a Vault attachment.
+- Added grouped multi-file import with an editable heading, ordinary links for data and document files, and optional inline previews for selected images.
+- Stored every imported file through the existing content-addressed attachment pipeline, including SHA-256 deduplication, backup support and LAN synchronization.
+- Batched attachment refresh notifications so importing many files refreshes note images once instead of once per file.
+- Limited one import to 24 files, 100 MB per file and 120 MB total before writing anything to the Vault.
+- Preserved portable Markdown, existing scientific table IDs, themes, Vault layout, database schema, synchronization formats and existing notes without migration.
+- Added deterministic tests for UTF-8 BOM CSV parsing, collision-safe table IDs, source-file links and grouped image/file Markdown.
+
 ## 0.26.2+68
 
 - Expanded the existing note-version snapshots into a complete history browser without adding a new database table or Vault format.
