@@ -75,7 +75,7 @@ class NoteMarkdownView extends StatelessWidget {
     return ListView.builder(
       controller: controller,
       padding: padding,
-      cacheExtent: 640,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(640.0),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       itemCount: chunks.length,
       itemBuilder:
