@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -535,15 +536,26 @@ class _ManagedNoteImage extends StatefulWidget {
 class _ManagedNoteImageState extends State<_ManagedNoteImage> {
   bool hovering = false;
   double? dragPercent;
+  int? pendingWidthPercent;
   double availableWidth = 1;
+  double queuedDragDeltaX = 0;
+  bool dragFrameScheduled = false;
 
   bool get editable => widget.onEdit != null || widget.onResize != null;
 
   @override
   void didUpdateWidget(covariant _ManagedNoteImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.reference.raw != widget.reference.raw) {
+    final pending = pendingWidthPercent;
+    if (pending != null &&
+        widget.reference.presentation.widthPercent == pending) {
+      pendingWidthPercent = null;
+    }
+    if (oldWidget.reference.target != widget.reference.target ||
+        oldWidget.reference.alt != widget.reference.alt) {
       dragPercent = null;
+      pendingWidthPercent = null;
+      queuedDragDeltaX = 0;
     }
   }
 
@@ -551,7 +563,9 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
   Widget build(BuildContext context) {
     final presentation = widget.reference.presentation;
     final effectivePercent =
-        dragPercent ?? presentation.widthPercent.toDouble();
+        dragPercent ??
+        pendingWidthPercent?.toDouble() ??
+        presentation.widthPercent.toDouble();
     final alignment = switch (presentation.alignment) {
       NoteImageAlignment.left => Alignment.centerLeft,
       NoteImageAlignment.center => Alignment.center,
@@ -595,12 +609,17 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
                         children: [
                           GestureDetector(
                             onTap: widget.onEdit,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(14),
-                              child: widget.child,
+                            child: RepaintBoundary(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: widget.child,
+                              ),
                             ),
                           ),
-                          if (editable && (hovering || dragPercent != null))
+                          if (editable &&
+                              (hovering ||
+                                  dragPercent != null ||
+                                  pendingWidthPercent != null))
                             Positioned(
                               top: 8,
                               right: 8,
@@ -626,8 +645,10 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
                                                 CheckedPopupMenuItem<int>(
                                                   value: width,
                                                   checked:
-                                                      presentation
-                                                          .widthPercent ==
+                                                      NoteImageSyntax
+                                                          .normalizeWidthPercent(
+                                                            effectivePercent,
+                                                          ) ==
                                                       width,
                                                   child: Text(
                                                     width ==
@@ -723,22 +744,9 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
                                 cursor: SystemMouseCursors.resizeLeftRight,
                                 child: GestureDetector(
                                   behavior: HitTestBehavior.opaque,
-                                  onHorizontalDragUpdate: (details) {
-                                    final current =
-                                        dragPercent ??
-                                        presentation.widthPercent.toDouble();
-                                    setState(() {
-                                      dragPercent = (current +
-                                              details.delta.dx /
-                                                  availableWidth *
-                                                  100)
-                                          .clamp(
-                                            NoteImageSyntax.minWidthPercent,
-                                            NoteImageSyntax.maxWidthPercent,
-                                          )
-                                          .toDouble();
-                                    });
-                                  },
+                                  onHorizontalDragUpdate:
+                                      (details) =>
+                                          _queueResizeDelta(details.delta.dx),
                                   onHorizontalDragEnd: (_) => _finishResize(),
                                   onHorizontalDragCancel: _cancelResize,
                                   child: AnimatedOpacity(
@@ -848,7 +856,7 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
 
   void _applyQuickWidthAction(int action) {
     final current = NoteImageSyntax.normalizeWidthPercent(
-      widget.reference.presentation.widthPercent,
+      pendingWidthPercent ?? widget.reference.presentation.widthPercent,
     );
     final next = switch (action) {
       _decreaseImageWidthAction =>
@@ -857,27 +865,74 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
         current + NoteImageSyntax.widthStepPercent,
       _ => action,
     };
+    final normalized = NoteImageSyntax.normalizeWidthPercent(next);
+    setState(() => pendingWidthPercent = normalized);
     widget.onResize?.call(
-      widget.reference.presentation.copyWith(widthPercent: next),
+      widget.reference.presentation.copyWith(widthPercent: normalized),
     );
   }
 
-  void _finishResize() {
-    final current = dragPercent;
-    if (current == null) {
+  void _queueResizeDelta(double deltaX) {
+    queuedDragDeltaX += deltaX;
+    if (dragFrameScheduled) {
       return;
     }
+    dragFrameScheduled = true;
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      dragFrameScheduled = false;
+      if (!mounted) {
+        queuedDragDeltaX = 0;
+        return;
+      }
+      _applyQueuedResizeDelta();
+    });
+  }
+
+  void _applyQueuedResizeDelta({bool rebuild = true}) {
+    final deltaX = queuedDragDeltaX;
+    queuedDragDeltaX = 0;
+    if (deltaX == 0 || availableWidth <= 0) {
+      return;
+    }
+    final current =
+        dragPercent ??
+        pendingWidthPercent?.toDouble() ??
+        widget.reference.presentation.widthPercent.toDouble();
+    final next =
+        (current + deltaX / availableWidth * 100)
+            .clamp(
+              NoteImageSyntax.minWidthPercent,
+              NoteImageSyntax.maxWidthPercent,
+            )
+            .toDouble();
+    if (rebuild) {
+      setState(() => dragPercent = next);
+    } else {
+      dragPercent = next;
+    }
+  }
+
+  void _finishResize() {
+    _applyQueuedResizeDelta(rebuild: false);
+    final current =
+        dragPercent ??
+        pendingWidthPercent?.toDouble() ??
+        widget.reference.presentation.widthPercent.toDouble();
     final rounded = NoteImageSyntax.normalizeWidthPercent(
       (current / NoteImageSyntax.widthStepPercent).round() *
           NoteImageSyntax.widthStepPercent,
     );
-    setState(() => dragPercent = null);
+    setState(() {
+      dragPercent = null;
+      pendingWidthPercent = rounded;
+    });
     widget.onResize?.call(
       widget.reference.presentation.copyWith(widthPercent: rounded),
     );
   }
 
   void _cancelResize() {
+    queuedDragDeltaX = 0;
     if (dragPercent != null) {
       setState(() => dragPercent = null);
     }

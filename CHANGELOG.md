@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.24.10+63
+
+- Stabilized image resizing in preview and split mode by retaining the requested width until the updated Markdown is rendered, eliminating the visible snap back to the old size.
+- Coalesced high-frequency pointer updates to at most one layout change per animation frame so dragging large images no longer overwhelms the UI thread.
+- Synchronized image-size edits with the live preview immediately while keeping the note dirty for the existing explicit save paths instead of forcing a full AppStore save on every resize.
+- Added a dedicated attachment refresh signal so ordinary note edits no longer cause every Vault image in the open note to be read from disk again.
+- Kept attachment refreshes for actual attachment imports, LAN synchronization, Vault application and backup restoration.
+- Preserved image binaries, responsive Markdown metadata, themes, Vault layout, synchronization payloads, database schema and existing notes without migration.
+- Added deterministic tests for attachment refresh isolation and stable image-resize rendering behavior.
+
 ## 0.24.9+62
 
 - Added direct drag-and-drop reordering for complete columns while preserving their Markdown content and responsive width.

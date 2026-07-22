@@ -83,6 +83,11 @@ class AppStore extends ChangeNotifier {
   final bool _reliabilityFeaturesEnabled;
   late final LanAutoSyncService autoSyncService;
   final _uuid = const Uuid();
+  final ValueNotifier<int> _attachmentRefreshNotifier =
+      ValueNotifier<int>(0);
+
+  ValueListenable<int> get attachmentRefreshListenable =>
+      _attachmentRefreshNotifier;
 
   AppData data = AppData.empty();
   List<NoteTemplate> customNoteTemplates = const <NoteTemplate>[];
@@ -1326,6 +1331,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     if (report?.changedData ?? false) {
       _scheduleVaultMirror();
     }
+    _notifyAttachmentRefresh();
     notifyListeners();
   }
 
@@ -1787,8 +1793,12 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     }
   }
 
-  Future<AttachmentImportResult?> pickAttachmentForNote(Note note) {
-    return _vaultService.pickAndStoreAttachment(note);
+  Future<AttachmentImportResult?> pickAttachmentForNote(Note note) async {
+    final result = await _vaultService.pickAndStoreAttachment(note);
+    if (result != null) {
+      _notifyAttachmentRefresh();
+    }
+    return result;
   }
 
   Future<VaultApplyResult> applyVaultChanges(
@@ -1880,6 +1890,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       vaultStatus = await _vaultService.rewriteAfterApply(data, scan);
       pendingVaultScan = await _vaultService.scan(data);
       _mergeVaultScanIntoStatus();
+      _notifyAttachmentRefresh();
 
       return VaultApplyResult(
         createdCount: createdCount,
@@ -2400,6 +2411,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     pendingVaultScan = await _vaultService.scan(data);
     _mergeVaultScanIntoStatus();
     await refreshSyncFoundation(notify: false);
+    _notifyAttachmentRefresh();
   }
 
   Future<String> exportBackupJson() => _repository.exportJson();
@@ -2424,6 +2436,10 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     await rebuildAllNoteLinks();
   }
 
+  void _notifyAttachmentRefresh() {
+    _attachmentRefreshNotifier.value += 1;
+  }
+
   void _startTicker() {
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -2445,6 +2461,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
       unawaited(node.close());
     }
     unawaited(_repository.close());
+    _attachmentRefreshNotifier.dispose();
     super.dispose();
   }
 }

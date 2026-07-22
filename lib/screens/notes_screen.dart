@@ -944,7 +944,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
               onResizeImage: _replaceImagePresentation,
               onEditColumns: _editColumnsReference,
               onResizeColumns: _replaceColumnsWidths,
-              assetListenable: widget.store,
+              assetListenable: widget.store.attachmentRefreshListenable,
               citationSources: widget.store.data.citationSources,
               vaultRootPath: widget.store.vaultStatus.rootPath,
             ),
@@ -1771,12 +1771,17 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
               offset: current.start + replacement.length,
             );
 
+    final updatedText = value.text.replaceRange(
+      current.start,
+      current.end,
+      replacement,
+    );
     contentController.value = value.copyWith(
-      text: value.text.replaceRange(current.start, current.end, replacement),
+      text: updatedText,
       selection: updatedSelection,
       composing: TextRange.empty,
     );
-    _save(createVersion: false);
+    _previewTextNotifier.setImmediate(updatedText);
   }
 
   Future<void> _configureColumnsAtCursor() async {

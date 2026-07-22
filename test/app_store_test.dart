@@ -75,4 +75,35 @@ void main() {
     await store.deleteCustomNoteTemplate(created.id);
     expect(store.customNoteTemplates, isEmpty);
   });
+
+
+  test('ordinary note updates do not refresh Vault attachment images', () async {
+    final repository = InMemoryAppRepository();
+    final store = AppStore(repository: repository);
+    addTearDown(store.dispose);
+    await store.load();
+
+    var attachmentRefreshCount = 0;
+    store.attachmentRefreshListenable.addListener(() {
+      attachmentRefreshCount += 1;
+    });
+
+    if (store.data.projects.isEmpty) {
+      store.addProject(
+        Project(id: 'project-1', title: 'Project', emoji: '📁'),
+      );
+    }
+    final note = Note(
+      id: 'resize-note',
+      title: 'Image resize',
+      projectId: store.data.projects.first.id,
+      body: '![image](../Attachments/image.png)',
+    );
+    store.addNote(note);
+    note.body =
+        '![image](../Attachments/image.png "chronicle-image width=50 align=center")';
+    store.updateNote(note);
+
+    expect(attachmentRefreshCount, 0);
+  });
 }
