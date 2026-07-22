@@ -7,6 +7,7 @@ import '../../services/app_store.dart';
 import 'note_graph_analysis.dart';
 import 'note_graph_layout.dart';
 import 'note_templates.dart';
+import 'research_canvas_screen.dart';
 
 typedef NoteGraphOpenNote = Future<void> Function(Note note);
 
@@ -38,6 +39,20 @@ class _NoteGraphScreenState extends State<NoteGraphScreen> {
   bool showDirections = true;
   bool focusMode = false;
   int focusDepth = 1;
+
+  Future<void> _openResearchCanvas() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ResearchCanvasScreen(
+          store: widget.store,
+          onOpenNote: widget.onOpenNote,
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   @override
   void dispose() {
@@ -117,6 +132,11 @@ class _NoteGraphScreenState extends State<NoteGraphScreen> {
       appBar: AppBar(
         title: const Text('Карта знаний'),
         actions: [
+          IconButton(
+            tooltip: 'Открыть карту исследования',
+            onPressed: _openResearchCanvas,
+            icon: const Icon(Icons.dashboard_customize_outlined),
+          ),
           IconButton(
             tooltip: 'Структура графа',
             onPressed: () => _showInsights(

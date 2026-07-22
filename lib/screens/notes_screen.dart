@@ -24,6 +24,7 @@ import '../features/notes/note_link_dialogs.dart';
 import '../features/notes/note_link_tools.dart';
 import '../features/notes/laboratory_template_dialog.dart';
 import '../features/notes/note_graph_screen.dart';
+import '../features/notes/research_canvas_screen.dart';
 import '../features/notes/note_markdown_view.dart';
 import '../features/notes/note_templates.dart';
 import '../features/notes/note_version_history_dialog.dart';
@@ -139,6 +140,11 @@ class _NotesScreenState extends State<NotesScreen> {
             tooltip: 'Карта знаний',
             onPressed: _openKnowledgeGraph,
             icon: const Icon(Icons.hub_outlined),
+          ),
+          IconButton(
+            tooltip: 'Карта исследования',
+            onPressed: _openResearchCanvas,
+            icon: const Icon(Icons.dashboard_customize_outlined),
           ),
           IconButton(
             tooltip: 'Проверить ссылки',
@@ -399,6 +405,20 @@ class _NotesScreenState extends State<NotesScreen> {
               store: widget.store,
               onOpenNote: _open,
             ),
+      ),
+    );
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _openResearchCanvas() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ResearchCanvasScreen(
+          store: widget.store,
+          onOpenNote: _open,
+        ),
       ),
     );
     if (mounted) {
