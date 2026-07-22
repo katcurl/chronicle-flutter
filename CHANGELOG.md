@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.26.6+72
+
+- Added a searchable multi-select note-link picker with inline and bulleted insertion modes.
+- Made links inserted through the picker and `[[` autocomplete use exact note IDs with readable labels, so new links remain stable after note renaming.
+- Added `Ctrl+Shift+K` / `Cmd+Shift+K` for opening the note-link picker from the Markdown editor.
+- Added copying the current note as a portable stable `[[id:...|Title]]` link from the note menu.
+- Added an on-demand unlinked-mention review that finds unique note titles outside existing wiki links, code blocks and ordinary Markdown links.
+- Added selective conversion of mentions into exact-ID links while preserving the visible source text and cursor position.
+- Skipped ambiguous duplicate titles during mention detection and bounded one review to 80 occurrences to protect large notes.
+- Preserved existing title links, safe renaming, backlinks, knowledge graph, Vault layout, synchronization and database schema without migration.
+- Added deterministic tests for stable link composition, mention boundaries, code/link exclusions, duplicate-title safety and cursor adjustment.
+
 ## 0.26.5+71
 
 - Added personal workspaces that switch Chronicle between saved interface profiles without changing projects, notes, tasks, attachments or Vault files.

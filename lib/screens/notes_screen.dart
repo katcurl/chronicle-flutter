@@ -20,6 +20,8 @@ import '../features/notes/note_export_dialog.dart';
 import '../features/notes/note_export_file_service.dart';
 import '../features/notes/note_image_editor_dialog.dart';
 import '../features/notes/note_image_syntax.dart';
+import '../features/notes/note_link_dialogs.dart';
+import '../features/notes/note_link_tools.dart';
 import '../features/notes/laboratory_template_dialog.dart';
 import '../features/notes/note_graph_screen.dart';
 import '../features/notes/note_markdown_view.dart';
@@ -808,14 +810,46 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                   ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
-                    if (value == 'delete') {
-                      widget.store.deleteNote(widget.note.id);
-                      Navigator.pop(context);
+                    switch (value) {
+                      case 'copy_stable_link':
+                        unawaited(_copyStableNoteLink());
+                        break;
+                      case 'link_mentions':
+                        unawaited(_linkUnlinkedMentions());
+                        break;
+                      case 'delete':
+                        widget.store.deleteNote(widget.note.id);
+                        Navigator.pop(context);
+                        break;
                     }
                   },
                   itemBuilder:
                       (_) => const [
-                        PopupMenuItem(value: 'delete', child: Text('Удалить')),
+                        PopupMenuItem(
+                          value: 'copy_stable_link',
+                          child: ListTile(
+                            leading: Icon(Icons.link_rounded),
+                            title: Text('Копировать устойчивую ссылку'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'link_mentions',
+                          child: ListTile(
+                            leading: Icon(Icons.auto_fix_high_rounded),
+                            title: Text('Связать упоминания'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        PopupMenuDivider(),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: ListTile(
+                            leading: Icon(Icons.delete_outline_rounded),
+                            title: Text('Удалить'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
                       ],
                 ),
               ],
@@ -960,6 +994,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           onConfigureColumns: _configureColumnsAtCursor,
           onReorderBlocks: _reorderBlocks,
           onBlockAction: _handleBlockAction,
+          onInsertNoteLink: _insertNoteLinks,
           onInsertCitation: _insertCitation,
           onInsertBibliography: _insertBibliography,
           onInsertScientificTable: _insertScientificTable,
@@ -1661,6 +1696,113 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     }
   }
 
+  List<NoteLinkTarget> _availableNoteLinkTargets() {
+    return <NoteLinkTarget>[
+      for (final note in widget.store.data.notes)
+        if (note.id != widget.note.id)
+          NoteLinkTarget(
+            id: note.id,
+            title: note.title,
+            projectTitle:
+                widget.store.projectById(note.projectId)?.title ?? 'Без проекта',
+            folderPath: note.folderPath,
+            noteType: note.noteType,
+            tags: List<String>.from(note.tags),
+          ),
+    ];
+  }
+
+  NoteLinkTarget _currentNoteLinkTarget() {
+    return NoteLinkTarget(
+      id: widget.note.id,
+      title: _proposedTitle,
+      projectTitle:
+          widget.store.projectById(projectId)?.title ?? 'Без проекта',
+      folderPath: folderPath,
+      noteType: noteType,
+      tags: List<String>.from(tags),
+    );
+  }
+
+  Future<void> _insertNoteLinks() async {
+    final targets = _availableNoteLinkTargets();
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Других заметок пока нет.')),
+      );
+      return;
+    }
+    final result = await NoteLinkPickerDialog.show(
+      context,
+      targets: targets,
+      sourceProjectTitle:
+          widget.store.projectById(projectId)?.title ?? 'Без проекта',
+    );
+    if (result == null || result.targets.isEmpty || !mounted) {
+      return;
+    }
+    final markdown = NoteLinkTools.compose(
+      result.targets,
+      style: result.style,
+    );
+    if (result.style == NoteLinkInsertStyle.inline) {
+      _insertInlineMarkdown(markdown);
+    } else {
+      _insertMarkdownAtSelection(markdown);
+    }
+  }
+
+  Future<void> _linkUnlinkedMentions() async {
+    final targets = _availableNoteLinkTargets();
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Других заметок пока нет.')),
+      );
+      return;
+    }
+    final originalValue = contentController.value;
+    final selected = await NoteUnlinkedMentionsDialog.show(
+      context,
+      markdown: originalValue.text,
+      targets: targets,
+    );
+    if (selected == null || selected.isEmpty || !mounted) {
+      return;
+    }
+    final cursor = originalValue.selection.isValid
+        ? originalValue.selection.extentOffset
+        : originalValue.text.length;
+    final edit = NoteLinkTools.applyMentions(
+      originalValue.text,
+      selected,
+      cursor: cursor,
+    );
+    if (edit.text == originalValue.text) {
+      return;
+    }
+    contentController.value = originalValue.copyWith(
+      text: edit.text,
+      selection: TextSelection.collapsed(offset: edit.cursor),
+      composing: TextRange.empty,
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Создано устойчивых ссылок: ${selected.length}.'),
+      ),
+    );
+  }
+
+  Future<void> _copyStableNoteLink() async {
+    final markdown = NoteLinkTools.stableMarkdown(_currentNoteLinkTarget());
+    await Clipboard.setData(ClipboardData(text: markdown));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Устойчивая ссылка скопирована.')),
+    );
+  }
+
   Future<void> _insertScientificTable() async {
     final value = contentController.value;
     final selection = value.selection;
@@ -1819,6 +1961,11 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     }
     if (event.logicalKey == LogicalKeyboardKey.keyY) {
       _editHistory.redo();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.keyK &&
+        keyboard.isShiftPressed) {
+      unawaited(_insertNoteLinks());
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.keyV) {
@@ -2889,6 +3036,7 @@ class _EditorToolbar extends StatefulWidget {
     required this.onConfigureColumns,
     required this.onReorderBlocks,
     required this.onBlockAction,
+    required this.onInsertNoteLink,
     required this.onInsertCitation,
     required this.onInsertBibliography,
     required this.onInsertScientificTable,
@@ -2911,6 +3059,7 @@ class _EditorToolbar extends StatefulWidget {
   final VoidCallback onConfigureColumns;
   final VoidCallback onReorderBlocks;
   final ValueChanged<_NoteBlockAction> onBlockAction;
+  final VoidCallback onInsertNoteLink;
   final VoidCallback onInsertCitation;
   final VoidCallback onInsertBibliography;
   final VoidCallback onInsertScientificTable;
@@ -3209,7 +3358,11 @@ class _EditorToolbarState extends State<_EditorToolbar> {
           _button(Icons.format_italic_rounded, '_', '_'),
           _button(Icons.format_list_bulleted_rounded, '- ', ''),
           _button(Icons.check_box_outlined, '- [ ] ', ''),
-          _button(Icons.link_rounded, '[[', ']]'),
+          IconButton(
+            tooltip: 'Вставить устойчивую ссылку на заметку',
+            onPressed: widget.onInsertNoteLink,
+            icon: const Icon(Icons.link_rounded),
+          ),
           IconButton(
             tooltip: 'Вставить научную цитату',
             onPressed: widget.onInsertCitation,
@@ -3510,12 +3663,12 @@ class _WikiLinkSuggestionsBar extends StatelessWidget {
   void _complete(NoteWikiAutocompleteQuery query, Note note) {
     final value = controller.value;
     if (query.end > value.text.length) return;
-    final target = store.wikiTargetFor(note);
+    final target = NoteWikiTarget.exactId(note.id);
     final completion = NoteWikiLinkSyntax.complete(
       value.text,
       query,
       target,
-      label: NoteWikiTarget.parse(target).noteId == null ? null : note.title,
+      label: note.title,
     );
     controller.value = value.copyWith(
       text: completion.text,
