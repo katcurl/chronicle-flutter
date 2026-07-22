@@ -70,8 +70,12 @@ void main() {
     expect(markdown, contains('chronicle_id: "note-1"'));
     expect(markdown, contains('assets/plot--abc.png'));
     final html = utf8.decode(entries['RMSD analysis.html']!);
-    expect(html, contains('<figure class="align-center" style="width:50%">'));
-    expect(html, contains('assets/plot--abc.png'));
+    final normalizedHtml = html.replaceAll('&#47;', '/');
+    expect(
+      normalizedHtml,
+      contains('<figure class="align-center" style="width:50%">'),
+    );
+    expect(normalizedHtml, contains('assets/plot--abc.png'));
   });
 
   test('standalone HTML embeds images as data URIs', () async {
@@ -90,8 +94,9 @@ void main() {
     );
 
     final html = utf8.decode(payload.bytes);
-    expect(html, contains('data:image/png;base64,'));
-    expect(html, contains('<!doctype html>'));
+    final normalizedHtml = html.replaceAll('&#47;', '/');
+    expect(normalizedHtml, contains('data:image/png;base64,'));
+    expect(normalizedHtml, contains('<!doctype html>'));
   });
 
   test('project archive rewrites wiki links and lists tasks', () async {
