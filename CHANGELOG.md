@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.26.4+70
+
+- Added explicit export actions for the current note and complete projects without modifying source data.
+- Added UTF-8 Markdown export with portable Chronicle metadata and project task/note summaries.
+- Added standalone HTML export with embedded CSS, data-URI attachments and Chronicle image width, alignment and captions.
+- Added portable ZIP export containing Markdown, HTML, a versioned manifest and only referenced managed attachments.
+- Added separate project note files and conversion of internal wiki links to ordinary relative links inside project archives.
+- Added bounded UTF-8 ZIP32 generation without a new runtime dependency and a 240 MB export limit.
+- Preserved unsaved editor text during note export while leaving the note, Vault, synchronization and database unchanged.
+- Added deterministic tests for ZIP contents, embedded images, project wiki links, task lists and safe file names.
+
 ## 0.26.3+69
 
 - Added a dedicated **Import data** action to the note editor for selecting one or many files through the native file picker.

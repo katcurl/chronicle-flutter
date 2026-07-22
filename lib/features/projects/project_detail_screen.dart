@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../models/app_models.dart';
 import '../../services/app_store.dart';
 import '../../widgets/common.dart';
+import '../notes/note_export.dart';
+import '../notes/note_export_dialog.dart';
+import '../notes/note_export_file_service.dart';
 import '../tasks/task_editor_sheet.dart';
 import '../tasks/task_metadata.dart';
 import 'project_editor_sheet.dart';
@@ -64,7 +67,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             icon: const Icon(Icons.edit_outlined),
           ),
           PopupMenuButton<String>(
-            onSelected: (value) {
+            onSelected: (value) async {
+              if (value == 'export') {
+                await _exportProject(project, notes, tasks);
+                return;
+              }
               if (value == 'archive') {
                 widget.store.setProjectArchived(project, !project.archived);
                 setState(() {});
@@ -72,6 +79,15 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             },
             itemBuilder:
                 (_) => [
+                  const PopupMenuItem<String>(
+                    value: 'export',
+                    child: ListTile(
+                      leading: Icon(Icons.download_outlined),
+                      title: Text('Экспортировать проект'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  const PopupMenuDivider(),
                   PopupMenuItem<String>(
                     value: 'archive',
                     child: Text(
@@ -183,6 +199,56 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _exportProject(
+    Project project,
+    List<Note> notes,
+    List<WorkTask> tasks,
+  ) async {
+    final format = await NoteExportDialog.show(
+      context,
+      subjectLabel: project.title,
+      isProject: true,
+    );
+    if (format == null || !mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final payload = await NoteExportComposer(
+        readAttachment: widget.store.readManagedAttachment,
+      ).exportProject(
+        project: project,
+        notes: notes,
+        tasks: tasks,
+        format: format,
+      );
+      final savedPath = await const NoteExportFileService().save(payload);
+      if (savedPath == null || !mounted) {
+        return;
+      }
+      final missingSuffix =
+          payload.missingAttachments.isEmpty
+              ? ''
+              : '; не найдено вложений: '
+                  '${payload.missingAttachments.length}';
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Проект экспортирован: ${payload.fileName}; '
+            'вложений: ${payload.assetCount}$missingSuffix',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось экспортировать проект: $error')),
+      );
+    }
   }
 
   Future<void> _editProject(Project project) async {

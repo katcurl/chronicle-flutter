@@ -1874,6 +1874,10 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     }
   }
 
+  Future<Uint8List?> readManagedAttachment(String relativePath) {
+    return _vaultService.readManagedAttachment(relativePath);
+  }
+
   Future<AttachmentImportResult?> pickAttachmentForNote(Note note) async {
     final result = await _vaultService.pickAndStoreAttachment(note);
     if (result != null) {

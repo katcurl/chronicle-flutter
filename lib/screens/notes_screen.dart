@@ -15,6 +15,9 @@ import '../features/notes/note_data_import.dart';
 import '../features/notes/note_data_import_dialog.dart';
 import '../features/notes/note_data_import_file_service.dart';
 import '../features/notes/note_edit_history.dart';
+import '../features/notes/note_export.dart';
+import '../features/notes/note_export_dialog.dart';
+import '../features/notes/note_export_file_service.dart';
 import '../features/notes/note_image_editor_dialog.dart';
 import '../features/notes/note_image_syntax.dart';
 import '../features/notes/laboratory_template_dialog.dart';
@@ -606,6 +609,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   bool _renameReviewBusy = false;
   bool _clipboardPasteBusy = false;
   bool _dataImportBusy = false;
+  bool _exportBusy = false;
   int mode = 0;
 
   @override
@@ -960,6 +964,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           onInsertBibliography: _insertBibliography,
           onInsertScientificTable: _insertScientificTable,
           onImportData: () => unawaited(_importDataFiles()),
+          onExport: () => unawaited(_exportCurrentNote()),
           onInsertScientificReference: _insertScientificReference,
           onInspectScientificObjects: _inspectScientificObjects,
           onApplyLaboratoryTemplate: _applyLaboratoryTemplate,
@@ -1912,6 +1917,81 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     );
   }
 
+  Note _currentExportDraft() {
+    final draft = Note(
+      id: widget.note.id,
+      title: _proposedTitle,
+      projectId: projectId,
+      body: '',
+      tags: List<String>.from(tags),
+      status: status,
+      folderPath: folderPath.trim(),
+      noteType: noteType,
+      properties: Map<String, String>.from(properties),
+      pinned: pinned,
+      revision: widget.note.revision,
+      createdAt: widget.note.createdAt,
+      updatedAt: widget.note.updatedAt,
+      deletedAt: widget.note.deletedAt,
+    );
+    draft.body = NoteDocument.serialize(draft, contentController.text);
+    return draft;
+  }
+
+  Future<void> _exportCurrentNote() async {
+    if (_exportBusy) {
+      return;
+    }
+    final format = await NoteExportDialog.show(
+      context,
+      subjectLabel: _proposedTitle,
+      isProject: false,
+    );
+    if (format == null || !mounted) {
+      return;
+    }
+    _exportBusy = true;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final draft = _currentExportDraft();
+      final projectTitle =
+          widget.store.projectById(projectId)?.title ?? 'Без проекта';
+      final payload = await NoteExportComposer(
+        readAttachment: widget.store.readManagedAttachment,
+      ).exportNote(
+        note: draft,
+        projectTitle: projectTitle,
+        format: format,
+      );
+      final savedPath = await const NoteExportFileService().save(payload);
+      if (savedPath == null || !mounted) {
+        return;
+      }
+      final missingSuffix =
+          payload.missingAttachments.isEmpty
+              ? ''
+              : '; не найдено вложений: '
+                  '${payload.missingAttachments.length}';
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Экспорт сохранён: ${payload.fileName}; '
+            'вложений: ${payload.assetCount}$missingSuffix',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось экспортировать заметку: $error')),
+      );
+    } finally {
+      _exportBusy = false;
+    }
+  }
+
   Future<void> _importDataFiles() async {
     if (_dataImportBusy) {
       return;
@@ -2813,6 +2893,7 @@ class _EditorToolbar extends StatefulWidget {
     required this.onInsertBibliography,
     required this.onInsertScientificTable,
     required this.onImportData,
+    required this.onExport,
     required this.onInsertScientificReference,
     required this.onInspectScientificObjects,
     required this.onApplyLaboratoryTemplate,
@@ -2834,6 +2915,7 @@ class _EditorToolbar extends StatefulWidget {
   final VoidCallback onInsertBibliography;
   final VoidCallback onInsertScientificTable;
   final VoidCallback onImportData;
+  final VoidCallback onExport;
   final VoidCallback onInsertScientificReference;
   final VoidCallback onInspectScientificObjects;
   final VoidCallback onApplyLaboratoryTemplate;
@@ -3142,6 +3224,11 @@ class _EditorToolbarState extends State<_EditorToolbar> {
             tooltip: 'Импортировать данные из файлов',
             onPressed: widget.onImportData,
             icon: const Icon(Icons.upload_file_outlined),
+          ),
+          IconButton(
+            tooltip: 'Экспортировать заметку',
+            onPressed: widget.onExport,
+            icon: const Icon(Icons.download_outlined),
           ),
           IconButton(
             tooltip: 'Добавить или редактировать научную таблицу',

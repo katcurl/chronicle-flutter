@@ -306,6 +306,18 @@ class VaultService {
     );
   }
 
+  Future<Uint8List?> readManagedAttachment(String relativePath) async {
+    final normalized = relativePath.replaceAll('\\', '/');
+    if (!_validAttachmentPath(normalized)) {
+      return null;
+    }
+    final rootPath = await _backend.resolveRootPath();
+    if (rootPath == null || rootPath.isEmpty) {
+      return null;
+    }
+    return _backend.readBinaryFile(rootPath, normalized);
+  }
+
   Future<AttachmentImportResult> storeAttachmentBytes({
     required Note note,
     required String originalName,
