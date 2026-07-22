@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.26.2+68
+
+- Expanded the existing note-version snapshots into a complete history browser without adding a new database table or Vault format.
+- Added search across version dates, reasons, titles, note types, statuses, folders, tags and saved properties.
+- Added a line-by-line comparison between a selected snapshot and the current editor state, including unsaved Markdown and metadata changes.
+- Added exact longest-common-subsequence comparison for ordinary notes and a bounded prefix/suffix fallback for very large documents so history inspection cannot freeze the editor.
+- Added full raw Markdown preview for every snapshot before restoration.
+- Replaced immediate restore links in the context panel with explicit compare actions and a second confirmation step.
+- Preserved the existing safety snapshot created immediately before every restoration, so a rollback can itself be undone from version history.
+- Kept synchronization, Vault layout, attachments, templates, database schema and existing notes unchanged.
+- Added deterministic tests for exact diffs, unchanged documents and bounded large-document comparison.
+
 ## 0.26.1+67
 
 - Expanded **Мои шаблоны** into a searchable custom-template library with category filtering and a visible result count.

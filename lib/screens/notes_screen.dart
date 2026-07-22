@@ -18,6 +18,7 @@ import '../features/notes/laboratory_template_dialog.dart';
 import '../features/notes/note_graph_screen.dart';
 import '../features/notes/note_markdown_view.dart';
 import '../features/notes/note_templates.dart';
+import '../features/notes/note_version_history_dialog.dart';
 import '../features/notes/note_table_syntax.dart';
 import '../features/notes/note_wiki_link_syntax.dart';
 import '../features/notes/note_wiki_rename.dart';
@@ -1227,21 +1228,36 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         const SizedBox(height: 10),
         _ContextCard(
           title: 'История версий',
+          action:
+              versions.isEmpty
+                  ? null
+                  : TextButton.icon(
+                    onPressed: () => _openVersionHistory(),
+                    icon: const Icon(Icons.manage_history_rounded, size: 18),
+                    label: const Text('Все версии'),
+                  ),
           child:
               versions.isEmpty
                   ? const Text('Версии появятся после ручного сохранения')
                   : Column(
                     children: [
-                      for (final version in versions.take(8))
+                      for (final version in versions.take(3))
                         ListTile(
                           dense: true,
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(Icons.history_rounded),
                           title: Text(_dateTime(version.createdAt)),
-                          subtitle: Text(version.reason),
+                          subtitle: Text(
+                            version.reason,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           trailing: TextButton(
-                            onPressed: () => _restoreVersion(version),
-                            child: const Text('Вернуть'),
+                            onPressed:
+                                () => _openVersionHistory(
+                                  initialVersionId: version.id,
+                                ),
+                            child: const Text('Сравнить'),
                           ),
                         ),
                     ],
@@ -2582,6 +2598,54 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     );
   }
 
+  NoteVersion _currentVersionSnapshot() {
+    final draft = Note(
+      id: widget.note.id,
+      title: _proposedTitle,
+      projectId: projectId,
+      body: widget.note.body,
+      tags: List<String>.from(tags),
+      status: status,
+      folderPath: folderPath.trim(),
+      noteType: noteType,
+      properties: Map<String, String>.from(properties),
+      pinned: pinned,
+      revision: widget.note.revision,
+      createdAt: widget.note.createdAt,
+      updatedAt: widget.note.updatedAt,
+    );
+    return NoteVersion(
+      id: 'current',
+      noteId: widget.note.id,
+      title: draft.title,
+      body: NoteDocument.serialize(draft, contentController.text),
+      tags: List<String>.from(draft.tags),
+      status: draft.status,
+      folderPath: draft.folderPath,
+      noteType: draft.noteType,
+      properties: Map<String, String>.from(draft.properties),
+      reason: 'Текущее состояние',
+      createdAt: DateTime.now(),
+    );
+  }
+
+  Future<void> _openVersionHistory({String? initialVersionId}) async {
+    final versions = widget.store.versionsFor(widget.note.id);
+    if (versions.isEmpty) {
+      return;
+    }
+    final selected = await NoteVersionHistoryDialog.show(
+      context,
+      versions: versions,
+      current: _currentVersionSnapshot(),
+      initialVersionId: initialVersionId,
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    _restoreVersion(selected);
+  }
+
   Future<void> _openNote(Note? note) async {
     if (note == null || note.id == widget.note.id) return;
     _save(createVersion: false);
@@ -2594,17 +2658,18 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   }
 
   void _restoreVersion(NoteVersion version) {
+    final current = _currentVersionSnapshot();
     widget.store.addNoteVersion(
       NoteVersion(
         id: const Uuid().v4(),
         noteId: widget.note.id,
-        title: widget.note.title,
-        body: widget.note.body,
-        tags: List<String>.from(widget.note.tags),
-        status: widget.note.status,
-        folderPath: widget.note.folderPath,
-        noteType: widget.note.noteType,
-        properties: Map<String, String>.from(widget.note.properties),
+        title: current.title,
+        body: current.body,
+        tags: List<String>.from(current.tags),
+        status: current.status,
+        folderPath: current.folderPath,
+        noteType: current.noteType,
+        properties: Map<String, String>.from(current.properties),
         reason: 'Перед восстановлением',
       ),
     );
