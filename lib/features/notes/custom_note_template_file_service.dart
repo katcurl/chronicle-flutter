@@ -25,21 +25,16 @@ class CustomNoteTemplateFileService {
   }
 
   Future<List<NoteTemplate>?> importTemplates() async {
-    final result = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       dialogTitle: 'Импорт шаблонов Chronicle',
       type: FileType.custom,
       allowedExtensions: const <String>['json'],
-      allowMultiple: false,
-      withData: true,
       lockParentWindow: true,
     );
-    if (result == null || result.files.isEmpty) {
+    if (file == null) {
       return null;
     }
-    final bytes = result.files.single.bytes;
-    if (bytes == null) {
-      throw StateError('Не удалось прочитать выбранный файл.');
-    }
+    final bytes = await file.readAsBytes();
     final text = utf8.decode(bytes, allowMalformed: false);
     return CustomNoteTemplateStore.decodeImportBundle(text);
   }
