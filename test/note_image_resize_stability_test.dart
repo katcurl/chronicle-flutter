@@ -1,12 +1,10 @@
-import 'dart:ui';
-
 import 'package:chronicle/features/notes/note_image_syntax.dart';
 import 'package:chronicle/features/notes/note_markdown_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('quick resize keeps the requested width while Markdown catches up', (
+  testWidgets('resize keeps the requested width while Markdown catches up', (
     tester,
   ) async {
     NoteImagePresentation? requestedPresentation;
@@ -33,21 +31,15 @@ void main() {
     await tester.pumpAndSettle();
 
     final image = find.byType(Image).first;
-    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await mouse.addPointer(location: Offset.zero);
-    await mouse.moveTo(tester.getCenter(image));
-    await tester.pump();
+    final initialWidth = tester.getSize(image).width;
+    final resizeHandle = find.byIcon(Icons.drag_handle_rounded);
 
-    expect(find.text('100%'), findsOneWidget);
-    await tester.tap(find.text('100%'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('50%').last);
+    expect(resizeHandle, findsOneWidget);
+    await tester.drag(resizeHandle, Offset(-initialWidth / 2, 0));
     await tester.pumpAndSettle();
 
     expect(requestedPresentation?.widthPercent, 50);
+    expect(tester.getSize(image).width, closeTo(initialWidth / 2, 1));
     expect(find.text('50%'), findsOneWidget);
-    expect(find.text('100%'), findsNothing);
-
-    await mouse.removePointer();
   });
 }
