@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../features/workspaces/workspace_manager_dialog.dart';
+import '../features/workspaces/workspace_preferences_store.dart';
+import '../features/workspaces/workspace_profile.dart';
 import '../navigation/app_section.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/insights_screen.dart';
@@ -21,7 +26,19 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
+  final WorkspacePreferencesStore _workspaceStore =
+      WorkspacePreferencesStore();
+  WorkspacePreferences _workspacePreferences = WorkspacePreferences.defaults();
   AppSection section = AppSection.today;
+
+  WorkspaceProfile get activeWorkspace =>
+      _workspacePreferences.activeProfile;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadWorkspacePreferences());
+  }
 
   int get index => section.index;
 
@@ -51,6 +68,16 @@ class _HomeShellState extends State<HomeShell> {
             () => _select(AppSection.insights),
         const SingleActivator(LogicalKeyboardKey.keyT, control: true): _start,
         const SingleActivator(LogicalKeyboardKey.keyT, meta: true): _start,
+        const SingleActivator(
+          LogicalKeyboardKey.keyW,
+          control: true,
+          shift: true,
+        ): () => unawaited(_openWorkspaceManager()),
+        const SingleActivator(
+          LogicalKeyboardKey.keyW,
+          meta: true,
+          shift: true,
+        ): () => unawaited(_openWorkspaceManager()),
       },
       child: Focus(
         autofocus: true,
@@ -67,28 +94,48 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Widget _buildCompact() {
+    final colors = Theme.of(context).colorScheme;
     return Scaffold(
       body: _pages(),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (value) => _select(AppSection.values[value]),
-        destinations:
-            AppSection.values
-                .map(
-                  (item) => NavigationDestination(
-                    icon: Icon(item.icon),
-                    selectedIcon: Icon(item.selectedIcon),
-                    label: item.label,
-                  ),
-                )
-                .toList(),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Divider(height: 1, color: colors.outlineVariant),
+          ColoredBox(
+            color: colors.surfaceContainerLowest,
+            child: SizedBox(
+              height: 42,
+              child: Center(child: _workspaceSwitcher(compact: false)),
+            ),
+          ),
+          NavigationBar(
+            selectedIndex: index,
+            onDestinationSelected:
+                (value) => _select(AppSection.values[value]),
+            destinations:
+                AppSection.values
+                    .map(
+                      (item) => NavigationDestination(
+                        icon: Icon(item.icon),
+                        selectedIcon: Icon(item.selectedIcon),
+                        label: item.label,
+                      ),
+                    )
+                    .toList(),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildWide(double width) {
-    final showContextPanel = width >= ChronicleBreakpoints.contextPanel;
-    final extended = width >= ChronicleBreakpoints.extendedNavigationRail;
+    final workspace = activeWorkspace;
+    final showContextPanel =
+        width >= ChronicleBreakpoints.contextPanel &&
+        workspace.showContextPanel;
+    final extended =
+        width >= ChronicleBreakpoints.extendedNavigationRail &&
+        workspace.extendedNavigation;
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -107,10 +154,17 @@ class _HomeShellState extends State<HomeShell> {
               backgroundColor: colors.surfaceContainerLowest,
               leading: Padding(
                 padding: const EdgeInsets.only(top: 12, bottom: 20),
-                child:
-                    extended
-                        ? const _ExtendedWordmark()
-                        : const _CompactWordmark(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (extended)
+                      const _ExtendedWordmark()
+                    else
+                      const _CompactWordmark(),
+                    const SizedBox(height: 12),
+                    _workspaceSwitcher(compact: !extended),
+                  ],
+                ),
               ),
               trailing: Padding(
                 padding: const EdgeInsets.only(bottom: 18),
@@ -153,6 +207,7 @@ class _HomeShellState extends State<HomeShell> {
             DesktopContextPanel(
               store: widget.store,
               section: section,
+              workspace: workspace,
               onStartTimer: _start,
             ),
           ],
@@ -180,6 +235,140 @@ class _HomeShellState extends State<HomeShell> {
   void _select(AppSection value) {
     if (section == value) return;
     setState(() => section = value);
+  }
+
+  Future<void> _loadWorkspacePreferences() async {
+    WorkspacePreferences loaded;
+    try {
+      loaded = await _workspaceStore.load();
+    } on Object {
+      loaded = WorkspacePreferences.defaults();
+    }
+    if (!mounted) return;
+    setState(() {
+      _workspacePreferences = loaded;
+      section = loaded.activeProfile.startSection;
+    });
+  }
+
+  Future<void> _activateWorkspace(String id) async {
+    WorkspaceProfile? profile;
+    for (final candidate in _workspacePreferences.profiles) {
+      if (candidate.id == id) {
+        profile = candidate;
+        break;
+      }
+    }
+    if (profile == null) return;
+    final next = _workspacePreferences.copyWith(activeWorkspaceId: id);
+    setState(() {
+      _workspacePreferences = next;
+      section = profile.startSection;
+    });
+    await _saveWorkspacePreferences(next);
+  }
+
+  Future<void> _openWorkspaceManager() async {
+    final result = await WorkspaceManagerDialog.show(
+      context,
+      preferences: _workspacePreferences,
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      _workspacePreferences = result;
+      section = result.activeProfile.startSection;
+    });
+    await _saveWorkspacePreferences(result);
+  }
+
+  Future<void> _saveWorkspacePreferences(WorkspacePreferences value) async {
+    try {
+      await _workspaceStore.save(value);
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось сохранить интерфейс: $error')),
+      );
+    }
+  }
+
+  Widget _workspaceSwitcher({required bool compact}) {
+    final workspace = activeWorkspace;
+    final colors = Theme.of(context).colorScheme;
+    return PopupMenuButton<String>(
+      tooltip: 'Рабочее пространство',
+      onSelected: (value) {
+        if (value == '__manage__') {
+          unawaited(_openWorkspaceManager());
+        } else {
+          unawaited(_activateWorkspace(value));
+        }
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        for (final profile in _workspacePreferences.profiles)
+          PopupMenuItem<String>(
+            value: profile.id,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 30,
+                  child: Text(
+                    profile.emoji,
+                    style: const TextStyle(fontSize: 20),
+                  ),
+                ),
+                Expanded(child: Text(profile.name)),
+                if (profile.id == _workspacePreferences.activeWorkspaceId)
+                  Icon(Icons.check_rounded, color: colors.primary),
+              ],
+            ),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<String>(
+          value: '__manage__',
+          child: Row(
+            children: [
+              Icon(Icons.tune_rounded),
+              SizedBox(width: 12),
+              Text('Настроить пространства'),
+            ],
+          ),
+        ),
+      ],
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surfaceContainer,
+          borderRadius: BorderRadius.circular(compact ? 14 : 12),
+          border: Border.all(color: colors.outlineVariant),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 12,
+            vertical: compact ? 9 : 7,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(workspace.emoji, style: const TextStyle(fontSize: 18)),
+              if (!compact) ...[
+                const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 132),
+                  child: Text(
+                    workspace.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_drop_down_rounded, size: 20),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _start() async {

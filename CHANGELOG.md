@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.26.5+71
+
+- Added personal workspaces that switch Chronicle between saved interface profiles without changing projects, notes, tasks, attachments or Vault files.
+- Added editable built-in Overview, Laboratory and Focus profiles with a configurable starting section, emoji and name.
+- Added per-workspace compact or extended navigation and optional hiding of the right context panel on wide screens.
+- Added visibility and drag reordering for timer, metrics, recent sessions, shortcut hints and the local-first notice in the context panel.
+- Added workspace creation, duplication, deletion and immediate activation from a dedicated manager dialog.
+- Added a workspace switcher to desktop navigation and compact layouts plus `Ctrl+Shift+W` / `Cmd+Shift+W` for opening the manager.
+- Stored workspace preferences locally in SharedPreferences with validation and safe fallback to built-in profiles.
+- Preserved themes, Vault layout, synchronization, database schema, exports and all existing user data without migration.
+- Added deterministic tests for defaults, JSON round-tripping, invalid panel repair and corrupt preference recovery.
+
 ## 0.26.4+70
 
 - Added explicit export actions for the current note and complete projects without modifying source data.

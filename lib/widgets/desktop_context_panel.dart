@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../features/workspaces/workspace_profile.dart';
+import '../models/app_models.dart';
 import '../navigation/app_section.dart';
 import '../services/app_store.dart';
 import 'common.dart';
@@ -9,19 +11,90 @@ class DesktopContextPanel extends StatelessWidget {
     super.key,
     required this.store,
     required this.section,
+    required this.workspace,
     required this.onStartTimer,
   });
 
   final AppStore store;
   final AppSection section;
+  final WorkspaceProfile workspace;
   final VoidCallback onStartTimer;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final activeTasks =
-        store.data.tasks.where((task) => task.status != 'done').length;
+    final activeTasks = store.data.tasks
+        .where((task) => task.status != 'done')
+        .length;
     final recentEntries = store.data.entries.take(3).toList();
+    final panels = workspace.panelOrder
+        .where(workspace.visiblePanels.contains)
+        .toList(growable: false);
+
+    final children = <Widget>[
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Контекст',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          Text(workspace.emoji, style: const TextStyle(fontSize: 22)),
+        ],
+      ),
+      const SizedBox(height: 6),
+      Row(
+        children: [
+          Icon(section.selectedIcon, size: 18, color: colors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${workspace.name} · ${section.label}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 22),
+    ];
+
+    if (panels.isEmpty) {
+      children.add(
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.surfaceContainer,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'В этом рабочем пространстве контекстные блоки скрыты.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+      );
+    } else {
+      for (var index = 0; index < panels.length; index += 1) {
+        if (index > 0) children.add(const SizedBox(height: 18));
+        children.add(
+          _buildPanel(
+            panels[index],
+            activeTasks: activeTasks,
+            recentEntries: recentEntries,
+          ),
+        );
+      }
+    }
 
     return ColoredBox(
       color: colors.surfaceContainerLowest,
@@ -31,143 +104,43 @@ class DesktopContextPanel extends StatelessWidget {
           width: 320,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Контекст',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  Tooltip(
-                    message: 'Текущий раздел',
-                    child: Icon(section.selectedIcon, color: colors.primary),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                section.label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 22),
-              _TimerCard(store: store, onStartTimer: onStartTimer),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: _CompactMetric(
-                      label: 'Сегодня',
-                      value: formatDuration(store.todaySeconds),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _CompactMetric(
-                      label: 'Задачи',
-                      value: '$activeTasks',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Последние сессии',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 10),
-              if (recentEntries.isEmpty)
-                Text(
-                  'Завершённые сессии появятся здесь.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                )
-              else
-                ...recentEntries.map(
-                  (entry) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colors.surfaceContainer,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(13),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.history_rounded,
-                              size: 20,
-                              color: colors.primary,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                entry.description,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              formatDuration(entry.durationSeconds),
-                              style: Theme.of(context).textTheme.labelMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 18),
-              Divider(color: colors.outlineVariant),
-              const SizedBox(height: 14),
-              Text(
-                'Быстрые клавиши',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 10),
-              const _ShortcutRow(
-                keys: 'Ctrl  1–5',
-                action: 'Переключить раздел',
-              ),
-              const SizedBox(height: 8),
-              const _ShortcutRow(keys: 'Ctrl  T', action: 'Запустить таймер'),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Icon(
-                    Icons.cloud_off_outlined,
-                    size: 18,
-                    color: colors.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Local-first · данные хранятся на устройстве',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            children: children,
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildPanel(
+    WorkspacePanel panel, {
+    required int activeTasks,
+    required List<TimeEntry> recentEntries,
+  }) {
+    switch (panel) {
+      case WorkspacePanel.timer:
+        return _TimerCard(store: store, onStartTimer: onStartTimer);
+      case WorkspacePanel.metrics:
+        return Row(
+          children: [
+            Expanded(
+              child: _CompactMetric(
+                label: 'Сегодня',
+                value: formatDuration(store.todaySeconds),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _CompactMetric(label: 'Задачи', value: '$activeTasks'),
+            ),
+          ],
+        );
+      case WorkspacePanel.recentSessions:
+        return _RecentSessions(entries: recentEntries);
+      case WorkspacePanel.shortcuts:
+        return const _ShortcutPanel();
+      case WorkspacePanel.localFirst:
+        return const _LocalFirstPanel();
+    }
   }
 }
 
@@ -261,6 +234,130 @@ class _CompactMetric extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _RecentSessions extends StatelessWidget {
+  const _RecentSessions({required this.entries});
+
+  final List<TimeEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Последние сессии',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 10),
+        if (entries.isEmpty)
+          Text(
+            'Завершённые сессии появятся здесь.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          )
+        else
+          ...entries.map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(13),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.history_rounded,
+                        size: 20,
+                        color: colors.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          entry.description,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        formatDuration(entry.durationSeconds),
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ShortcutPanel extends StatelessWidget {
+  const _ShortcutPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Быстрые клавиши',
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 10),
+        const _ShortcutRow(keys: 'Ctrl  1–5', action: 'Переключить раздел'),
+        const SizedBox(height: 8),
+        const _ShortcutRow(keys: 'Ctrl  T', action: 'Запустить таймер'),
+        const SizedBox(height: 8),
+        const _ShortcutRow(
+          keys: 'Ctrl ⇧ W',
+          action: 'Настроить пространства',
+        ),
+      ],
+    );
+  }
+}
+
+class _LocalFirstPanel extends StatelessWidget {
+  const _LocalFirstPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(
+          Icons.cloud_off_outlined,
+          size: 18,
+          color: colors.onSurfaceVariant,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            'Local-first · данные хранятся на устройстве',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
