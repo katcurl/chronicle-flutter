@@ -10,10 +10,9 @@ void main() {
     final firstStore = AppStore(repository: repository);
     await firstStore.load();
 
-    firstStore.addProject(
+    await firstStore.addProject(
       Project(id: 'persistent-project', title: 'Постоянный', emoji: '📁'),
     );
-    await Future<void>.delayed(Duration.zero);
 
     final secondStore = AppStore(repository: repository);
     await secondStore.load();
@@ -136,7 +135,9 @@ void main() {
     });
 
     if (store.data.projects.isEmpty) {
-      store.addProject(Project(id: 'project-1', title: 'Project', emoji: '📁'));
+      await store.addProject(
+        Project(id: 'project-1', title: 'Project', emoji: '📁'),
+      );
     }
     final note = Note(
       id: 'resize-note',
@@ -144,10 +145,10 @@ void main() {
       projectId: store.data.projects.first.id,
       body: '![image](../Attachments/image.png)',
     );
-    store.addNote(note);
+    await store.addNote(note);
     note.body =
         '![image](../Attachments/image.png "chronicle-image width=50 align=center")';
-    store.updateNote(note);
+    await store.updateNote(note);
 
     expect(attachmentRefreshCount, 0);
   });

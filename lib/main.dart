@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 
@@ -44,6 +45,12 @@ class _ChronicleAppState extends State<ChronicleApp>
     if (state == AppLifecycleState.resumed) {
       store.handleAppResumed();
     }
+  }
+
+  @override
+  Future<AppExitResponse> didRequestAppExit() async {
+    await store.flushPendingWrites();
+    return AppExitResponse.exit;
   }
 
   @override

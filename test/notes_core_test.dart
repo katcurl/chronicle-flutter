@@ -34,9 +34,9 @@ void main() {
     final store = AppStore(repository: repository);
     await store.load();
 
-    store.updateNote(source);
+    await store.updateNote(source);
     await store.rebuildAllNoteLinks();
-    store.addNoteVersion(
+    await store.addNoteVersion(
       NoteVersion(
         id: 'version-1',
         noteId: source.id,

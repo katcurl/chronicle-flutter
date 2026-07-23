@@ -499,7 +499,7 @@ class _NotesScreenState extends State<NotesScreen> {
         target,
         '# ${reference.noteTitle}\n\n',
       );
-      widget.store.addNote(target);
+      await widget.store.addNote(target);
       await widget.store.rebuildAllNoteLinks();
     }
     if (target == null) return;
@@ -565,7 +565,7 @@ class _NotesScreenState extends State<NotesScreen> {
       properties: Map<String, String>.from(template.defaultProperties),
     );
     note.body = NoteDocument.serialize(note, template.content);
-    widget.store.addNote(note);
+    await widget.store.addNote(note);
     await _open(note);
   }
 
@@ -794,6 +794,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   late String _lastContentText;
   bool _suppressTextChangeTracking = false;
   bool dirty = false;
+  bool _saveBusy = false;
   bool _renameReviewBusy = false;
   bool _clipboardPasteBusy = false;
   bool _dataImportBusy = false;
@@ -892,7 +893,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         return;
       }
       if (_proposedTitle == widget.note.title) {
-        _save(createVersion: false);
+        unawaited(_save(createVersion: false));
       }
     });
   }
@@ -935,8 +936,15 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       controller: widget.appearanceController,
       globalAppearance: widget.globalAppearance,
       child: PopScope(
-        onPopInvokedWithResult: (_, __) {
-          if (dirty) _save(createVersion: false);
+        canPop: !dirty && !_saveBusy && !_renameReviewBusy,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop || _saveBusy || _renameReviewBusy) {
+            return;
+          }
+          await _saveWithRenameReview(createVersion: false);
+          if (mounted && !dirty) {
+            Navigator.of(this.context).pop(result);
+          }
         },
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -1634,11 +1642,12 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                           contentPadding: EdgeInsets.zero,
                           value: task.status == 'done',
                           title: Text(task.title),
-                          onChanged:
-                              (value) => widget.store.updateTaskStatus(
-                                task,
-                                value == true ? 'done' : 'next',
-                              ),
+                          onChanged: (value) async {
+                            await widget.store.updateTaskStatus(
+                              task,
+                              value == true ? 'done' : 'next',
+                            );
+                          },
                         ),
                     ],
                   ),
@@ -1741,7 +1750,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     );
   }
 
-  void _save({required bool createVersion}) {
+  Future<void> _save({required bool createVersion}) async {
+    if (_saveBusy) {
+      return;
+    }
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
     _editHistory.flush();
@@ -1754,18 +1766,42 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
             : null;
     final needsReview = renamePlan?.requiresReview ?? false;
 
-    if (createVersion && dirty && !needsReview) {
-      _recordCurrentVersion('Ручное сохранение');
+    if (mounted) {
+      setState(() => _saveBusy = true);
     }
-    final savedTitle = needsReview ? widget.note.title : proposedTitle;
-    _writeEditorState(savedTitle: savedTitle);
-    _lastContentText = contentController.text;
-    if (needsReview) {
-      _lastTitleText = widget.note.title;
-      if (mounted) setState(() => dirty = true);
-    } else {
-      _lastTitleText = titleController.text;
-      if (mounted) setState(() => dirty = false);
+    try {
+      if (createVersion && dirty && !needsReview) {
+        await _recordCurrentVersion('Ручное сохранение');
+      }
+      final savedTitle = needsReview ? widget.note.title : proposedTitle;
+      await _writeEditorState(savedTitle: savedTitle);
+      _lastContentText = contentController.text;
+      if (needsReview) {
+        _lastTitleText = widget.note.title;
+        if (mounted) setState(() => dirty = true);
+      } else {
+        _lastTitleText = titleController.text;
+        if (mounted) setState(() => dirty = false);
+      }
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => dirty = true);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'Заметка не сохранена. Изменения остаются в редакторе: $error',
+            ),
+            duration: const Duration(seconds: 10),
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() => _saveBusy = false);
+      }
     }
   }
 
@@ -1773,14 +1809,14 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (_renameReviewBusy) return;
     final proposedTitle = _proposedTitle;
     if (proposedTitle == widget.note.title) {
-      _save(createVersion: createVersion);
+      await _save(createVersion: createVersion);
       return;
     }
 
     setState(() => _renameReviewBusy = true);
     try {
       final oldTitle = widget.note.title;
-      _assignEditorState(savedTitle: oldTitle);
+      await _writeEditorState(savedTitle: oldTitle);
       _lastContentText = contentController.text;
       _lastTitleText = oldTitle;
       final plan = widget.store.buildWikiRenamePlan(widget.note, proposedTitle);
@@ -1792,10 +1828,14 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           body: widget.note.body,
         );
         if (createVersion) {
-          _recordCurrentVersion('Перед переименованием заметки');
+          await _recordCurrentVersion('Перед переименованием заметки');
         }
-        widget.note.title = proposedTitle;
-        widget.store.updateNote(widget.note);
+        final updated = _buildEditorSnapshot(savedTitle: proposedTitle);
+        await widget.store.updateNote(updated);
+        final committed = widget.store.noteById(updated.id);
+        if (committed != null) {
+          _adoptCommittedNote(committed);
+        }
         final undo = NoteWikiRenameUndo(
           snapshots: [previous],
           appliedSnapshots: [
@@ -1814,6 +1854,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         return;
       }
 
+      if (!mounted) {
+        return;
+      }
       final decision = await showDialog<_WikiRenameDecision>(
         context: context,
         barrierDismissible: false,
@@ -1822,7 +1865,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       if (!mounted ||
           decision == null ||
           decision == _WikiRenameDecision.cancel) {
-        widget.store.updateNote(widget.note);
+        await widget.store.updateNote(widget.note);
         setState(() => dirty = true);
         return;
       }
@@ -1862,9 +1905,15 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           title: oldTitle,
           body: widget.note.body,
         );
-        _recordCurrentVersion('Перед переименованием без обновления ссылок');
-        widget.note.title = proposedTitle;
-        widget.store.updateNote(widget.note);
+        await _recordCurrentVersion(
+          'Перед переименованием без обновления ссылок',
+        );
+        final updated = _buildEditorSnapshot(savedTitle: proposedTitle);
+        await widget.store.updateNote(updated);
+        final committed = widget.store.noteById(updated.id);
+        if (committed != null) {
+          _adoptCommittedNote(committed);
+        }
         undo = NoteWikiRenameUndo(
           snapshots: [previous],
           appliedSnapshots: [
@@ -1904,28 +1953,49 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     return value.isEmpty ? 'Без названия' : value;
   }
 
-  void _assignEditorState({required String savedTitle}) {
-    widget.note.title = savedTitle;
-    widget.note.projectId = projectId;
-    widget.note.status = status;
-    widget.note.folderPath = folderPath.trim();
-    widget.note.noteType = noteType;
-    widget.note.tags = List<String>.from(tags);
-    widget.note.properties = Map<String, String>.from(properties);
-    widget.note.pinned = pinned;
-    widget.note.body = NoteDocument.serialize(
-      widget.note,
-      contentController.text,
-    );
+  Note _buildEditorSnapshot({required String savedTitle}) {
+    final snapshot = Note.fromJson(<String, dynamic>{
+      ...widget.note.toJson(),
+      'title': savedTitle,
+      'projectId': projectId,
+      'status': status,
+      'folderPath': folderPath.trim(),
+      'noteType': noteType,
+      'tags': List<String>.from(tags),
+      'properties': Map<String, String>.from(properties),
+      'pinned': pinned,
+    });
+    snapshot.body = NoteDocument.serialize(snapshot, contentController.text);
+    return snapshot;
   }
 
-  void _writeEditorState({required String savedTitle}) {
-    _assignEditorState(savedTitle: savedTitle);
-    widget.store.updateNote(widget.note);
+  Future<void> _writeEditorState({required String savedTitle}) async {
+    final snapshot = _buildEditorSnapshot(savedTitle: savedTitle);
+    await widget.store.updateNote(snapshot);
+    final committed = widget.store.noteById(snapshot.id);
+    if (committed != null) {
+      _adoptCommittedNote(committed);
+    }
   }
 
-  void _recordCurrentVersion(String reason) {
-    widget.store.addNoteVersion(
+  void _adoptCommittedNote(Note committed) {
+    widget.note.title = committed.title;
+    widget.note.projectId = committed.projectId;
+    widget.note.body = committed.body;
+    widget.note.tags = List<String>.from(committed.tags);
+    widget.note.status = committed.status;
+    widget.note.folderPath = committed.folderPath;
+    widget.note.noteType = committed.noteType;
+    widget.note.properties = Map<String, String>.from(committed.properties);
+    widget.note.pinned = committed.pinned;
+    widget.note.revision = committed.revision;
+    widget.note.createdAt = committed.createdAt;
+    widget.note.updatedAt = committed.updatedAt;
+    widget.note.deletedAt = committed.deletedAt;
+  }
+
+  Future<void> _recordCurrentVersion(String reason) {
+    return widget.store.addNoteVersion(
       NoteVersion(
         id: const Uuid().v4(),
         noteId: widget.note.id,
@@ -3190,7 +3260,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       initialNoteId: widget.note.id,
     );
     if (task == null) return;
-    widget.store.addTask(task);
+    await widget.store.addTask(task);
     if (mounted) setState(() {});
   }
 
@@ -3274,7 +3344,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         target,
         '# ${reference.noteTitle}\n\n',
       );
-      widget.store.addNote(target);
+      await widget.store.addNote(target);
       await widget.store.rebuildAllNoteLinks();
     }
     if (!mounted) return;
@@ -3359,7 +3429,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (selected == null || !mounted) {
       return;
     }
-    _restoreVersion(selected);
+    await _restoreVersion(selected);
   }
 
   Future<void> _openNote(Note? note) async {
@@ -3379,9 +3449,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (mounted) setState(() {});
   }
 
-  void _restoreVersion(NoteVersion version) {
+  Future<void> _restoreVersion(NoteVersion version) async {
     final current = _currentVersionSnapshot();
-    widget.store.addNoteVersion(
+    await widget.store.addNoteVersion(
       NoteVersion(
         id: const Uuid().v4(),
         noteId: widget.note.id,

@@ -261,22 +261,26 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                             (item) => item.parentTaskId == rootTasks[index].id,
                           )
                           .toList(),
-                  onToggle: (value) {
-                    widget.store.updateTaskStatus(
+                  onToggle: (value) async {
+                    await widget.store.updateTaskStatus(
                       rootTasks[index],
                       value ? 'done' : 'next',
                     );
-                    setState(() {});
+                    if (mounted) {
+                      setState(() {});
+                    }
                   },
                   onEdit: () => _editTask(rootTasks[index]),
                   onAddSubtask: () => _addSubtask(rootTasks[index]),
                   onDelete: () => _deleteTask(rootTasks[index]),
-                  onChildToggle: (child, value) {
-                    widget.store.updateTaskStatus(
+                  onChildToggle: (child, value) async {
+                    await widget.store.updateTaskStatus(
                       child,
                       value ? 'done' : 'next',
                     );
-                    setState(() {});
+                    if (mounted) {
+                      setState(() {});
+                    }
                   },
                   onChildEdit: _editTask,
                 ),
@@ -346,7 +350,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       globalAppearance: widget.globalAppearance,
     );
     if (result == null) return;
-    widget.store.updateProject(result.project);
+    await widget.store.updateProject(result.project);
     try {
       await widget.appearanceController.saveProjectAppearance(
         result.project.id,
@@ -373,13 +377,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       sources: widget.store.data.citationSources,
     );
     if (result == null) return;
-    project.researchGoal = result.researchGoal;
-    project.researchQuestions = result.researchQuestions;
-    project.knownFindings = result.knownFindings;
-    project.openChecks = result.openChecks;
-    project.pinnedNoteIds = result.pinnedNoteIds;
-    project.linkedSourceIds = result.linkedSourceIds;
-    widget.store.updateProject(project);
+    final updated = Project.fromJson({
+      ...project.toJson(),
+      'researchGoal': result.researchGoal,
+      'researchQuestions': result.researchQuestions,
+      'knownFindings': result.knownFindings,
+      'openChecks': result.openChecks,
+      'pinnedNoteIds': result.pinnedNoteIds,
+      'linkedSourceIds': result.linkedSourceIds,
+    });
+    await widget.store.updateProject(updated);
     if (mounted) setState(() {});
   }
 
@@ -411,7 +418,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       initialProjectId: project.id,
     );
     if (task == null) return;
-    widget.store.addTask(task);
+    await widget.store.addTask(task);
     setState(() {});
   }
 
@@ -424,7 +431,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       initialParentTaskId: parent.id,
     );
     if (task == null) return;
-    widget.store.addTask(task);
+    await widget.store.addTask(task);
     setState(() {});
   }
 
@@ -436,11 +443,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       task: task,
     );
     if (edited == null) return;
-    final index = widget.store.data.tasks.indexWhere(
-      (item) => item.id == task.id,
-    );
-    if (index >= 0) widget.store.data.tasks[index] = edited;
-    widget.store.updateTask(edited);
+    await widget.store.updateTask(edited);
     setState(() {});
   }
 

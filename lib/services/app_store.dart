@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../data/migration/legacy_preferences_importer.dart';
 import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
+import '../data/repositories/mutation_queue.dart';
 import '../features/notes/custom_note_template_library.dart';
 import '../features/notes/custom_note_template_store.dart';
 import '../features/notes/note_document.dart';
@@ -87,6 +88,7 @@ class AppStore extends ChangeNotifier {
   late final LanAutoSyncService autoSyncService;
   final _uuid = const Uuid();
   final ChronicleUndoJournal _undoJournal = ChronicleUndoJournal();
+  final MutationQueue _mutationQueue = MutationQueue();
   final ValueNotifier<int> _attachmentRefreshNotifier = ValueNotifier<int>(0);
 
   ValueListenable<int> get attachmentRefreshListenable =>
@@ -932,29 +934,35 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addTask(WorkTask task) {
-    data.tasks.insert(0, task);
-    unawaited(_repository.saveTask(task));
-    _scheduleSyncOverviewRefresh();
-    notifyListeners();
+  Future<void> addTask(WorkTask task) {
+    final persisted = _cloneTask(task);
+    return _mutationQueue.run(() async {
+      await _repository.saveTask(persisted);
+      data.tasks.insert(0, persisted);
+      _scheduleSyncOverviewRefresh();
+      notifyListeners();
+    });
   }
 
-  void updateTask(WorkTask task) {
-    task.updatedAt = DateTime.now();
-    final index = data.tasks.indexWhere((item) => item.id == task.id);
-    if (index >= 0) data.tasks[index] = task;
-    unawaited(_repository.saveTask(task));
-    _scheduleSyncOverviewRefresh();
-    notifyListeners();
+  Future<void> updateTask(WorkTask task) {
+    final persisted = _cloneTask(task)..updatedAt = DateTime.now();
+    return _mutationQueue.run(() async {
+      await _repository.saveTask(persisted);
+      final index = data.tasks.indexWhere((item) => item.id == persisted.id);
+      if (index >= 0) {
+        data.tasks[index] = persisted;
+      }
+      _scheduleSyncOverviewRefresh();
+      notifyListeners();
+    });
   }
 
-  void updateTaskStatus(WorkTask task, String status) {
-    task.status = status;
-    task.updatedAt = DateTime.now();
-    task.completedAt = status == 'done' ? DateTime.now() : null;
-    unawaited(_repository.saveTask(task));
-    _scheduleSyncOverviewRefresh();
-    notifyListeners();
+  Future<void> updateTaskStatus(WorkTask task, String status) {
+    final updated = _cloneTask(task);
+    updated.status = status;
+    updated.updatedAt = DateTime.now();
+    updated.completedAt = status == 'done' ? DateTime.now() : null;
+    return updateTask(updated);
   }
 
   Future<void> deleteTask(String id) async {
@@ -1003,20 +1011,27 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addProject(Project project) {
-    data.projects.add(project);
-    unawaited(_repository.saveProject(project));
-    _scheduleSyncOverviewRefresh();
-    notifyListeners();
+  Future<void> addProject(Project project) {
+    final persisted = _cloneProject(project);
+    return _mutationQueue.run(() async {
+      await _repository.saveProject(persisted);
+      data.projects.add(persisted);
+      _scheduleSyncOverviewRefresh();
+      notifyListeners();
+    });
   }
 
-  void updateProject(Project project) {
-    project.updatedAt = DateTime.now();
-    final index = data.projects.indexWhere((item) => item.id == project.id);
-    if (index >= 0) data.projects[index] = project;
-    unawaited(_repository.saveProject(project));
-    _scheduleSyncOverviewRefresh();
-    notifyListeners();
+  Future<void> updateProject(Project project) {
+    final persisted = _cloneProject(project)..updatedAt = DateTime.now();
+    return _mutationQueue.run(() async {
+      await _repository.saveProject(persisted);
+      final index = data.projects.indexWhere((item) => item.id == persisted.id);
+      if (index >= 0) {
+        data.projects[index] = persisted;
+      }
+      _scheduleSyncOverviewRefresh();
+      notifyListeners();
+    });
   }
 
   Future<void> setProjectArchived(Project project, bool archived) async {
@@ -1129,32 +1144,48 @@ class AppStore extends ChangeNotifier {
     return imported;
   }
 
-  void addNote(Note note) {
-    data.notes.insert(0, note);
-    unawaited(_repository.saveNote(note));
-    unawaited(_syncNoteLinks(note));
-    _scheduleSyncOverviewRefresh();
-    _scheduleVaultMirror();
-    notifyListeners();
+  Future<void> addNote(Note note) {
+    final persisted = _cloneNote(note);
+    return _mutationQueue.run(() async {
+      await _repository.saveNote(persisted);
+      data.notes.insert(0, persisted);
+      await _syncNoteLinks(persisted);
+      _scheduleSyncOverviewRefresh();
+      _scheduleVaultMirror();
+      notifyListeners();
+    });
   }
 
-  void updateNote(Note note) {
-    note.updatedAt = DateTime.now();
-    note.revision += 1;
-    final index = data.notes.indexWhere((item) => item.id == note.id);
-    if (index >= 0) data.notes[index] = note;
-    unawaited(_repository.saveNote(note));
-    unawaited(_syncNoteLinks(note));
-    _scheduleSyncOverviewRefresh();
-    _scheduleVaultMirror();
-    notifyListeners();
+  Future<void> updateNote(Note note) {
+    final persisted =
+        _cloneNote(note)
+          ..updatedAt = DateTime.now()
+          ..revision += 1;
+    return _mutationQueue.run(() async {
+      await _repository.saveNote(persisted);
+      final index = data.notes.indexWhere((item) => item.id == persisted.id);
+      if (index >= 0) {
+        data.notes[index] = persisted;
+      }
+      await _syncNoteLinks(persisted);
+      _scheduleSyncOverviewRefresh();
+      _scheduleVaultMirror();
+      notifyListeners();
+    });
   }
 
-  void addNoteVersion(NoteVersion version) {
-    data.noteVersions.insert(0, version);
-    unawaited(_repository.saveNoteVersion(version));
-    _scheduleSyncOverviewRefresh();
-    notifyListeners();
+  Future<void> flushPendingWrites() => _mutationQueue.drain();
+
+  Future<void> addNoteVersion(NoteVersion version) {
+    final persisted = NoteVersion.fromJson(
+      Map<String, dynamic>.from(version.toJson()),
+    );
+    return _mutationQueue.run(() async {
+      await _repository.saveNoteVersion(persisted);
+      data.noteVersions.insert(0, persisted);
+      _scheduleSyncOverviewRefresh();
+      notifyListeners();
+    });
   }
 
   void restoreNoteVersion(Note note, NoteVersion version) {
@@ -2735,6 +2766,9 @@ class AppStore extends ChangeNotifier {
 
   Note _cloneNote(Note note) =>
       Note.fromJson(Map<String, dynamic>.from(note.toJson()));
+
+  Project _cloneProject(Project project) =>
+      Project.fromJson(Map<String, dynamic>.from(project.toJson()));
 
   WorkTask _cloneTask(WorkTask task) =>
       WorkTask.fromJson(Map<String, dynamic>.from(task.toJson()));

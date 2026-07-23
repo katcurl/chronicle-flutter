@@ -141,9 +141,11 @@ class _TasksScreenState extends State<TasksScreen>
           task: task,
           children: children,
           project: widget.store.projectById(task.projectId),
-          onToggle: (done) {
-            widget.store.updateTaskStatus(task, done ? 'done' : 'next');
-            setState(() {});
+          onToggle: (done) async {
+            await widget.store.updateTaskStatus(task, done ? 'done' : 'next');
+            if (mounted) {
+              setState(() {});
+            }
           },
           onEdit: () => _edit(task),
           onDelete: () => _delete(task),
@@ -155,9 +157,11 @@ class _TasksScreenState extends State<TasksScreen>
               noteId: task.noteId,
             );
           },
-          onChildToggle: (child, done) {
-            widget.store.updateTaskStatus(child, done ? 'done' : 'next');
-            setState(() {});
+          onChildToggle: (child, done) async {
+            await widget.store.updateTaskStatus(child, done ? 'done' : 'next');
+            if (mounted) {
+              setState(() {});
+            }
           },
           onChildEdit: _edit,
         );
@@ -222,7 +226,7 @@ class _TasksScreenState extends State<TasksScreen>
       tasks: widget.store.data.tasks,
     );
     if (task == null) return;
-    widget.store.addTask(task);
+    await widget.store.addTask(task);
     setState(() {});
   }
 
@@ -234,11 +238,7 @@ class _TasksScreenState extends State<TasksScreen>
       task: task,
     );
     if (edited == null) return;
-    final index = widget.store.data.tasks.indexWhere(
-      (item) => item.id == task.id,
-    );
-    if (index >= 0) widget.store.data.tasks[index] = edited;
-    widget.store.updateTask(edited);
+    await widget.store.updateTask(edited);
     setState(() {});
   }
 

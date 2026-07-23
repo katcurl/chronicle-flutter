@@ -23,7 +23,7 @@ void main() {
       pinnedNoteIds: const <String>['note-result'],
       linkedSourceIds: const <String>['source-jaffe'],
     );
-    store.addProject(project);
+    await store.addProject(project);
 
     final task = WorkTask(
       id: 'task-v10',
@@ -33,9 +33,7 @@ void main() {
       priority: 3,
       estimateMinutes: 120,
     );
-    store.addTask(task);
-
-    await Future<void>.delayed(Duration.zero);
+    await store.addTask(task);
     final reloaded = await repository.load();
 
     expect(

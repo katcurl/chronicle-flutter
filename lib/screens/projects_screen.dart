@@ -110,7 +110,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       globalAppearance: widget.globalAppearance,
     );
     if (result == null) return;
-    widget.store.addProject(result.project);
+    await widget.store.addProject(result.project);
     await _saveAppearance(result);
     if (mounted) setState(() {});
   }
@@ -123,7 +123,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       globalAppearance: widget.globalAppearance,
     );
     if (result == null) return;
-    widget.store.updateProject(result.project);
+    await widget.store.updateProject(result.project);
     await _saveAppearance(result);
     if (mounted) setState(() {});
   }

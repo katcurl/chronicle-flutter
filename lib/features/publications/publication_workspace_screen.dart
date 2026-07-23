@@ -473,7 +473,7 @@ class _PublicationWorkspaceScreenState
     }
   }
 
-  void _save() {
+  Future<void> _save() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
       _showMessage('Укажи название документа.');
@@ -497,10 +497,10 @@ class _PublicationWorkspaceScreenState
         tags: const <String>['publication'],
       );
       PublicationWorkspaceCodec.write(note, _workspace, _sourceNotes);
-      widget.store.addNote(note);
+      await widget.store.addNote(note);
       _publication = note;
     } else {
-      widget.store.addNoteVersion(
+      await widget.store.addNoteVersion(
         NoteVersion(
           id: _uuid.v4(),
           noteId: existing.id,
@@ -514,9 +514,13 @@ class _PublicationWorkspaceScreenState
           reason: 'Перед изменением пространства публикации',
         ),
       );
-      existing.title = title;
-      PublicationWorkspaceCodec.write(existing, _workspace, _sourceNotes);
-      widget.store.updateNote(existing);
+      final updated = Note.fromJson({...existing.toJson(), 'title': title});
+      PublicationWorkspaceCodec.write(updated, _workspace, _sourceNotes);
+      await widget.store.updateNote(updated);
+      _publication = updated;
+    }
+    if (!mounted) {
+      return;
     }
     Navigator.pop(context, true);
   }
