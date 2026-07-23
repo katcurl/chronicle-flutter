@@ -7058,6 +7058,44 @@ final class $$NoteRecordsTableReferences
     );
   }
 
+  static MultiTypedResultKey<$NoteLinkRecordsTable, List<NoteLinkRecord>>
+  _sourceNoteLinksTable(_$ChronicleDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.noteLinkRecords,
+        aliasName: 'notes__id__note_links__source_note_id',
+      );
+
+  $$NoteLinkRecordsTableProcessedTableManager get sourceNoteLinks {
+    final manager = $$NoteLinkRecordsTableTableManager(
+      $_db,
+      $_db.noteLinkRecords,
+    ).filter((f) => f.sourceNoteId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_sourceNoteLinksTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$NoteLinkRecordsTable, List<NoteLinkRecord>>
+  _targetNoteLinksTable(_$ChronicleDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.noteLinkRecords,
+        aliasName: 'notes__id__note_links__target_note_id',
+      );
+
+  $$NoteLinkRecordsTableProcessedTableManager get targetNoteLinks {
+    final manager = $$NoteLinkRecordsTableTableManager(
+      $_db,
+      $_db.noteLinkRecords,
+    ).filter((f) => f.targetNoteId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_targetNoteLinksTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$NoteVersionRecordsTable, List<NoteVersionRecord>>
   _noteVersionRecordsRefsTable(_$ChronicleDatabase db) =>
       MultiTypedResultKey.fromTable(
@@ -7215,6 +7253,56 @@ class $$NoteRecordsTableFilterComposer
           ),
     );
     return composer;
+  }
+
+  Expression<bool> sourceNoteLinks(
+    Expression<bool> Function($$NoteLinkRecordsTableFilterComposer f) f,
+  ) {
+    final $$NoteLinkRecordsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.noteLinkRecords,
+      getReferencedColumn: (t) => t.sourceNoteId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NoteLinkRecordsTableFilterComposer(
+            $db: $db,
+            $table: $db.noteLinkRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> targetNoteLinks(
+    Expression<bool> Function($$NoteLinkRecordsTableFilterComposer f) f,
+  ) {
+    final $$NoteLinkRecordsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.noteLinkRecords,
+      getReferencedColumn: (t) => t.targetNoteId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NoteLinkRecordsTableFilterComposer(
+            $db: $db,
+            $table: $db.noteLinkRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 
   Expression<bool> noteVersionRecordsRefs(
@@ -7466,6 +7554,56 @@ class $$NoteRecordsTableAnnotationComposer
     return composer;
   }
 
+  Expression<T> sourceNoteLinks<T extends Object>(
+    Expression<T> Function($$NoteLinkRecordsTableAnnotationComposer a) f,
+  ) {
+    final $$NoteLinkRecordsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.noteLinkRecords,
+      getReferencedColumn: (t) => t.sourceNoteId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NoteLinkRecordsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.noteLinkRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> targetNoteLinks<T extends Object>(
+    Expression<T> Function($$NoteLinkRecordsTableAnnotationComposer a) f,
+  ) {
+    final $$NoteLinkRecordsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.noteLinkRecords,
+      getReferencedColumn: (t) => t.targetNoteId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$NoteLinkRecordsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.noteLinkRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> noteVersionRecordsRefs<T extends Object>(
     Expression<T> Function($$NoteVersionRecordsTableAnnotationComposer a) f,
   ) {
@@ -7558,6 +7696,8 @@ class $$NoteRecordsTableTableManager
           NoteRecord,
           PrefetchHooks Function({
             bool projectId,
+            bool sourceNoteLinks,
+            bool targetNoteLinks,
             bool noteVersionRecordsRefs,
             bool taskRecordsRefs,
             bool timeEntryRecordsRefs,
@@ -7657,6 +7797,8 @@ class $$NoteRecordsTableTableManager
                       .toList(),
           prefetchHooksCallback: ({
             projectId = false,
+            sourceNoteLinks = false,
+            targetNoteLinks = false,
             noteVersionRecordsRefs = false,
             taskRecordsRefs = false,
             timeEntryRecordsRefs = false,
@@ -7664,6 +7806,8 @@ class $$NoteRecordsTableTableManager
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
+                if (sourceNoteLinks) db.noteLinkRecords,
+                if (targetNoteLinks) db.noteLinkRecords,
                 if (noteVersionRecordsRefs) db.noteVersionRecords,
                 if (taskRecordsRefs) db.taskRecords,
                 if (timeEntryRecordsRefs) db.timeEntryRecords,
@@ -7702,6 +7846,50 @@ class $$NoteRecordsTableTableManager
               },
               getPrefetchedDataCallback: (items) async {
                 return [
+                  if (sourceNoteLinks)
+                    await $_getPrefetchedData<
+                      NoteRecord,
+                      $NoteRecordsTable,
+                      NoteLinkRecord
+                    >(
+                      currentTable: table,
+                      referencedTable: $$NoteRecordsTableReferences
+                          ._sourceNoteLinksTable(db),
+                      managerFromTypedResult:
+                          (p0) =>
+                              $$NoteRecordsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).sourceNoteLinks,
+                      referencedItemsForCurrentItem:
+                          (item, referencedItems) => referencedItems.where(
+                            (e) => e.sourceNoteId == item.id,
+                          ),
+                      typedResults: items,
+                    ),
+                  if (targetNoteLinks)
+                    await $_getPrefetchedData<
+                      NoteRecord,
+                      $NoteRecordsTable,
+                      NoteLinkRecord
+                    >(
+                      currentTable: table,
+                      referencedTable: $$NoteRecordsTableReferences
+                          ._targetNoteLinksTable(db),
+                      managerFromTypedResult:
+                          (p0) =>
+                              $$NoteRecordsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).targetNoteLinks,
+                      referencedItemsForCurrentItem:
+                          (item, referencedItems) => referencedItems.where(
+                            (e) => e.targetNoteId == item.id,
+                          ),
+                      typedResults: items,
+                    ),
                   if (noteVersionRecordsRefs)
                     await $_getPrefetchedData<
                       NoteRecord,
@@ -7787,6 +7975,8 @@ typedef $$NoteRecordsTableProcessedTableManager =
       NoteRecord,
       PrefetchHooks Function({
         bool projectId,
+        bool sourceNoteLinks,
+        bool targetNoteLinks,
         bool noteVersionRecordsRefs,
         bool taskRecordsRefs,
         bool timeEntryRecordsRefs,

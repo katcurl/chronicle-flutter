@@ -1106,7 +1106,7 @@ class _PdfRenderer {
       final alt = image.alt.trim().isEmpty ? 'изображение' : image.alt.trim();
       return pw.TextSpan(
         text: '[Не удалось встроить $alt: ${image.target}]',
-        style: const pw.TextStyle(fontStyle: pw.FontStyle.italic),
+        style: pw.TextStyle(fontStyle: pw.FontStyle.italic),
       );
     }
     final width = 110.0 *
@@ -1128,7 +1128,7 @@ class _PdfRenderer {
     } on Object {
       return pw.TextSpan(
         text: '[Изображение не удалось декодировать: ${image.target}]',
-        style: const pw.TextStyle(fontStyle: pw.FontStyle.italic),
+        style: pw.TextStyle(fontStyle: pw.FontStyle.italic),
       );
     }
   }
@@ -1141,7 +1141,7 @@ class _PdfRenderer {
         padding: const pw.EdgeInsets.only(bottom: 9),
         child: pw.Text(
           '[Не удалось встроить $alt: ${image.target}]',
-          style: const pw.TextStyle(fontStyle: pw.FontStyle.italic),
+          style: pw.TextStyle(fontStyle: pw.FontStyle.italic),
         ),
       );
     }
@@ -1188,7 +1188,7 @@ class _PdfRenderer {
               child: pw.Text(
                 caption,
                 textAlign: pw.TextAlign.center,
-                style: const pw.TextStyle(
+                style: pw.TextStyle(
                   fontSize: 9.5,
                   fontStyle: pw.FontStyle.italic,
                   color: PdfColors.grey700,

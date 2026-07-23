@@ -78,11 +78,13 @@ class NoteRecords extends Table {
 @TableIndex(name: 'idx_note_links_source', columns: {#sourceNoteId})
 class NoteLinkRecords extends Table {
   TextColumn get id => text()();
+  @ReferenceName('sourceNoteLinks')
   TextColumn get sourceNoteId =>
       text()
           .named('source_note_id')
           .references(NoteRecords, #id, onDelete: KeyAction.cascade)();
   TextColumn get targetTitle => text().named('target_title')();
+  @ReferenceName('targetNoteLinks')
   TextColumn get targetNoteId =>
       text()
           .named('target_note_id')
