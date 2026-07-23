@@ -24,7 +24,7 @@ void main() {
 
     expect(
       AppSettingsDialog.appearanceSummary(appearance),
-      'Красная · Shiny · Тёмная',
+      'Красная · Shiny · без фона · Тёмная',
     );
   });
 

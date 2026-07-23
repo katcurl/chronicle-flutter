@@ -176,6 +176,13 @@ class AppAppearancePreferences {
     required this.panelPalette,
     required this.surfaceStyle,
     required this.brightnessMode,
+    this.backgroundFileName,
+    this.backgroundRevision = 0,
+    this.wallpaperOpacity = 1,
+    this.wallpaperOverlay = 0.18,
+    this.panelOpacity = 1,
+    this.panelBlurSigma = 0,
+    this.sparkleIntensity = 1,
   });
 
   final ChroniclePalette accentPalette;
@@ -184,6 +191,15 @@ class AppAppearancePreferences {
   final ChroniclePalette panelPalette;
   final ChronicleSurfaceStyle surfaceStyle;
   final ChronicleBrightnessMode brightnessMode;
+  final String? backgroundFileName;
+  final int backgroundRevision;
+  final double wallpaperOpacity;
+  final double wallpaperOverlay;
+  final double panelOpacity;
+  final double panelBlurSigma;
+  final double sparkleIntensity;
+
+  bool get hasBackgroundImage => backgroundFileName != null;
 
   factory AppAppearancePreferences.defaults() {
     return const AppAppearancePreferences(
@@ -200,6 +216,13 @@ class AppAppearancePreferences {
     ChroniclePalette palette, {
     ChronicleSurfaceStyle surfaceStyle = ChronicleSurfaceStyle.matte,
     ChronicleBrightnessMode brightnessMode = ChronicleBrightnessMode.system,
+    String? backgroundFileName,
+    int backgroundRevision = 0,
+    double wallpaperOpacity = 1,
+    double wallpaperOverlay = 0.18,
+    double panelOpacity = 1,
+    double panelBlurSigma = 0,
+    double sparkleIntensity = 1,
   }) {
     return AppAppearancePreferences(
       accentPalette: palette,
@@ -208,6 +231,13 @@ class AppAppearancePreferences {
       panelPalette: palette,
       surfaceStyle: surfaceStyle,
       brightnessMode: brightnessMode,
+      backgroundFileName: backgroundFileName,
+      backgroundRevision: backgroundRevision,
+      wallpaperOpacity: wallpaperOpacity,
+      wallpaperOverlay: wallpaperOverlay,
+      panelOpacity: panelOpacity,
+      panelBlurSigma: panelBlurSigma,
+      sparkleIntensity: sparkleIntensity,
     );
   }
 
@@ -223,6 +253,14 @@ class AppAppearancePreferences {
     ChroniclePalette? panelPalette,
     ChronicleSurfaceStyle? surfaceStyle,
     ChronicleBrightnessMode? brightnessMode,
+    String? backgroundFileName,
+    bool clearBackgroundFileName = false,
+    int? backgroundRevision,
+    double? wallpaperOpacity,
+    double? wallpaperOverlay,
+    double? panelOpacity,
+    double? panelBlurSigma,
+    double? sparkleIntensity,
   }) {
     return AppAppearancePreferences(
       accentPalette: accentPalette ?? this.accentPalette,
@@ -231,6 +269,35 @@ class AppAppearancePreferences {
       panelPalette: panelPalette ?? this.panelPalette,
       surfaceStyle: surfaceStyle ?? this.surfaceStyle,
       brightnessMode: brightnessMode ?? this.brightnessMode,
+      backgroundFileName: clearBackgroundFileName
+          ? null
+          : backgroundFileName ?? this.backgroundFileName,
+      backgroundRevision: backgroundRevision ?? this.backgroundRevision,
+      wallpaperOpacity: _clampDouble(
+        wallpaperOpacity ?? this.wallpaperOpacity,
+        0.1,
+        1,
+      ),
+      wallpaperOverlay: _clampDouble(
+        wallpaperOverlay ?? this.wallpaperOverlay,
+        0,
+        0.85,
+      ),
+      panelOpacity: _clampDouble(
+        panelOpacity ?? this.panelOpacity,
+        0.35,
+        1,
+      ),
+      panelBlurSigma: _clampDouble(
+        panelBlurSigma ?? this.panelBlurSigma,
+        0,
+        30,
+      ),
+      sparkleIntensity: _clampDouble(
+        sparkleIntensity ?? this.sparkleIntensity,
+        0,
+        2,
+      ),
     );
   }
 
@@ -241,9 +308,17 @@ class AppAppearancePreferences {
     'panelPalette': panelPalette.id,
     'surfaceStyle': surfaceStyle.id,
     'brightnessMode': brightnessMode.id,
+    'backgroundFileName': backgroundFileName,
+    'backgroundRevision': backgroundRevision,
+    'wallpaperOpacity': wallpaperOpacity,
+    'wallpaperOverlay': wallpaperOverlay,
+    'panelOpacity': panelOpacity,
+    'panelBlurSigma': panelBlurSigma,
+    'sparkleIntensity': sparkleIntensity,
   };
 
   factory AppAppearancePreferences.fromJson(Map<String, Object?> json) {
+    final rawRevision = json['backgroundRevision'];
     return AppAppearancePreferences(
       accentPalette: ChroniclePalette.fromId(json['accentPalette']),
       iconPalette: ChroniclePalette.fromId(
@@ -260,6 +335,20 @@ class AppAppearancePreferences {
       ),
       surfaceStyle: ChronicleSurfaceStyle.fromId(json['surfaceStyle']),
       brightnessMode: ChronicleBrightnessMode.fromId(json['brightnessMode']),
+      backgroundFileName: _cleanOptionalText(json['backgroundFileName']),
+      backgroundRevision: rawRevision is int
+          ? rawRevision
+          : int.tryParse(rawRevision?.toString() ?? '') ?? 0,
+      wallpaperOpacity: _readDouble(json['wallpaperOpacity'], 1, 0.1, 1),
+      wallpaperOverlay: _readDouble(
+        json['wallpaperOverlay'],
+        0.18,
+        0,
+        0.85,
+      ),
+      panelOpacity: _readDouble(json['panelOpacity'], 1, 0.35, 1),
+      panelBlurSigma: _readDouble(json['panelBlurSigma'], 0, 0, 30),
+      sparkleIntensity: _readDouble(json['sparkleIntensity'], 1, 0, 2),
     );
   }
 
@@ -272,7 +361,14 @@ class AppAppearancePreferences {
             backgroundPalette == other.backgroundPalette &&
             panelPalette == other.panelPalette &&
             surfaceStyle == other.surfaceStyle &&
-            brightnessMode == other.brightnessMode;
+            brightnessMode == other.brightnessMode &&
+            backgroundFileName == other.backgroundFileName &&
+            backgroundRevision == other.backgroundRevision &&
+            wallpaperOpacity == other.wallpaperOpacity &&
+            wallpaperOverlay == other.wallpaperOverlay &&
+            panelOpacity == other.panelOpacity &&
+            panelBlurSigma == other.panelBlurSigma &&
+            sparkleIntensity == other.sparkleIntensity;
   }
 
   @override
@@ -283,5 +379,31 @@ class AppAppearancePreferences {
     panelPalette,
     surfaceStyle,
     brightnessMode,
+    backgroundFileName,
+    backgroundRevision,
+    wallpaperOpacity,
+    wallpaperOverlay,
+    panelOpacity,
+    panelBlurSigma,
+    sparkleIntensity,
   );
+}
+
+String? _cleanOptionalText(Object? raw) {
+  final value = raw?.toString().trim();
+  return value == null || value.isEmpty ? null : value;
+}
+
+double _readDouble(
+  Object? raw,
+  double fallback,
+  double minimum,
+  double maximum,
+) {
+  final value = raw is num ? raw.toDouble() : double.tryParse('$raw');
+  return _clampDouble(value ?? fallback, minimum, maximum);
+}
+
+double _clampDouble(double value, double minimum, double maximum) {
+  return value.clamp(minimum, maximum).toDouble();
 }

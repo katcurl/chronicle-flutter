@@ -1,24 +1,29 @@
 import 'package:flutter/material.dart';
 
 import 'app_appearance.dart';
+import 'app_appearance_store.dart';
 import 'app_appearance_theme.dart';
 
 class AppAppearanceDialog extends StatefulWidget {
   const AppAppearanceDialog({
     super.key,
     required this.initialPreferences,
+    this.existingBackgroundImage,
   });
 
   final AppAppearancePreferences initialPreferences;
+  final ImageProvider<Object>? existingBackgroundImage;
 
-  static Future<AppAppearancePreferences?> show(
+  static Future<AppAppearanceChange?> show(
     BuildContext context, {
     required AppAppearancePreferences preferences,
+    ImageProvider<Object>? existingBackgroundImage,
   }) {
-    return showDialog<AppAppearancePreferences>(
+    return showDialog<AppAppearanceChange>(
       context: context,
       builder: (context) => AppAppearanceDialog(
         initialPreferences: preferences,
+        existingBackgroundImage: existingBackgroundImage,
       ),
     );
   }
@@ -29,6 +34,16 @@ class AppAppearanceDialog extends StatefulWidget {
 
 class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
   late AppAppearancePreferences draft;
+  AppBackgroundSelection? pendingBackground;
+  bool removeBackground = false;
+  bool pickingBackground = false;
+
+  ImageProvider<Object>? get previewBackground {
+    final pending = pendingBackground;
+    if (pending != null) return MemoryImage(pending.bytes);
+    if (removeBackground) return null;
+    return widget.existingBackgroundImage;
+  }
 
   @override
   void initState() {
@@ -42,17 +57,16 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
       insetPadding: const EdgeInsets.all(20),
       title: const Text('Внешний вид Chronicle'),
       content: SizedBox(
-        width: 980,
-        height: 690,
+        width: 1040,
+        height: 720,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final compact = constraints.maxWidth < 760;
-            if (compact) {
+            if (constraints.maxWidth < 780) {
               return ListView(
                 children: <Widget>[
                   _settings(),
                   const SizedBox(height: 24),
-                  _preview(),
+                  SizedBox(height: 560, child: _preview()),
                 ],
               );
             }
@@ -70,7 +84,11 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
       actions: <Widget>[
         TextButton.icon(
           onPressed: () {
-            setState(() => draft = AppAppearancePreferences.defaults());
+            setState(() {
+              draft = AppAppearancePreferences.defaults();
+              pendingBackground = null;
+              removeBackground = true;
+            });
           },
           icon: const Icon(Icons.restart_alt_rounded),
           label: const Text('По умолчанию'),
@@ -80,7 +98,14 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
           child: const Text('Отмена'),
         ),
         FilledButton.icon(
-          onPressed: () => Navigator.pop(context, draft),
+          onPressed: () => Navigator.pop(
+            context,
+            AppAppearanceChange(
+              preferences: draft,
+              background: pendingBackground,
+              removeBackground: removeBackground,
+            ),
+          ),
           icon: const Icon(Icons.check_rounded),
           label: const Text('Применить'),
         ),
@@ -89,20 +114,16 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
   }
 
   Widget _settings() {
+    final colors = Theme.of(context).colorScheme;
     return ListView(
       padding: const EdgeInsets.only(right: 6),
       children: <Widget>[
-        Text(
-          'Готовые темы',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-        ),
+        _sectionTitle('Готовые темы'),
         const SizedBox(height: 6),
         Text(
-          'Тема согласованно меняет акцент, иконки, фон и панели. Ниже каждый цвет можно переопределить отдельно.',
+          'Тема согласованно меняет акцент, иконки, фон и панели. Каждый параметр можно переопределить ниже.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            color: colors.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 14),
@@ -139,6 +160,49 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
             padding: const EdgeInsets.only(bottom: 10),
             child: _styleTile(style),
           ),
+        const SizedBox(height: 20),
+        _backgroundSection(),
+        const SizedBox(height: 24),
+        _sectionTitle('Стекло и прозрачность'),
+        const SizedBox(height: 4),
+        _slider(
+          title: 'Прозрачность панелей',
+          value: draft.panelOpacity,
+          minimum: 0.35,
+          maximum: 1,
+          divisions: 13,
+          label: '${(draft.panelOpacity * 100).round()}%',
+          onChanged: (value) {
+            setState(() => draft = draft.copyWith(panelOpacity: value));
+          },
+        ),
+        _slider(
+          title: 'Размытие за панелями',
+          value: draft.panelBlurSigma,
+          minimum: 0,
+          maximum: 30,
+          divisions: 15,
+          label: draft.panelBlurSigma == 0
+              ? 'выкл.'
+              : draft.panelBlurSigma.toStringAsFixed(0),
+          onChanged: draft.panelOpacity >= 0.999
+              ? null
+              : (value) {
+                  setState(() => draft = draft.copyWith(panelBlurSigma: value));
+                },
+        ),
+        if (draft.surfaceStyle == ChronicleSurfaceStyle.shiny)
+          _slider(
+            title: 'Интенсивность блёсток',
+            value: draft.sparkleIntensity,
+            minimum: 0,
+            maximum: 2,
+            divisions: 20,
+            label: '${(draft.sparkleIntensity * 100).round()}%',
+            onChanged: (value) {
+              setState(() => draft = draft.copyWith(sparkleIntensity: value));
+            },
+          ),
         const SizedBox(height: 18),
         _paletteSelector(
           title: 'Акцент и кнопки',
@@ -155,7 +219,7 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
           },
         ),
         _paletteSelector(
-          title: 'Фон приложения',
+          title: 'Фоновый цвет',
           selected: draft.backgroundPalette,
           onChanged: (value) {
             setState(() => draft = draft.copyWith(backgroundPalette: value));
@@ -168,6 +232,77 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
             setState(() => draft = draft.copyWith(panelPalette: value));
           },
         ),
+      ],
+    );
+  }
+
+  Widget _backgroundSection() {
+    final colors = Theme.of(context).colorScheme;
+    final hasBackground = previewBackground != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _sectionTitle('Фоновое изображение или GIF'),
+        const SizedBox(height: 6),
+        Text(
+          'PNG, JPEG, WebP или GIF до 30 МБ. Файл копируется в локальное хранилище Chronicle.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: colors.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: <Widget>[
+            FilledButton.tonalIcon(
+              onPressed: pickingBackground ? null : _pickBackground,
+              icon: pickingBackground
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.wallpaper_rounded),
+              label: Text(hasBackground ? 'Заменить фон' : 'Выбрать фон'),
+            ),
+            if (hasBackground) ...<Widget>[
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    pendingBackground = null;
+                    removeBackground = true;
+                  });
+                },
+                icon: const Icon(Icons.delete_outline_rounded),
+                label: const Text('Убрать'),
+              ),
+            ],
+          ],
+        ),
+        if (hasBackground) ...<Widget>[
+          const SizedBox(height: 10),
+          _slider(
+            title: 'Яркость изображения',
+            value: draft.wallpaperOpacity,
+            minimum: 0.1,
+            maximum: 1,
+            divisions: 18,
+            label: '${(draft.wallpaperOpacity * 100).round()}%',
+            onChanged: (value) {
+              setState(() => draft = draft.copyWith(wallpaperOpacity: value));
+            },
+          ),
+          _slider(
+            title: 'Цветовая вуаль',
+            value: draft.wallpaperOverlay,
+            minimum: 0,
+            maximum: 0.85,
+            divisions: 17,
+            label: '${(draft.wallpaperOverlay * 100).round()}%',
+            onChanged: (value) {
+              setState(() => draft = draft.copyWith(wallpaperOverlay: value));
+            },
+          ),
+        ],
       ],
     );
   }
@@ -185,6 +320,13 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
             palette,
             surfaceStyle: draft.surfaceStyle,
             brightnessMode: draft.brightnessMode,
+            backgroundFileName: draft.backgroundFileName,
+            backgroundRevision: draft.backgroundRevision,
+            wallpaperOpacity: draft.wallpaperOpacity,
+            wallpaperOverlay: draft.wallpaperOverlay,
+            panelOpacity: draft.panelOpacity,
+            panelBlurSigma: draft.panelBlurSigma,
+            sparkleIntensity: draft.sparkleIntensity,
           );
         });
       },
@@ -242,6 +384,38 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
     );
   }
 
+  Widget _slider({
+    required String title,
+    required double value,
+    required double minimum,
+    required double maximum,
+    required int divisions,
+    required String label,
+    required ValueChanged<double>? onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(child: Text(title)),
+              Text(label, style: Theme.of(context).textTheme.labelMedium),
+            ],
+          ),
+          Slider(
+            value: value.clamp(minimum, maximum).toDouble(),
+            min: minimum,
+            max: maximum,
+            divisions: divisions,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _paletteSelector({
     required String title,
     required ChroniclePalette selected,
@@ -255,10 +429,7 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
           Row(
             children: <Widget>[
               Expanded(child: _sectionTitle(title)),
-              Text(
-                selected.label,
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
+              Text(selected.label, style: Theme.of(context).textTheme.labelMedium),
             ],
           ),
           const SizedBox(height: 10),
@@ -304,119 +475,144 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
       ChronicleBrightnessMode.dark => Brightness.dark,
       ChronicleBrightnessMode.system => platformBrightness,
     };
-    final previewTheme = buildChronicleTheme(brightness, draft);
+    final background = previewBackground;
+    final previewTheme = buildChronicleTheme(
+      brightness,
+      draft,
+      backgroundAvailable: background != null,
+    );
     return Theme(
       data: previewTheme,
       child: Builder(
         builder: (previewContext) {
           final colors = Theme.of(previewContext).colorScheme;
-          return ColoredBox(
-            color: Theme.of(previewContext).scaffoldBackgroundColor,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Text(
-                    'Предпросмотр',
-                    style: Theme.of(previewContext).textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 16),
-                  ChroniclePanelSurface(
-                    emphasized: true,
-                    borderRadius: BorderRadius.circular(22),
-                    clipBehavior: Clip.antiAlias,
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Row(
-                        children: <Widget>[
-                          Icon(
-                            Icons.science_rounded,
-                            color: Theme.of(previewContext)
-                                .extension<ChronicleAppearanceTheme>()
-                                ?.iconAccent,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+          return ChronicleBackdrop(
+            backgroundImage: background,
+            revision: draft.backgroundRevision,
+            child: ColoredBox(
+              color: background == null
+                  ? Theme.of(previewContext).scaffoldBackgroundColor
+                  : Colors.transparent,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Text(
+                      'Предпросмотр',
+                      style: Theme.of(previewContext).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 16),
+                    ChroniclePanelSurface(
+                      emphasized: true,
+                      borderRadius: BorderRadius.circular(22),
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Row(
+                          children: <Widget>[
+                            const Icon(Icons.science_rounded),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    'Проект ORF9b',
+                                    style: Theme.of(previewContext)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                  ),
+                                  Text(
+                                    'Активное исследование',
+                                    style: Theme.of(previewContext)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: colors.onSurfaceVariant,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.auto_awesome_rounded),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ChroniclePanelSurface(
+                      borderRadius: BorderRadius.circular(22),
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              'RMSD analysis',
+                              style: Theme.of(previewContext)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Сравнение метастабильных состояний белка и текущие наблюдения.',
+                            ),
+                            const SizedBox(height: 14),
+                            const Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
                               children: <Widget>[
-                                Text(
-                                  'Проект ORF9b',
-                                  style: Theme.of(previewContext)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                                Text(
-                                  'Активное исследование',
-                                  style: Theme.of(previewContext)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: colors.onSurfaceVariant,
-                                      ),
-                                ),
+                                Chip(label: Text('ORF9b')),
+                                Chip(label: Text('MD')),
                               ],
                             ),
-                          ),
-                          const Icon(Icons.more_horiz_rounded),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            'RMSD analysis',
-                            style: Theme.of(previewContext)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Сравнение метастабильных состояний белка и текущие наблюдения.',
-                            style: Theme.of(previewContext).textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: const <Widget>[
-                              Chip(label: Text('ORF9b')),
-                              Chip(label: Text('MD')),
-                            ],
-                          ),
-                        ],
-                      ),
+                    const Spacer(),
+                    FilledButton.icon(
+                      onPressed: () {},
+                      icon: const Icon(Icons.palette_rounded),
+                      label: const Text('Акцентная кнопка'),
                     ),
-                  ),
-                            FilledButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.palette_rounded),
-                    label: const Text('Акцентная кнопка'),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Настройки применяются ко всему интерфейсу и не меняют данные проектов.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(previewContext).textTheme.bodySmall
-                        ?.copyWith(color: colors.onSurfaceVariant),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    Text(
+                      'Фон и эффекты хранятся локально и не меняют данные проектов.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(previewContext).textTheme.bodySmall
+                          ?.copyWith(color: colors.onSurfaceVariant),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
         },
       ),
     );
+  }
+
+  Future<void> _pickBackground() async {
+    setState(() => pickingBackground = true);
+    try {
+      final selected = await pickAppBackground();
+      if (!mounted || selected == null) return;
+      setState(() {
+        pendingBackground = selected;
+        removeBackground = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось загрузить фон: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => pickingBackground = false);
+    }
   }
 
   Widget _sectionTitle(String text) {
@@ -436,10 +632,7 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
         color: color,
         shape: BoxShape.circle,
         boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: color.withValues(alpha: 0.28),
-            blurRadius: 6,
-          ),
+          BoxShadow(color: color.withValues(alpha: 0.28), blurRadius: 6),
         ],
       ),
     );

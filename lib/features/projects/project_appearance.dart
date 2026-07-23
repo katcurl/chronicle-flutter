@@ -10,6 +10,13 @@ class ProjectAppearancePreferences {
     required this.surfaceStyle,
     this.iconFileName,
     this.iconRevision = 0,
+    this.backgroundFileName,
+    this.backgroundRevision = 0,
+    this.wallpaperOpacity = 1,
+    this.wallpaperOverlay = 0.18,
+    this.panelOpacity = 1,
+    this.panelBlurSigma = 0,
+    this.sparkleIntensity = 1,
   });
 
   final bool inheritsGlobal;
@@ -20,6 +27,13 @@ class ProjectAppearancePreferences {
   final ChronicleSurfaceStyle surfaceStyle;
   final String? iconFileName;
   final int iconRevision;
+  final String? backgroundFileName;
+  final int backgroundRevision;
+  final double wallpaperOpacity;
+  final double wallpaperOverlay;
+  final double panelOpacity;
+  final double panelBlurSigma;
+  final double sparkleIntensity;
 
   factory ProjectAppearancePreferences.defaults() {
     return const ProjectAppearancePreferences(
@@ -43,6 +57,11 @@ class ProjectAppearancePreferences {
       backgroundPalette: appearance.backgroundPalette,
       panelPalette: appearance.panelPalette,
       surfaceStyle: appearance.surfaceStyle,
+      wallpaperOpacity: appearance.wallpaperOpacity,
+      wallpaperOverlay: appearance.wallpaperOverlay,
+      panelOpacity: appearance.panelOpacity,
+      panelBlurSigma: appearance.panelBlurSigma,
+      sparkleIntensity: appearance.sparkleIntensity,
     );
   }
 
@@ -62,6 +81,13 @@ class ProjectAppearancePreferences {
       panelPalette: panelPalette,
       surfaceStyle: surfaceStyle,
       brightnessMode: globalAppearance.brightnessMode,
+      backgroundFileName: backgroundFileName,
+      backgroundRevision: backgroundRevision,
+      wallpaperOpacity: wallpaperOpacity,
+      wallpaperOverlay: wallpaperOverlay,
+      panelOpacity: panelOpacity,
+      panelBlurSigma: panelBlurSigma,
+      sparkleIntensity: sparkleIntensity,
     );
   }
 
@@ -84,6 +110,14 @@ class ProjectAppearancePreferences {
     String? iconFileName,
     bool clearIconFileName = false,
     int? iconRevision,
+    String? backgroundFileName,
+    bool clearBackgroundFileName = false,
+    int? backgroundRevision,
+    double? wallpaperOpacity,
+    double? wallpaperOverlay,
+    double? panelOpacity,
+    double? panelBlurSigma,
+    double? sparkleIntensity,
   }) {
     return ProjectAppearancePreferences(
       inheritsGlobal: inheritsGlobal ?? this.inheritsGlobal,
@@ -95,6 +129,31 @@ class ProjectAppearancePreferences {
       iconFileName:
           clearIconFileName ? null : iconFileName ?? this.iconFileName,
       iconRevision: iconRevision ?? this.iconRevision,
+      backgroundFileName: clearBackgroundFileName
+          ? null
+          : backgroundFileName ?? this.backgroundFileName,
+      backgroundRevision: backgroundRevision ?? this.backgroundRevision,
+      wallpaperOpacity: _clamp(
+        wallpaperOpacity ?? this.wallpaperOpacity,
+        0.1,
+        1,
+      ),
+      wallpaperOverlay: _clamp(
+        wallpaperOverlay ?? this.wallpaperOverlay,
+        0,
+        0.85,
+      ),
+      panelOpacity: _clamp(panelOpacity ?? this.panelOpacity, 0.35, 1),
+      panelBlurSigma: _clamp(
+        panelBlurSigma ?? this.panelBlurSigma,
+        0,
+        30,
+      ),
+      sparkleIntensity: _clamp(
+        sparkleIntensity ?? this.sparkleIntensity,
+        0,
+        2,
+      ),
     );
   }
 
@@ -107,11 +166,19 @@ class ProjectAppearancePreferences {
     'surfaceStyle': surfaceStyle.id,
     'iconFileName': iconFileName,
     'iconRevision': iconRevision,
+    'backgroundFileName': backgroundFileName,
+    'backgroundRevision': backgroundRevision,
+    'wallpaperOpacity': wallpaperOpacity,
+    'wallpaperOverlay': wallpaperOverlay,
+    'panelOpacity': panelOpacity,
+    'panelBlurSigma': panelBlurSigma,
+    'sparkleIntensity': sparkleIntensity,
   };
 
   factory ProjectAppearancePreferences.fromJson(Map<String, Object?> json) {
     final rawInheritsGlobal = json['inheritsGlobal'];
-    final rawRevision = json['iconRevision'];
+    final rawIconRevision = json['iconRevision'];
+    final rawBackgroundRevision = json['backgroundRevision'];
     final legacyPalette = ChroniclePalette.fromId(json['palette']);
     final accentPalette = ChroniclePalette.fromId(
       json['accentPalette'],
@@ -134,9 +201,23 @@ class ProjectAppearancePreferences {
       ),
       surfaceStyle: ChronicleSurfaceStyle.fromId(json['surfaceStyle']),
       iconFileName: _cleanOptionalText(json['iconFileName']),
-      iconRevision: rawRevision is int
-          ? rawRevision
-          : int.tryParse(rawRevision?.toString() ?? '') ?? 0,
+      iconRevision: rawIconRevision is int
+          ? rawIconRevision
+          : int.tryParse(rawIconRevision?.toString() ?? '') ?? 0,
+      backgroundFileName: _cleanOptionalText(json['backgroundFileName']),
+      backgroundRevision: rawBackgroundRevision is int
+          ? rawBackgroundRevision
+          : int.tryParse(rawBackgroundRevision?.toString() ?? '') ?? 0,
+      wallpaperOpacity: _readDouble(json['wallpaperOpacity'], 1, 0.1, 1),
+      wallpaperOverlay: _readDouble(
+        json['wallpaperOverlay'],
+        0.18,
+        0,
+        0.85,
+      ),
+      panelOpacity: _readDouble(json['panelOpacity'], 1, 0.35, 1),
+      panelBlurSigma: _readDouble(json['panelBlurSigma'], 0, 0, 30),
+      sparkleIntensity: _readDouble(json['sparkleIntensity'], 1, 0, 2),
     );
   }
 
@@ -151,7 +232,14 @@ class ProjectAppearancePreferences {
             panelPalette == other.panelPalette &&
             surfaceStyle == other.surfaceStyle &&
             iconFileName == other.iconFileName &&
-            iconRevision == other.iconRevision;
+            iconRevision == other.iconRevision &&
+            backgroundFileName == other.backgroundFileName &&
+            backgroundRevision == other.backgroundRevision &&
+            wallpaperOpacity == other.wallpaperOpacity &&
+            wallpaperOverlay == other.wallpaperOverlay &&
+            panelOpacity == other.panelOpacity &&
+            panelBlurSigma == other.panelBlurSigma &&
+            sparkleIntensity == other.sparkleIntensity;
   }
 
   @override
@@ -164,10 +252,31 @@ class ProjectAppearancePreferences {
     surfaceStyle,
     iconFileName,
     iconRevision,
+    backgroundFileName,
+    backgroundRevision,
+    wallpaperOpacity,
+    wallpaperOverlay,
+    panelOpacity,
+    panelBlurSigma,
+    sparkleIntensity,
   );
 }
 
 String? _cleanOptionalText(Object? raw) {
   final value = raw?.toString().trim();
   return value == null || value.isEmpty ? null : value;
+}
+
+double _readDouble(
+  Object? raw,
+  double fallback,
+  double minimum,
+  double maximum,
+) {
+  final value = raw is num ? raw.toDouble() : double.tryParse('$raw');
+  return _clamp(value ?? fallback, minimum, maximum);
+}
+
+double _clamp(double value, double minimum, double maximum) {
+  return value.clamp(minimum, maximum).toDouble();
 }

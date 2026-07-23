@@ -1,11 +1,14 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import 'app_appearance.dart';
 
 ThemeData buildChronicleTheme(
   Brightness brightness,
-  AppAppearancePreferences appearance,
-) {
+  AppAppearancePreferences appearance, {
+  bool backgroundAvailable = false,
+}) {
   final isLight = brightness == Brightness.light;
   final background = appearance.backgroundPalette.background(brightness);
   final panel = appearance.panelPalette.panel(brightness);
@@ -59,7 +62,7 @@ ThemeData buildChronicleTheme(
   return ThemeData(
     useMaterial3: true,
     colorScheme: colors,
-    scaffoldBackgroundColor: background,
+    scaffoldBackgroundColor: backgroundAvailable ? Colors.transparent : background,
     visualDensity: VisualDensity.standard,
     iconTheme: IconThemeData(color: iconAccent),
     primaryIconTheme: IconThemeData(color: iconAccent),
@@ -86,7 +89,7 @@ ThemeData buildChronicleTheme(
         borderRadius: BorderRadius.circular(22),
         side: cardSide,
       ),
-      color: panelMid,
+      color: panelMid.withValues(alpha: appearance.panelOpacity),
       surfaceTintColor: Colors.transparent,
     ),
     dialogTheme: DialogThemeData(
@@ -101,7 +104,7 @@ ThemeData buildChronicleTheme(
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: panelHigh,
+      fillColor: panelHigh.withValues(alpha: appearance.panelOpacity),
       border: OutlineInputBorder(
         borderSide: BorderSide.none,
         borderRadius: BorderRadius.circular(16),
@@ -153,6 +156,12 @@ ThemeData buildChronicleTheme(
         panelShadow: _shadow(panel, brightness),
         iconAccent: iconAccent,
         outlineColor: colors.outlineVariant,
+        backgroundColor: background,
+        wallpaperOpacity: appearance.wallpaperOpacity,
+        wallpaperOverlay: appearance.wallpaperOverlay,
+        panelOpacity: appearance.panelOpacity,
+        panelBlurSigma: appearance.panelBlurSigma,
+        sparkleIntensity: appearance.sparkleIntensity,
       ),
     ],
   );
@@ -168,6 +177,12 @@ class ChronicleAppearanceTheme
     required this.panelShadow,
     required this.iconAccent,
     required this.outlineColor,
+    required this.backgroundColor,
+    required this.wallpaperOpacity,
+    required this.wallpaperOverlay,
+    required this.panelOpacity,
+    required this.panelBlurSigma,
+    required this.sparkleIntensity,
   });
 
   final ChronicleSurfaceStyle style;
@@ -176,6 +191,12 @@ class ChronicleAppearanceTheme
   final Color panelShadow;
   final Color iconAccent;
   final Color outlineColor;
+  final Color backgroundColor;
+  final double wallpaperOpacity;
+  final double wallpaperOverlay;
+  final double panelOpacity;
+  final double panelBlurSigma;
+  final double sparkleIntensity;
 
   @override
   ChronicleAppearanceTheme copyWith({
@@ -185,6 +206,12 @@ class ChronicleAppearanceTheme
     Color? panelShadow,
     Color? iconAccent,
     Color? outlineColor,
+    Color? backgroundColor,
+    double? wallpaperOpacity,
+    double? wallpaperOverlay,
+    double? panelOpacity,
+    double? panelBlurSigma,
+    double? sparkleIntensity,
   }) {
     return ChronicleAppearanceTheme(
       style: style ?? this.style,
@@ -193,6 +220,12 @@ class ChronicleAppearanceTheme
       panelShadow: panelShadow ?? this.panelShadow,
       iconAccent: iconAccent ?? this.iconAccent,
       outlineColor: outlineColor ?? this.outlineColor,
+      backgroundColor: backgroundColor ?? this.backgroundColor,
+      wallpaperOpacity: wallpaperOpacity ?? this.wallpaperOpacity,
+      wallpaperOverlay: wallpaperOverlay ?? this.wallpaperOverlay,
+      panelOpacity: panelOpacity ?? this.panelOpacity,
+      panelBlurSigma: panelBlurSigma ?? this.panelBlurSigma,
+      sparkleIntensity: sparkleIntensity ?? this.sparkleIntensity,
     );
   }
 
@@ -209,6 +242,16 @@ class ChronicleAppearanceTheme
       panelShadow: Color.lerp(panelShadow, other.panelShadow, t)!,
       iconAccent: Color.lerp(iconAccent, other.iconAccent, t)!,
       outlineColor: Color.lerp(outlineColor, other.outlineColor, t)!,
+      backgroundColor: Color.lerp(backgroundColor, other.backgroundColor, t)!,
+      wallpaperOpacity: lerpDouble(wallpaperOpacity, other.wallpaperOpacity, t)!,
+      wallpaperOverlay: lerpDouble(wallpaperOverlay, other.wallpaperOverlay, t)!,
+      panelOpacity: lerpDouble(panelOpacity, other.panelOpacity, t)!,
+      panelBlurSigma: lerpDouble(panelBlurSigma, other.panelBlurSigma, t)!,
+      sparkleIntensity: lerpDouble(
+        sparkleIntensity,
+        other.sparkleIntensity,
+        t,
+      )!,
     );
   }
 
@@ -217,9 +260,12 @@ class ChronicleAppearanceTheme
     bool emphasized = false,
   }) {
     final radius = borderRadius ?? BorderRadius.zero;
+    final panel = panelColor.withValues(alpha: panelOpacity);
+    final highlight = panelHighlight.withValues(alpha: panelOpacity);
+    final shadow = panelShadow.withValues(alpha: panelOpacity);
     switch (style) {
       case ChronicleSurfaceStyle.matte:
-        return BoxDecoration(color: panelColor, borderRadius: radius);
+        return BoxDecoration(color: panel, borderRadius: radius);
       case ChronicleSurfaceStyle.glossy:
         return BoxDecoration(
           borderRadius: radius,
@@ -227,12 +273,12 @@ class ChronicleAppearanceTheme
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: <Color>[
-              Color.lerp(panelHighlight, panelColor, 0.22)!,
-              panelColor,
+              Color.lerp(highlight, panel, 0.22)!,
+              panel,
             ],
           ),
           border: Border.all(
-            color: panelHighlight.withValues(alpha: 0.62),
+            color: panelHighlight.withValues(alpha: 0.62 * panelOpacity),
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
@@ -250,13 +296,13 @@ class ChronicleAppearanceTheme
             end: Alignment.bottomCenter,
             stops: const <double>[0, 0.34, 1],
             colors: <Color>[
-              panelHighlight,
-              Color.lerp(panelHighlight, panelColor, 0.68)!,
-              panelShadow,
+              highlight,
+              Color.lerp(highlight, panel, 0.68)!,
+              shadow,
             ],
           ),
           border: Border.all(
-            color: panelHighlight.withValues(alpha: 0.82),
+            color: panelHighlight.withValues(alpha: 0.82 * panelOpacity),
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
@@ -291,6 +337,35 @@ class ChroniclePanelSurface extends StatelessWidget {
     ).extension<ChronicleAppearanceTheme>();
     if (appearance == null) return child;
     final radius = borderRadius ?? BorderRadius.zero;
+    Widget content = Stack(
+      fit: StackFit.passthrough,
+      children: <Widget>[
+        child,
+        if (appearance.style == ChronicleSurfaceStyle.shiny &&
+            appearance.sparkleIntensity > 0)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _ChronicleGlitterPainter(
+                  sparkleColor: appearance.panelHighlight,
+                  accentColor: appearance.iconAccent,
+                  emphasized: emphasized,
+                  intensity: appearance.sparkleIntensity,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+    if (appearance.panelBlurSigma > 0 && appearance.panelOpacity < 0.999) {
+      content = BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: appearance.panelBlurSigma,
+          sigmaY: appearance.panelBlurSigma,
+        ),
+        child: content,
+      );
+    }
     return DecoratedBox(
       decoration: appearance.decoration(
         borderRadius: radius,
@@ -299,25 +374,54 @@ class ChroniclePanelSurface extends StatelessWidget {
       child: ClipRRect(
         borderRadius: radius,
         clipBehavior: clipBehavior,
-        child: Stack(
-          fit: StackFit.passthrough,
-          children: <Widget>[
-            child,
-            if (appearance.style == ChronicleSurfaceStyle.shiny)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: _ChronicleGlitterPainter(
-                      sparkleColor: appearance.panelHighlight,
-                      accentColor: appearance.iconAccent,
-                      emphasized: emphasized,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
+        child: content,
       ),
+    );
+  }
+}
+
+class ChronicleBackdrop extends StatelessWidget {
+  const ChronicleBackdrop({
+    super.key,
+    required this.child,
+    this.backgroundImage,
+    this.revision = 0,
+  });
+
+  final Widget child;
+  final ImageProvider<Object>? backgroundImage;
+  final int revision;
+
+  @override
+  Widget build(BuildContext context) {
+    final appearance = Theme.of(
+      context,
+    ).extension<ChronicleAppearanceTheme>();
+    if (appearance == null || backgroundImage == null) return child;
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        ColoredBox(color: appearance.backgroundColor),
+        Image(
+          key: ValueKey<int>(revision),
+          image: backgroundImage!,
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          opacity: AlwaysStoppedAnimation<double>(
+            appearance.wallpaperOpacity,
+          ),
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => const SizedBox.expand(),
+        ),
+        if (appearance.wallpaperOverlay > 0)
+          ColoredBox(
+            color: appearance.backgroundColor.withValues(
+              alpha: appearance.wallpaperOverlay,
+            ),
+          ),
+        child,
+      ],
     );
   }
 }
@@ -327,11 +431,13 @@ class _ChronicleGlitterPainter extends CustomPainter {
     required this.sparkleColor,
     required this.accentColor,
     required this.emphasized,
+    required this.intensity,
   });
 
   final Color sparkleColor;
   final Color accentColor;
   final bool emphasized;
+  final double intensity;
 
   static const List<Offset> _points = <Offset>[
     Offset(0.07, 0.18),
@@ -354,10 +460,18 @@ class _ChronicleGlitterPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final dotPaint = Paint()
-      ..color = sparkleColor.withValues(alpha: emphasized ? 0.52 : 0.34)
+      ..color = sparkleColor.withValues(
+        alpha: ((emphasized ? 0.52 : 0.34) * intensity)
+            .clamp(0, 1)
+            .toDouble(),
+      )
       ..style = PaintingStyle.fill;
     final accentPaint = Paint()
-      ..color = accentColor.withValues(alpha: emphasized ? 0.42 : 0.26)
+      ..color = accentColor.withValues(
+        alpha: ((emphasized ? 0.42 : 0.26) * intensity)
+            .clamp(0, 1)
+            .toDouble(),
+      )
       ..strokeWidth = emphasized ? 1.2 : 0.9
       ..strokeCap = StrokeCap.round;
 
@@ -367,10 +481,12 @@ class _ChronicleGlitterPainter extends CustomPainter {
         normalized.dx * size.width,
         normalized.dy * size.height,
       );
-      final radius = index % 3 == 0 ? 1.45 : 0.8;
+      final radius = (index % 3 == 0 ? 1.45 : 0.8) *
+          (0.72 + intensity * 0.28);
       canvas.drawCircle(center, radius, dotPaint);
       if (index % 4 == 0) {
-        final arm = emphasized ? 4.0 : 3.0;
+        final arm = (emphasized ? 4.0 : 3.0) *
+            (0.72 + intensity * 0.28);
         canvas.drawLine(
           center.translate(-arm, 0),
           center.translate(arm, 0),
@@ -389,7 +505,8 @@ class _ChronicleGlitterPainter extends CustomPainter {
   bool shouldRepaint(covariant _ChronicleGlitterPainter oldDelegate) {
     return sparkleColor != oldDelegate.sparkleColor ||
         accentColor != oldDelegate.accentColor ||
-        emphasized != oldDelegate.emphasized;
+        emphasized != oldDelegate.emphasized ||
+        intensity != oldDelegate.intensity;
   }
 }
 

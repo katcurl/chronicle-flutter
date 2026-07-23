@@ -35,11 +35,44 @@ class ProjectIconSelection {
     }
     final extension = _detectImageExtension(bytes);
     if (extension == null) {
-      throw const FormatException(
-        'Поддерживаются PNG, JPEG, WebP и GIF.',
-      );
+      throw const FormatException('Поддерживаются PNG, JPEG, WebP и GIF.');
     }
     return ProjectIconSelection(
+      bytes: bytes,
+      extension: extension,
+      originalName: originalName,
+    );
+  }
+}
+
+class ProjectBackgroundSelection {
+  const ProjectBackgroundSelection({
+    required this.bytes,
+    required this.extension,
+    required this.originalName,
+  });
+
+  static const int maxBytes = 30 * 1024 * 1024;
+
+  final Uint8List bytes;
+  final String extension;
+  final String originalName;
+
+  factory ProjectBackgroundSelection.validate({
+    required Uint8List bytes,
+    required String originalName,
+  }) {
+    if (bytes.isEmpty) {
+      throw const FormatException('Выбранный файл пуст.');
+    }
+    if (bytes.length > maxBytes) {
+      throw const FormatException('Фон проекта должен быть не больше 30 МБ.');
+    }
+    final extension = _detectImageExtension(bytes);
+    if (extension == null) {
+      throw const FormatException('Поддерживаются PNG, JPEG, WebP и GIF.');
+    }
+    return ProjectBackgroundSelection(
       bytes: bytes,
       extension: extension,
       originalName: originalName,
@@ -60,7 +93,23 @@ Future<ProjectIconSelection?> pickProjectIcon() async {
     throw const FormatException('Иконка проекта должна быть не больше 10 МБ.');
   }
   final bytes = await file.readAsBytes();
-  return ProjectIconSelection.validate(
+  return ProjectIconSelection.validate(bytes: bytes, originalName: file.name);
+}
+
+Future<ProjectBackgroundSelection?> pickProjectBackground() async {
+  final result = await FilePicker.pickFiles(
+    dialogTitle: 'Выбрать фон проекта',
+    type: FileType.custom,
+    allowedExtensions: const <String>['png', 'jpg', 'jpeg', 'webp', 'gif'],
+    lockParentWindow: true,
+  );
+  if (result == null || result.files.isEmpty) return null;
+  final file = result.files.single;
+  if (file.size > ProjectBackgroundSelection.maxBytes) {
+    throw const FormatException('Фон проекта должен быть не больше 30 МБ.');
+  }
+  final bytes = await file.readAsBytes();
+  return ProjectBackgroundSelection.validate(
     bytes: bytes,
     originalName: file.name,
   );
@@ -69,6 +118,7 @@ Future<ProjectIconSelection?> pickProjectIcon() async {
 class ProjectAppearanceStore {
   static const String preferencesKey = 'chronicle_project_appearance_v1';
   static const String iconDirectoryName = 'project_icons';
+  static const String backgroundDirectoryName = 'project_backgrounds';
 
   Future<Map<String, ProjectAppearancePreferences>> load() async {
     final preferences = await SharedPreferences.getInstance();
@@ -86,6 +136,15 @@ class ProjectAppearanceStore {
   Future<Directory> iconDirectory() async {
     final support = await getApplicationSupportDirectory();
     final directory = Directory(path.join(support.path, iconDirectoryName));
+    await directory.create(recursive: true);
+    return directory;
+  }
+
+  Future<Directory> backgroundDirectory() async {
+    final support = await getApplicationSupportDirectory();
+    final directory = Directory(
+      path.join(support.path, backgroundDirectoryName),
+    );
     await directory.create(recursive: true);
     return directory;
   }
@@ -131,6 +190,7 @@ class ProjectAppearanceController extends ChangeNotifier {
   Map<String, ProjectAppearancePreferences> _values =
       <String, ProjectAppearancePreferences>{};
   Directory? _iconDirectory;
+  Directory? _backgroundDirectory;
   bool _ready = false;
   bool _disposed = false;
 
@@ -146,6 +206,11 @@ class ProjectAppearanceController extends ChangeNotifier {
       _iconDirectory = await _store.iconDirectory();
     } on Object {
       _iconDirectory = null;
+    }
+    try {
+      _backgroundDirectory = await _store.backgroundDirectory();
+    } on Object {
+      _backgroundDirectory = null;
     }
     _ready = true;
     _notify();
@@ -163,13 +228,17 @@ class ProjectAppearanceController extends ChangeNotifier {
   }
 
   File? iconFileFor(String projectId) {
-    final directory = _iconDirectory;
-    final fileName = preferencesFor(projectId).iconFileName;
-    if (directory == null || fileName == null) return null;
-    final safeName = path.basename(fileName);
-    if (safeName != fileName) return null;
-    final file = File(path.join(directory.path, safeName));
-    return file.existsSync() ? file : null;
+    return _managedFile(
+      _iconDirectory,
+      preferencesFor(projectId).iconFileName,
+    );
+  }
+
+  File? backgroundFileFor(String projectId) {
+    return _managedFile(
+      _backgroundDirectory,
+      preferencesFor(projectId).backgroundFileName,
+    );
   }
 
   Future<void> saveProjectAppearance(
@@ -177,13 +246,19 @@ class ProjectAppearanceController extends ChangeNotifier {
     ProjectAppearancePreferences value, {
     ProjectIconSelection? icon,
     bool removeIcon = false,
+    ProjectBackgroundSelection? background,
+    bool removeBackground = false,
   }) async {
     var next = value;
     final old = preferencesFor(projectId);
-    final directory = _iconDirectory ?? await _store.iconDirectory();
-    _iconDirectory = directory;
-    File? newlyWrittenFile;
+    final iconDirectory = _iconDirectory ?? await _store.iconDirectory();
+    final backgroundDirectory =
+        _backgroundDirectory ?? await _store.backgroundDirectory();
+    _iconDirectory = iconDirectory;
+    _backgroundDirectory = backgroundDirectory;
+    final newlyWrittenFiles = <File>[];
     String? oldIconToDelete;
+    String? oldBackgroundToDelete;
 
     if (removeIcon) {
       oldIconToDelete = old.iconFileName;
@@ -192,15 +267,14 @@ class ProjectAppearanceController extends ChangeNotifier {
         iconRevision: old.iconRevision + 1,
       );
     } else if (icon != null) {
-      final safeProjectId = projectId.replaceAll(
-        RegExp(r'[^A-Za-z0-9_-]'),
-        '_',
+      final fileName = _managedFileName(
+        prefix: 'project_icon',
+        projectId: projectId,
+        extension: icon.extension,
       );
-      final fileName =
-          'project_${safeProjectId}_${DateTime.now().microsecondsSinceEpoch}'
-          '.${icon.extension}';
-      newlyWrittenFile = File(path.join(directory.path, fileName));
-      await newlyWrittenFile.writeAsBytes(icon.bytes, flush: true);
+      final file = File(path.join(iconDirectory.path, fileName));
+      await file.writeAsBytes(icon.bytes, flush: true);
+      newlyWrittenFiles.add(file);
       oldIconToDelete = old.iconFileName;
       next = next.copyWith(
         iconFileName: fileName,
@@ -213,41 +287,73 @@ class ProjectAppearanceController extends ChangeNotifier {
       );
     }
 
+    if (removeBackground) {
+      oldBackgroundToDelete = old.backgroundFileName;
+      next = next.copyWith(
+        clearBackgroundFileName: true,
+        backgroundRevision: old.backgroundRevision + 1,
+      );
+    } else if (background != null) {
+      final fileName = _managedFileName(
+        prefix: 'project_background',
+        projectId: projectId,
+        extension: background.extension,
+      );
+      final file = File(path.join(backgroundDirectory.path, fileName));
+      await file.writeAsBytes(background.bytes, flush: true);
+      newlyWrittenFiles.add(file);
+      oldBackgroundToDelete = old.backgroundFileName;
+      next = next.copyWith(
+        backgroundFileName: fileName,
+        backgroundRevision: old.backgroundRevision + 1,
+      );
+    } else if (next.backgroundFileName == null &&
+        old.backgroundFileName != null) {
+      next = next.copyWith(
+        backgroundFileName: old.backgroundFileName,
+        backgroundRevision: old.backgroundRevision,
+      );
+    }
+
     final updated = Map<String, ProjectAppearancePreferences>.from(_values);
     updated[projectId] = next;
     try {
       await _store.save(updated);
     } on Object {
-      final createdFile = newlyWrittenFile;
-      if (createdFile != null) {
+      for (final file in newlyWrittenFiles) {
         try {
-          if (await createdFile.exists()) {
-            await createdFile.delete();
-          }
+          if (await file.exists()) await file.delete();
         } on FileSystemException {
-          // The preference write failed; best-effort cleanup must not mask it.
+          // Best-effort cleanup must not mask the preference write error.
         }
       }
       rethrow;
     }
     _values = updated;
     _notify();
-    if (oldIconToDelete != null &&
-        oldIconToDelete != next.iconFileName) {
-      await _deleteIconFile(oldIconToDelete, directory);
+    if (oldIconToDelete != null && oldIconToDelete != next.iconFileName) {
+      await _deleteManagedFile(oldIconToDelete, iconDirectory);
+    }
+    if (oldBackgroundToDelete != null &&
+        oldBackgroundToDelete != next.backgroundFileName) {
+      await _deleteManagedFile(oldBackgroundToDelete, backgroundDirectory);
     }
   }
 
   Future<void> removeProject(String projectId) async {
     final old = _values[projectId];
-    final directory = _iconDirectory ?? await _store.iconDirectory();
-    _iconDirectory = directory;
+    final iconDirectory = _iconDirectory ?? await _store.iconDirectory();
+    final backgroundDirectory =
+        _backgroundDirectory ?? await _store.backgroundDirectory();
+    _iconDirectory = iconDirectory;
+    _backgroundDirectory = backgroundDirectory;
     final updated = Map<String, ProjectAppearancePreferences>.from(_values)
       ..remove(projectId);
     await _store.save(updated);
     _values = updated;
     _notify();
-    await _deleteIconFile(old?.iconFileName, directory);
+    await _deleteManagedFile(old?.iconFileName, iconDirectory);
+    await _deleteManagedFile(old?.backgroundFileName, backgroundDirectory);
   }
 
   void _notify() {
@@ -260,17 +366,36 @@ class ProjectAppearanceController extends ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> _deleteIconFile(String? fileName, Directory directory) async {
-    if (fileName == null) return;
-    final safeName = path.basename(fileName);
-    if (safeName != fileName) return;
-    final file = File(path.join(directory.path, safeName));
+  File? _managedFile(Directory? directory, String? fileName) {
+    if (directory == null || fileName == null) return null;
+    if (path.basename(fileName) != fileName) return null;
+    final file = File(path.join(directory.path, fileName));
+    return file.existsSync() ? file : null;
+  }
+
+  String _managedFileName({
+    required String prefix,
+    required String projectId,
+    required String extension,
+  }) {
+    final safeProjectId = projectId.replaceAll(
+      RegExp(r'[^A-Za-z0-9_-]'),
+      '_',
+    );
+    return '${prefix}_${safeProjectId}_'
+        '${DateTime.now().microsecondsSinceEpoch}.$extension';
+  }
+
+  Future<void> _deleteManagedFile(
+    String? fileName,
+    Directory directory,
+  ) async {
+    if (fileName == null || path.basename(fileName) != fileName) return;
+    final file = File(path.join(directory.path, fileName));
     try {
-      if (await file.exists()) {
-        await file.delete();
-      }
+      if (await file.exists()) await file.delete();
     } on FileSystemException {
-      // A stale managed icon is harmless; the saved preference is authoritative.
+      // A stale managed image is harmless.
     }
   }
 }

@@ -14,12 +14,16 @@ class ProjectEditorResult {
     required this.appearance,
     this.icon,
     this.removeIcon = false,
+    this.background,
+    this.removeBackground = false,
   });
 
   final Project project;
   final ProjectAppearancePreferences appearance;
   final ProjectIconSelection? icon;
   final bool removeIcon;
+  final ProjectBackgroundSelection? background;
+  final bool removeBackground;
 }
 
 class ProjectEditorSheet extends StatefulWidget {
@@ -78,6 +82,9 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
   ProjectIconSelection? pendingIcon;
   bool removeIcon = false;
   bool pickingIcon = false;
+  ProjectBackgroundSelection? pendingBackground;
+  bool removeBackground = false;
+  bool pickingBackground = false;
 
   @override
   void initState() {
@@ -403,6 +410,113 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
     );
   }
 
+
+  ImageProvider<Object>? _projectBackgroundImage() {
+    final pending = pendingBackground;
+    if (pending != null) return MemoryImage(pending.bytes);
+    if (removeBackground) return null;
+    final file = widget.appearanceController.backgroundFileFor(projectId);
+    return file == null ? null : FileImage(file);
+  }
+
+  Widget _backgroundControls() {
+    final colors = Theme.of(context).colorScheme;
+    final background = _projectBackgroundImage();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Фоновое изображение или GIF',
+            style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 5),
+        Text(
+          'PNG, JPEG, WebP или GIF до 30 МБ. Файл хранится локально в Chronicle.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: colors.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            FilledButton.tonalIcon(
+              onPressed: pickingBackground ? null : _pickBackground,
+              icon: pickingBackground
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.wallpaper_rounded),
+              label: Text(background == null ? 'Выбрать фон' : 'Заменить фон'),
+            ),
+            if (background != null) ...[
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    pendingBackground = null;
+                    removeBackground = true;
+                  });
+                },
+                icon: const Icon(Icons.delete_outline_rounded),
+                label: const Text('Убрать'),
+              ),
+            ],
+          ],
+        ),
+        if (background != null) ...[
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              height: 120,
+              width: double.infinity,
+              child: Image(
+                image: background,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                errorBuilder: (_, __, ___) => ColoredBox(
+                  color: colors.surfaceContainerHigh,
+                  child: const Center(child: Icon(Icons.broken_image_outlined)),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _effectSlider({
+    required String title,
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required String label,
+    required ValueChanged<double>? onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(title)),
+              Text(label, style: Theme.of(context).textTheme.labelSmall),
+            ],
+          ),
+          Slider(
+            value: value.clamp(min, max).toDouble(),
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _appearanceSection() {
     final colors = Theme.of(context).colorScheme;
     final effective = projectAppearance.effectiveAppearance(
@@ -538,34 +652,139 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
                 ),
             ],
           ),
+          const SizedBox(height: 20),
+          _backgroundControls(),
+          const SizedBox(height: 18),
+          Text('Стекло и эффекты', style: Theme.of(context).textTheme.labelLarge),
+          _effectSlider(
+            title: 'Прозрачность панелей',
+            value: projectAppearance.panelOpacity,
+            min: 0.35,
+            max: 1,
+            divisions: 13,
+            label: '${(projectAppearance.panelOpacity * 100).round()}%',
+            onChanged: (value) {
+              setState(() {
+                projectAppearance = projectAppearance.copyWith(
+                  panelOpacity: value,
+                );
+              });
+            },
+          ),
+          _effectSlider(
+            title: 'Размытие за панелями',
+            value: projectAppearance.panelBlurSigma,
+            min: 0,
+            max: 30,
+            divisions: 15,
+            label: projectAppearance.panelBlurSigma == 0
+                ? 'выкл.'
+                : projectAppearance.panelBlurSigma.toStringAsFixed(0),
+            onChanged: projectAppearance.panelOpacity >= 0.999
+                ? null
+                : (value) {
+                    setState(() {
+                      projectAppearance = projectAppearance.copyWith(
+                        panelBlurSigma: value,
+                      );
+                    });
+                  },
+          ),
+          if (_projectBackgroundImage() != null) ...[
+            _effectSlider(
+              title: 'Яркость фона',
+              value: projectAppearance.wallpaperOpacity,
+              min: 0.1,
+              max: 1,
+              divisions: 18,
+              label: '${(projectAppearance.wallpaperOpacity * 100).round()}%',
+              onChanged: (value) {
+                setState(() {
+                  projectAppearance = projectAppearance.copyWith(
+                    wallpaperOpacity: value,
+                  );
+                });
+              },
+            ),
+            _effectSlider(
+              title: 'Цветовая вуаль',
+              value: projectAppearance.wallpaperOverlay,
+              min: 0,
+              max: 0.85,
+              divisions: 17,
+              label: '${(projectAppearance.wallpaperOverlay * 100).round()}%',
+              onChanged: (value) {
+                setState(() {
+                  projectAppearance = projectAppearance.copyWith(
+                    wallpaperOverlay: value,
+                  );
+                });
+              },
+            ),
+          ],
+          if (projectAppearance.surfaceStyle == ChronicleSurfaceStyle.shiny)
+            _effectSlider(
+              title: 'Интенсивность блёсток',
+              value: projectAppearance.sparkleIntensity,
+              min: 0,
+              max: 2,
+              divisions: 20,
+              label: '${(projectAppearance.sparkleIntensity * 100).round()}%',
+              onChanged: (value) {
+                setState(() {
+                  projectAppearance = projectAppearance.copyWith(
+                    sparkleIntensity: value,
+                  );
+                });
+              },
+            ),
         ],
         const SizedBox(height: 14),
         Theme(
-          data: buildChronicleTheme(brightness, effective),
+          data: buildChronicleTheme(
+            brightness,
+            effective,
+            backgroundAvailable: !projectAppearance.inheritsGlobal &&
+                _projectBackgroundImage() != null,
+          ),
           child: Builder(
-            builder: (previewContext) => ChroniclePanelSurface(
-              emphasized: true,
-              borderRadius: BorderRadius.circular(18),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.folder_special_rounded,
-                      color: Theme.of(previewContext)
-                          .extension<ChronicleAppearanceTheme>()
-                          ?.iconAccent,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        previewLabel,
-                        style: Theme.of(previewContext).textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
+            builder: (previewContext) => SizedBox(
+              height: 110,
+              child: ChronicleBackdrop(
+                backgroundImage: projectAppearance.inheritsGlobal
+                    ? null
+                    : _projectBackgroundImage(),
+                revision: projectAppearance.backgroundRevision,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: ChroniclePanelSurface(
+                    emphasized: true,
+                    borderRadius: BorderRadius.circular(18),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.folder_special_rounded,
+                            color: Theme.of(previewContext)
+                                .extension<ChronicleAppearanceTheme>()
+                                ?.iconAccent,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              previewLabel,
+                              style: Theme.of(previewContext)
+                                  .textTheme
+                                  .titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          const Icon(Icons.auto_awesome_rounded, size: 18),
+                        ],
                       ),
                     ),
-                    const Icon(Icons.auto_awesome_rounded, size: 18),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -591,6 +810,25 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
       );
     } finally {
       if (mounted) setState(() => pickingIcon = false);
+    }
+  }
+
+  Future<void> _pickBackground() async {
+    setState(() => pickingBackground = true);
+    try {
+      final selected = await pickProjectBackground();
+      if (!mounted || selected == null) return;
+      setState(() {
+        pendingBackground = selected;
+        removeBackground = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось загрузить фон: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => pickingBackground = false);
     }
   }
 
@@ -641,6 +879,8 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
         appearance: projectAppearance,
         icon: pendingIcon,
         removeIcon: removeIcon,
+        background: pendingBackground,
+        removeBackground: removeBackground,
       ),
     );
   }

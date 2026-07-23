@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -27,6 +28,7 @@ class _ChronicleAppState extends State<ChronicleApp>
   late final AppStore store;
   final AppAppearanceStore _appearanceStore = AppAppearanceStore();
   AppAppearancePreferences _appearance = AppAppearancePreferences.defaults();
+  File? _backgroundFile;
 
   @override
   void initState() {
@@ -59,8 +61,23 @@ class _ChronicleAppState extends State<ChronicleApp>
         debugShowCheckedModeBanner: false,
         title: 'Chronicle',
         themeMode: _appearance.brightnessMode.themeMode,
-        theme: buildChronicleTheme(Brightness.light, _appearance),
-        darkTheme: buildChronicleTheme(Brightness.dark, _appearance),
+        theme: buildChronicleTheme(
+          Brightness.light,
+          _appearance,
+          backgroundAvailable: _backgroundFile != null,
+        ),
+        darkTheme: buildChronicleTheme(
+          Brightness.dark,
+          _appearance,
+          backgroundAvailable: _backgroundFile != null,
+        ),
+        builder: (context, child) => ChronicleBackdrop(
+          backgroundImage: _backgroundFile == null
+              ? null
+              : FileImage(_backgroundFile!),
+          revision: _appearance.backgroundRevision,
+          child: child ?? const SizedBox.shrink(),
+        ),
         home: _home(),
       ),
     );
@@ -76,25 +93,38 @@ class _ChronicleAppState extends State<ChronicleApp>
     return HomeShell(
       store: store,
       appearance: _appearance,
+      backgroundImage: _backgroundFile == null
+          ? null
+          : FileImage(_backgroundFile!),
       onAppearanceChanged: _updateAppearance,
     );
   }
 
   Future<void> _loadAppearance() async {
     AppAppearancePreferences loaded;
+    File? backgroundFile;
     try {
       loaded = await _appearanceStore.load();
+      backgroundFile = await _appearanceStore.backgroundFileFor(loaded);
     } on Object {
       loaded = AppAppearancePreferences.defaults();
+      backgroundFile = null;
     }
     if (!mounted) return;
-    setState(() => _appearance = loaded);
+    setState(() {
+      _appearance = loaded;
+      _backgroundFile = backgroundFile;
+    });
   }
 
-  Future<void> _updateAppearance(AppAppearancePreferences value) async {
-    await _appearanceStore.save(value);
+  Future<void> _updateAppearance(AppAppearanceChange change) async {
+    final saved = await _appearanceStore.saveChange(change);
+    final backgroundFile = await _appearanceStore.backgroundFileFor(saved);
     if (!mounted) return;
-    setState(() => _appearance = value);
+    setState(() {
+      _appearance = saved;
+      _backgroundFile = backgroundFile;
+    });
   }
 }
 

@@ -290,6 +290,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         result.appearance,
         icon: result.icon,
         removeIcon: result.removeIcon,
+        background: result.background,
+        removeBackground: result.removeBackground,
       );
     } on Object catch (error) {
       if (!mounted) return;

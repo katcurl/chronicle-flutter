@@ -24,14 +24,24 @@ class ProjectAppearanceScope extends StatelessWidget {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, child) {
-        final appearance = controller.effectiveAppearance(
-          projectId,
-          globalAppearance,
-        );
+        final preferences = controller.preferencesFor(projectId);
+        if (preferences.inheritsGlobal) return child!;
+        final appearance = preferences.effectiveAppearance(globalAppearance);
+        final backgroundFile = controller.backgroundFileFor(projectId);
         final brightness = Theme.of(context).brightness;
         return Theme(
-          data: buildChronicleTheme(brightness, appearance),
-          child: child!,
+          data: buildChronicleTheme(
+            brightness,
+            appearance,
+            backgroundAvailable: backgroundFile != null,
+          ),
+          child: ChronicleBackdrop(
+            backgroundImage: backgroundFile == null
+                ? null
+                : FileImage(backgroundFile),
+            revision: preferences.backgroundRevision,
+            child: child!,
+          ),
         );
       },
       child: child,

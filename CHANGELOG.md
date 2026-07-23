@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.30.0+81
+
+- Added managed PNG, JPEG, WebP and animated GIF backgrounds for the complete Chronicle interface with a 30 MB content-validated limit.
+- Added independent wallpaper brightness and palette-overlay controls while preserving the existing solid background color as a safe fallback.
+- Added adjustable panel opacity and backdrop blur for glass-like Matte, Glossy and Shiny surfaces.
+- Added a 0–200% Shiny sparkle-intensity control without continuous animation or pointer interception.
+- Added optional per-project backgrounds and independent wallpaper, glass and sparkle settings alongside existing project colors and icons.
+- Applied project backgrounds to project cards, project pages and note workspaces without creating Markdown links or database fields.
+- Stored global and project background files in managed application-support directories with transactional replacement and best-effort cleanup.
+- Preserved all existing appearance data, project icons, notes, Vault files, database records and synchronization formats without migration.
+- Added deterministic tests for new appearance values, safe JSON round-tripping and image-signature validation.
+
 ## 0.28.0+80
 
 - Replaced the standalone palette button in compact and desktop navigation with one general Chronicle settings entry.

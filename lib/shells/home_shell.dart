@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../features/appearance/app_appearance.dart';
 import '../features/appearance/app_appearance_dialog.dart';
+import '../features/appearance/app_appearance_store.dart';
 import '../features/appearance/app_appearance_theme.dart';
 import '../features/projects/project_appearance_store.dart';
 import '../features/settings/app_settings_dialog.dart';
@@ -26,13 +27,14 @@ class HomeShell extends StatefulWidget {
     super.key,
     required this.store,
     required this.appearance,
+    required this.backgroundImage,
     required this.onAppearanceChanged,
   });
 
   final AppStore store;
   final AppAppearancePreferences appearance;
-  final Future<void> Function(AppAppearancePreferences value)
-      onAppearanceChanged;
+  final ImageProvider<Object>? backgroundImage;
+  final Future<void> Function(AppAppearanceChange change) onAppearanceChanged;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -372,8 +374,9 @@ class _HomeShellState extends State<HomeShell> {
     final result = await AppAppearanceDialog.show(
       context,
       preferences: widget.appearance,
+      existingBackgroundImage: widget.backgroundImage,
     );
-    if (!mounted || result == null || result == widget.appearance) return;
+    if (!mounted || result == null) return;
     try {
       await widget.onAppearanceChanged(result);
     } on Object catch (error) {

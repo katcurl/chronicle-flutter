@@ -54,6 +54,13 @@ void main() {
       surfaceStyle: ChronicleSurfaceStyle.glossy,
       iconFileName: 'project_demo_1.gif',
       iconRevision: 4,
+      backgroundFileName: 'project_demo_bg.gif',
+      backgroundRevision: 2,
+      wallpaperOpacity: 0.8,
+      wallpaperOverlay: 0.25,
+      panelOpacity: 0.62,
+      panelBlurSigma: 14,
+      sparkleIntensity: 1.4,
     );
 
     final decoded = ProjectAppearanceStore.decode(
@@ -90,5 +97,24 @@ void main() {
       ),
       throwsFormatException,
     );
+  });
+
+
+  test('project background validation detects PNG by content', () {
+    final selection = ProjectBackgroundSelection.validate(
+      bytes: Uint8List.fromList(<int>[
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+      ]),
+      originalName: 'background.bin',
+    );
+
+    expect(selection.extension, 'png');
   });
 }

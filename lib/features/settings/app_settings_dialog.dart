@@ -35,8 +35,11 @@ class AppSettingsDialog extends StatelessWidget {
   }
 
   static String appearanceSummary(AppAppearancePreferences appearance) {
-    return '${appearance.accentPalette.label} · '
-        '${appearance.surfaceStyle.label} · '
+    final background = appearance.hasBackgroundImage ? 'с фоном' : 'без фона';
+    final glass = appearance.panelOpacity < 0.999
+        ? 'стекло ${(appearance.panelOpacity * 100).round()}%'
+        : appearance.surfaceStyle.label;
+    return '${appearance.accentPalette.label} · $glass · $background · '
         '${appearance.brightnessMode.label}';
   }
 
