@@ -1,114 +1,52 @@
-# Roadmap to v1.0
+# Chronicle roadmap after 1.0
 
-Each milestone must end with a buildable APK, migration tests, and a tagged release.
+Chronicle 1.0 freezes the first stable data-safety contract. Future releases may add capabilities, but they may not weaken documented Vault, backup, conflict and recovery guarantees.
 
-## v0.1 Foundation
+## 1.0 stable baseline
 
-Deliverables:
+Completed release criteria:
 
-- product specification;
-- domain model;
-- architecture decisions;
-- vault and database schema;
-- design system;
-- roadmap and definition of done.
+- documented and versioned Vault format;
+- backward-compatible structured backups and future-format refusal;
+- emergency backup and automatic rollback around restore;
+- explicit Vault conflict review without silent data loss;
+- common session undo for principal destructive operations;
+- note version history and bounded large-document comparison;
+- regression coverage for large-note parse/serialize behavior;
+- reversible project/note export paths including DOCX and PDF;
+- pinned Windows analyzer, tests and release build;
+- in-app readiness audit and recovery documentation.
 
-Exit criterion: documents reviewed and committed to the repository.
+## 1.1 hardening
 
-## v0.2 App shell
+- embed figures and richer tables directly in DOCX/PDF;
+- expand undo to more metadata edits and batch operations;
+- add accessible keyboard navigation and screen-reader audit;
+- publish measured performance baselines for very large Vaults;
+- improve repair previews for integrity findings without automatic mutation.
 
-- reliable Flutter project scaffold;
-- Material 3 theme and tokens;
-- adaptive phone/tablet navigation;
-- error boundary and logging;
-- CI: format, analyze, test, APK artifact.
+## 1.2 local intelligence quality
 
-Exit criterion: empty app shell installs and runs on a physical Android device.
+- optional local embedding backend with explicit model/download controls;
+- multilingual term normalization;
+- better evidence grouping for contradictions and sourced answers;
+- evaluation fixtures that measure retrieval quality without uploading notes;
+- project-specific exclusions and index diagnostics.
 
-## v0.3 Persistence core
+## 1.3 portability and collaboration
 
-- Drift/SQLite database;
-- schema migrations;
-- repository interfaces;
-- workspaces, projects, and settings;
-- backup of structured data.
+- richer LaTeX export for publication workspaces;
+- reproducible import/export compatibility fixtures;
+- clearer multi-device conflict provenance;
+- optional encrypted peer synchronization;
+- signed release metadata and checksums.
 
-Exit criterion: projects survive process death and application upgrades.
+## Later, only after format review
 
-## v0.4 Time tracking
-
-- timer state machine;
-- foreground service and notification;
-- manual records;
-- recovery after process termination;
-- daily session list.
-
-Exit criterion: a 2-hour timer remains correct through screen lock and app restart.
-
-## v0.5 Work management
-
-- work items;
-- tasks, subtasks, statuses, dependencies;
-- estimates and actual time;
-- Today and project views.
-
-Exit criterion: user can plan, execute, and close a work item end to end.
-
-## v0.6 Notes core
-
-- Markdown files in vault;
-- source editor and preview;
-- LaTeX, images, tables, checklists;
-- frontmatter preservation;
-- file watcher and reconciliation.
-
-Exit criterion: notes remain editable in both Chronicle and Obsidian without data loss.
-
-## v0.7 Knowledge links
-
-- wiki-links;
-- backlinks;
-- headings and block links;
-- full-text search;
-- local graph and saved views.
-
-Exit criterion: renames and file moves retain valid relationships.
-
-## v0.8 History and research tools
-
-- project event timeline;
-- note version history;
-- BibTeX and citations;
-- experiment and literature templates;
-- outcome journal.
-
-Exit criterion: a research project can produce a traceable weekly report.
-
-## v0.9 Portability and polish
-
-- complete import/export;
-- backup restore UI;
-- accessibility audit;
-- performance profiling;
-- onboarding;
-- crash recovery and diagnostics.
-
-Exit criterion: beta users can migrate in and out without developer assistance.
-
-## v1.0 Stable Android release
-
-- signed APK/AAB;
-- documented privacy behavior;
-- migration guarantees;
-- user documentation;
-- reproducible release pipeline;
-- no known data-loss bugs.
-
-## After v1.0
-
-- desktop applications;
-- optional encrypted sync;
+- plugin API;
 - calendar integration;
-- Android widgets;
-- controlled AI assistance;
-- plugin API only after core formats stabilize.
+- Android companion application and widgets;
+- optional controlled cloud services;
+- additional platform builds.
+
+Any future schema or format change requires a new version, migration tests and a documented rollback/export path.

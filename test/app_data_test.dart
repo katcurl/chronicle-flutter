@@ -75,4 +75,47 @@ void main() {
     expect(restored.citationSources.single.citationKey, 'Jaffe2005');
     expect(restored.citationSources.single.normalizedDoi, '10.1000/example');
   });
+
+  test('legacy backup without version remains readable', () {
+    const raw = '''{
+      "projects": [],
+      "tasks": [],
+      "notes": [],
+      "entries": []
+    }''';
+
+    expect(
+      AppData.formatVersionOf(raw),
+      AppData.minimumReadableBackupFormatVersion,
+    );
+    expect(AppData.decode(raw).notes, isEmpty);
+  });
+
+  test('future backup format is refused instead of being overwritten', () {
+    final raw = '''{
+      "format": "${AppData.backupFormat}",
+      "version": ${AppData.currentBackupFormatVersion + 1},
+      "projects": [],
+      "tasks": [],
+      "notes": [],
+      "entries": []
+    }''';
+
+    expect(() => AppData.decode(raw), throwsUnsupportedError);
+  });
+
+  test('backup requiring a newer reader is refused', () {
+    final raw = '''{
+      "format": "${AppData.backupFormat}",
+      "version": ${AppData.currentBackupFormatVersion},
+      "minimumReaderVersion": ${AppData.currentBackupFormatVersion + 1},
+      "projects": [],
+      "tasks": [],
+      "notes": [],
+      "entries": []
+    }''';
+
+    expect(() => AppData.decode(raw), throwsUnsupportedError);
+  });
+
 }

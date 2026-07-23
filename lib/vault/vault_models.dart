@@ -14,6 +14,9 @@ class VaultStatus {
     this.conflictCount = 0,
     this.missingFileCount = 0,
     this.attachmentCount = 0,
+    this.formatVersion,
+    this.minimumReaderVersion,
+    this.readOnly = false,
   });
 
   const VaultStatus.unavailable({this.message})
@@ -25,7 +28,10 @@ class VaultStatus {
       pendingChangeCount = 0,
       conflictCount = 0,
       missingFileCount = 0,
-      attachmentCount = 0;
+      attachmentCount = 0,
+      formatVersion = null,
+      minimumReaderVersion = null,
+      readOnly = false;
 
   final bool supported;
   final String rootPath;
@@ -37,6 +43,11 @@ class VaultStatus {
   final int conflictCount;
   final int missingFileCount;
   final int attachmentCount;
+  final int? formatVersion;
+  final int? minimumReaderVersion;
+  final bool readOnly;
+
+  bool get writable => supported && !readOnly;
 
   VaultStatus copyWith({
     bool? supported,
@@ -50,6 +61,9 @@ class VaultStatus {
     int? conflictCount,
     int? missingFileCount,
     int? attachmentCount,
+    int? formatVersion,
+    int? minimumReaderVersion,
+    bool? readOnly,
   }) {
     return VaultStatus(
       supported: supported ?? this.supported,
@@ -62,6 +76,10 @@ class VaultStatus {
       conflictCount: conflictCount ?? this.conflictCount,
       missingFileCount: missingFileCount ?? this.missingFileCount,
       attachmentCount: attachmentCount ?? this.attachmentCount,
+      formatVersion: formatVersion ?? this.formatVersion,
+      minimumReaderVersion:
+          minimumReaderVersion ?? this.minimumReaderVersion,
+      readOnly: readOnly ?? this.readOnly,
     );
   }
 }

@@ -8,6 +8,7 @@ enum AppSettingsDestination {
   appearance,
   workspaces,
   projectAppearance,
+  reliability,
 }
 
 class AppSettingsDialog extends StatelessWidget {
@@ -103,6 +104,17 @@ class AppSettingsDialog extends StatelessWidget {
                 onTap: () => Navigator.pop(
                   context,
                   AppSettingsDestination.projectAppearance,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _SettingsRow(
+                icon: Icons.verified_user_outlined,
+                title: 'Надёжность и восстановление',
+                subtitle:
+                    'Проверка целостности, Vault, backup round-trip и undo.',
+                onTap: () => Navigator.pop(
+                  context,
+                  AppSettingsDestination.reliability,
                 ),
               ),
               const SizedBox(height: 18),

@@ -132,8 +132,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   return;
                 }
                 if (value == 'archive') {
-                  widget.store.setProjectArchived(project, !project.archived);
-                  setState(() {});
+                  await widget.store.setProjectArchived(
+                    project,
+                    !project.archived,
+                  );
+                  if (mounted) {
+                    setState(() {});
+                  }
                 }
               },
               itemBuilder: (_) => [
@@ -440,7 +445,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ),
     );
     if (confirmed != true) return;
-    widget.store.deleteTask(task.id);
+    await widget.store.deleteTask(task.id);
+    if (!mounted) {
+      return;
+    }
     setState(() {});
   }
 }

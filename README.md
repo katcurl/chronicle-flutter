@@ -1,28 +1,35 @@
-# Chronicle 0.7 — Data Core
+# Chronicle 1.0 — local-first research workspace
 
-Нативное local-first Android-приложение для проектов, задач, Markdown/LaTeX-заметок и учёта времени.
+Chronicle is a local-first Windows workspace for research projects, tasks, Markdown notes, scientific sources, time tracking, publication assembly and explainable local search.
 
-## Что уже работает
+The 1.0 release marks a stability contract rather than the end of development. Chronicle keeps the primary database and optional Markdown Vault on the user's device, never silently resolves conflicts, and provides explicit recovery paths before risky operations.
 
-- аккуратный Material 3 интерфейс;
-- проекты и задачи со статусами;
-- отзывчивый Markdown-редактор, устойчивый предпросмотр и безопасное управление порядком блоков;
-- визуальная компоновка заметок в 2–3 колонки с перетаскиванием и сохранением переносимого Markdown;
-- кликабельные `[[вики-ссылки]]`, автодополнение, обратные ссылки, безопасное переименование и интерактивная карта знаний;
-- локальная библиотека научных источников, BibTeX, цитаты `[@key]` и автоматически собираемая библиография;
-- нумерованные научные рисунки и таблицы с устойчивыми ссылками `@fig(id)` и `@tbl(id)` внутри заметки;
-- блочные LaTeX-формулы;
-- таймер с привязкой к проекту и заметке;
-- сохранение активного таймера после закрытия приложения;
-- SQLite-база для проектов, задач, заметок и временных записей;
-- автоматический перенос данных из старой SharedPreferences-версии;
-- JSON-резервная копия через буфер обмена;
-- статистика по проектам;
-- светлая и тёмная темы;
-- GitHub Actions для сборки `app-release.apk`;
-- in-memory репозиторий и автоматические тесты.
+## Core workspace
 
-## Архитектура Data Core
+- flexible research-project homes with goals, questions, findings, open checks, pinned results and timelines;
+- Markdown/LaTeX notes, tables, figures, attachments, columns, stable wiki-links, backlinks and knowledge graph;
+- note templates, note history and reversible imports;
+- tasks, subtasks and time tracking linked to projects and notes;
+- bibliography, citation keys and project source libraries;
+- article/report/presentation assembly from live note fragments;
+- Markdown, HTML, portable ZIP, DOCX and PDF export;
+- fully local TF-IDF search, related-note suggestions, sourced answers, term extraction and contradiction candidates;
+- per-workspace and per-project appearance, wallpapers and image/GIF project icons.
+
+## Chronicle 1.0 guarantees
+
+- **Stable Vault contract.** Vault manifest v2, UUID identity, preserved unknown frontmatter and documented conflict files.
+- **Future-format protection.** A Vault written by an incompatible newer Chronicle version opens read-only instead of being overwritten.
+- **Backward-compatible backups.** Legacy backup JSON without an explicit version remains readable; unknown future versions are refused.
+- **No silent conflict loss.** Divergent external edits become explicit conflict candidates and the existing content is backed up before resolution.
+- **Verified recovery path.** Restore creates an emergency copy first and rolls back automatically when applying the replacement fails.
+- **Session undo.** Deleting a note or task, deleting a source and archiving a project can be undone from the common undo journal.
+- **Large-note regression coverage.** CI verifies parse/serialize stability for a note larger than 1 MB and coalesced preview updates.
+- **Release-readiness audit.** Settings → Reliability and recovery checks data relationships, backup round-trip, Vault compatibility, conflicts and valid safety backups without modifying user data.
+
+The complete contract is documented in [`docs/75-v1-stability-contract.md`](docs/75-v1-stability-contract.md). Recovery instructions are in [`docs/76-recovery-guide.md`](docs/76-recovery-guide.md).
+
+## Data layers
 
 ```text
 Flutter UI
@@ -30,61 +37,57 @@ Flutter UI
 AppStore
    ↓
 AppRepository
-   ├── SqliteAppRepository — Android production
-   └── InMemoryAppRepository — tests
+   ├── DriftAppRepository — production SQLite
+   └── InMemoryAppRepository — deterministic tests
    ↓
 chronicle.db
+
+Optional open mirror:
+AppStore → VaultService → Markdown Vault + manifest/index
 ```
 
-Подробности: [`docs/11-data-core-v0.7.md`](docs/11-data-core-v0.7.md).
+The SQLite database is the structured local source of truth. The optional Vault is an open Markdown mirror with reviewed two-way reconciliation. Visual preferences and the local intelligence index remain separate from note contents.
 
-## Обновление с установленной v0.6
+## GitHub validation and Windows build
 
-Устанавливай новый APK поверх старого, не удаляя приложение. При первом запуске v0.7:
-
-1. создаётся `chronicle.db`;
-2. старые проекты, задачи, заметки и сессии читаются из `chronicle_data_v5`;
-3. данные записываются в SQLite;
-4. дальнейшая работа идёт через SQLite.
-
-Старый JSON пока не удаляется и остаётся аварийной копией.
-
-## Локальная проверка
+The pinned Windows workflow uses Flutter 3.44.7 and runs:
 
 ```bash
 flutter pub get
+dart run build_runner build --delete-conflicting-outputs
 flutter analyze
 flutter test
+flutter build windows --release
 ```
 
-Запуск на подключённом Android-устройстве:
+Run it from:
+
+```text
+Actions → Build Windows desktop → Run workflow
+```
+
+Download the artifact:
+
+```text
+chronicle-windows-x64
+```
+
+The ZIP contains the complete portable Windows release directory. Launch `chronicle.exe` from the extracted folder.
+
+## Local verification
 
 ```bash
-flutter run
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter analyze
+flutter test
+flutter build windows --release
 ```
 
-## Сборка APK через GitHub Actions
+## Documentation
 
-Workflow запускается при push в `main` и `feature/data-core`, а также вручную:
-
-```text
-Actions → Build Android APK → Run workflow
-```
-
-После успешной сборки скачай artifact:
-
-```text
-chronicle-release-apk
-```
-
-Внутри находится:
-
-```text
-app-release.apk
-```
-
-## Foundation
-
-Продуктовая спецификация находится в `docs/`, SQL-схема — в `sql/`, шаблоны заметок — в `templates/`.
-
-Следующий этап: **v0.8 Timer Core** — ручные интервалы, редактирование истории, foreground service и системное уведомление Android.
+- [`docs/04-vault-format.md`](docs/04-vault-format.md) — stable Vault specification;
+- [`docs/74-local-intelligence-and-document-export.md`](docs/74-local-intelligence-and-document-export.md) — local intelligence and document export;
+- [`docs/75-v1-stability-contract.md`](docs/75-v1-stability-contract.md) — 1.0 compatibility and reliability guarantees;
+- [`docs/76-recovery-guide.md`](docs/76-recovery-guide.md) — recovery procedures;
+- [`docs/08-roadmap.md`](docs/08-roadmap.md) — post-1.0 direction.

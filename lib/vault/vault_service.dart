@@ -16,6 +16,8 @@ class VaultService {
   VaultService({VaultBackend? backend}) : _backend = backend ?? VaultBackend();
 
   static const int backupFormatVersion = 2;
+  static const int currentVaultFormatVersion = 2;
+  static const int minimumReadableVaultFormatVersion = 1;
   static const String _indexPath = '.chronicle/vault-index.json';
   static const String _attachmentIndexPath =
       '.chronicle/attachments-index.json';
@@ -53,6 +55,18 @@ class VaultService {
     if (rootPath == null || rootPath.isEmpty) {
       return const VaultStatus.unavailable(
         message: 'Файловый Vault недоступен на этой платформе.',
+      );
+    }
+
+    final compatibility = await _readManifestCompatibility(rootPath);
+    if (compatibility.readOnly) {
+      final current = await inspect();
+      return current.copyWith(
+        noteCount: data.notes.length,
+        message: current.message ??
+            'Совместимость Vault нельзя безопасно подтвердить. '
+                'Автоматическая запись отключена, чтобы не повредить данные.',
+        readOnly: true,
       );
     }
 
@@ -96,6 +110,8 @@ class VaultService {
       lastWrittenAt: built.generatedAt,
       message: 'Chronicle и Markdown Vault синхронизированы.',
       attachmentCount: attachments.length,
+      formatVersion: currentVaultFormatVersion,
+      minimumReaderVersion: minimumReadableVaultFormatVersion,
     );
   }
 
@@ -120,6 +136,7 @@ class VaultService {
 
     try {
       final manifest = jsonDecode(raw) as Map<String, dynamic>;
+      final compatibility = _VaultManifestCompatibility.fromJson(manifest);
       final attachments = await _backend.listBinaryFiles(
         rootPath: rootPath,
         directory: 'Attachments',
@@ -133,6 +150,14 @@ class VaultService {
         lastWrittenAt: DateTime.tryParse(
           manifest['generatedAt']?.toString() ?? '',
         ),
+        formatVersion: compatibility.formatVersion,
+        minimumReaderVersion: compatibility.minimumReaderVersion,
+        readOnly: compatibility.readOnly,
+        message: compatibility.readOnly
+            ? 'Vault использует формат ${compatibility.formatVersion}, '
+                'который новее поддерживаемого '
+                '$currentVaultFormatVersion. Открыт только для чтения.'
+            : null,
       );
     } on Object {
       return VaultStatus(
@@ -140,7 +165,12 @@ class VaultService {
         rootPath: rootPath,
         noteCount: 0,
         fileCount: 0,
-        message: 'Манифест Vault повреждён; его можно пересоздать.',
+        message:
+            'Манифест Vault повреждён. Автоматическая запись отключена; '
+            'сначала сохрани копию папки и восстанови совместимый манифест.',
+        formatVersion: currentVaultFormatVersion,
+        minimumReaderVersion: minimumReadableVaultFormatVersion,
+        readOnly: true,
       );
     }
   }
@@ -1013,6 +1043,37 @@ class VaultService {
     return snapshot.path;
   }
 
+  Future<_VaultManifestCompatibility> _readManifestCompatibility(
+    String rootPath,
+  ) async {
+    final raw = await _backend.readTextFile(rootPath, _manifestPath);
+    if (raw == null || raw.trim().isEmpty) {
+      return const _VaultManifestCompatibility(
+        formatVersion: minimumReadableVaultFormatVersion,
+        minimumReaderVersion: minimumReadableVaultFormatVersion,
+        readOnly: false,
+      );
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        throw const FormatException('Invalid Vault manifest');
+      }
+      return _VaultManifestCompatibility.fromJson(
+        Map<String, dynamic>.from(decoded),
+      );
+    } on Object {
+      // A damaged or unknown manifest is not proof of compatibility. Chronicle
+      // 1.0 therefore refuses automatic writes until the user has preserved
+      // the folder and explicitly rebuilt or replaced the manifest.
+      return const _VaultManifestCompatibility(
+        formatVersion: currentVaultFormatVersion,
+        minimumReaderVersion: minimumReadableVaultFormatVersion,
+        readOnly: true,
+      );
+    }
+  }
+
   Future<_BuiltBackup> _buildBackupPackage({
     required AppData data,
     DeviceIdentity? identity,
@@ -1115,7 +1176,8 @@ class VaultService {
 
     final index = <String, dynamic>{
       'format': 'chronicle-vault-index',
-      'version': 2,
+      'version': currentVaultFormatVersion,
+      'minimumReaderVersion': minimumReadableVaultFormatVersion,
       'generatedAt': generatedAt.toIso8601String(),
       'notes': noteIndex,
     };
@@ -1124,11 +1186,15 @@ class VaultService {
 
     final manifest = <String, dynamic>{
       'format': 'chronicle-vault',
-      'version': 2,
+      'version': currentVaultFormatVersion,
+      'minimumReaderVersion': minimumReadableVaultFormatVersion,
+      'stableSince': '1.0.0',
       'generatedAt': generatedAt.toIso8601String(),
       'noteCount': data.notes.length,
       'fileCount': files.length + 1,
       'twoWayVault': true,
+      'unknownFrontmatterPolicy': 'preserve',
+      'conflictPolicy': 'never-silently-overwrite',
       'readme':
           'Chronicle импортирует внешние изменения только после просмотра.',
     };
@@ -1652,7 +1718,7 @@ class VaultService {
 
 Эта папка зарезервирована для пользовательских шаблонов Chronicle.
 
-В Chronicle v0.19 Markdown Vault работает в обе стороны. Внешние изменения
+Начиная с Chronicle 1.0 Markdown Vault использует стабильный формат v2 и работает в обе стороны. Внешние изменения
 сначала обнаруживаются и показываются пользователю; Chronicle никогда не
 перезаписывает конфликт молча. Удаление управляемого Markdown-файла можно
 безопасно превратить в синхронизируемое удаление заметки: перед этим Chronicle
@@ -1670,6 +1736,49 @@ class _BuiltVault {
   final Map<String, String> files;
   final List<String> notePaths;
   final DateTime generatedAt;
+}
+
+int _manifestInt(Object? value, {int fallback = 1}) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+class _VaultManifestCompatibility {
+  const _VaultManifestCompatibility({
+    required this.formatVersion,
+    required this.minimumReaderVersion,
+    required this.readOnly,
+  });
+
+  final int formatVersion;
+  final int minimumReaderVersion;
+  final bool readOnly;
+
+  factory _VaultManifestCompatibility.fromJson(Map<String, dynamic> json) {
+    final format = json['format']?.toString();
+    if (format != null && format.isNotEmpty && format != 'chronicle-vault') {
+      throw FormatException('Unknown Vault format: $format');
+    }
+    final formatVersion = _manifestInt(json['version']);
+    final minimumReaderVersion = _manifestInt(json['minimumReaderVersion']);
+    if (formatVersion < VaultService.minimumReadableVaultFormatVersion ||
+        minimumReaderVersion <
+            VaultService.minimumReadableVaultFormatVersion) {
+      throw const FormatException('Invalid Vault compatibility version.');
+    }
+    return _VaultManifestCompatibility(
+      formatVersion: formatVersion,
+      minimumReaderVersion: minimumReaderVersion,
+      readOnly:
+          formatVersion > VaultService.currentVaultFormatVersion ||
+          minimumReaderVersion > VaultService.currentVaultFormatVersion,
+    );
+  }
 }
 
 class _BuiltBackup {

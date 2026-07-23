@@ -253,7 +253,10 @@ class _SourcesScreenState extends State<SourcesScreen> {
       ),
     );
     if (confirmed == true && mounted) {
-      widget.store.deleteCitationSource(source.id);
+      await widget.store.deleteCitationSource(source.id);
+      if (!mounted) {
+        return;
+      }
       setState(() {});
     }
   }

@@ -9,6 +9,7 @@ import '../features/appearance/app_appearance_store.dart';
 import '../features/appearance/app_appearance_theme.dart';
 import '../features/projects/project_appearance_store.dart';
 import '../features/settings/app_settings_dialog.dart';
+import '../features/settings/release_readiness_dialog.dart';
 import '../features/workspaces/workspace_manager_dialog.dart';
 import '../features/workspaces/workspace_preferences_store.dart';
 import '../features/workspaces/workspace_profile.dart';
@@ -92,6 +93,10 @@ class _HomeShellState extends State<HomeShell> {
             () => _select(AppSection.insights),
         const SingleActivator(LogicalKeyboardKey.keyT, control: true): _start,
         const SingleActivator(LogicalKeyboardKey.keyT, meta: true): _start,
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
+            () => unawaited(_undo()),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true):
+            () => unawaited(_undo()),
         const SingleActivator(
           LogicalKeyboardKey.keyW,
           control: true,
@@ -147,6 +152,16 @@ class _HomeShellState extends State<HomeShell> {
                 children: [
                   _workspaceSwitcher(compact: false),
                   const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: widget.store.canUndo
+                        ? 'Отменить: ${widget.store.nextUndoLabel} (Ctrl+Z)'
+                        : 'Нет действий для отмены',
+                    onPressed: widget.store.canUndo
+                        ? () => unawaited(_undo())
+                        : null,
+                    icon: const Icon(Icons.undo_rounded),
+                  ),
+                  const SizedBox(width: 4),
                   IconButton(
                     tooltip: 'Настройки (Ctrl+,)',
                     onPressed: () => unawaited(_openSettings()),
@@ -221,6 +236,16 @@ class _HomeShellState extends State<HomeShell> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      IconButton.filledTonal(
+                        tooltip: widget.store.canUndo
+                            ? 'Отменить: ${widget.store.nextUndoLabel} (Ctrl+Z)'
+                            : 'Нет действий для отмены',
+                        onPressed: widget.store.canUndo
+                            ? () => unawaited(_undo())
+                            : null,
+                        icon: const Icon(Icons.undo_rounded),
+                      ),
+                      const SizedBox(height: 8),
                       IconButton.filledTonal(
                         tooltip: 'Настройки (Ctrl+,)',
                         onPressed: () => unawaited(_openSettings()),
@@ -367,6 +392,10 @@ class _HomeShellState extends State<HomeShell> {
       await _openWorkspaceManager();
       return;
     }
+    if (destination == AppSettingsDestination.reliability) {
+      await ReleaseReadinessDialog.show(context, store: widget.store);
+      return;
+    }
     _select(AppSection.projects);
   }
 
@@ -472,6 +501,25 @@ class _HomeShellState extends State<HomeShell> {
         ),
       ),
     );
+  }
+
+  Future<void> _undo() async {
+    try {
+      final label = await widget.store.undoLastAction();
+      if (!mounted || label == null) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Отменено: $label')),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось отменить действие: $error')),
+      );
+    }
   }
 
   Future<void> _start() async {

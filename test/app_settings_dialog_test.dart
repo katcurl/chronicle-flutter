@@ -4,11 +4,12 @@ import 'package:chronicle/features/workspaces/workspace_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('settings center exposes only the existing customization destinations', () {
+  test('settings center exposes customization and reliability destinations', () {
     expect(AppSettingsDestination.values, <AppSettingsDestination>[
       AppSettingsDestination.appearance,
       AppSettingsDestination.workspaces,
       AppSettingsDestination.projectAppearance,
+      AppSettingsDestination.reliability,
     ]);
   });
 

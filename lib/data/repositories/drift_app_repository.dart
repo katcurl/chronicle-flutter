@@ -167,6 +167,23 @@ class DriftAppRepository implements AppRepository {
   }
 
   @override
+  Future<void> restoreTask(String taskId) async {
+    final restoredAt = DateTime.now().toIso8601String();
+    await _database.transaction(() async {
+      await _database.customStatement(
+        'UPDATE tasks SET deleted_at = NULL, updated_at = ? WHERE id = ?',
+        [restoredAt, taskId],
+      );
+      await _recordLocalChangeInTransaction(
+        entityType: 'task',
+        entityId: taskId,
+        operation: 'restore',
+        payload: {'restoredAt': restoredAt},
+      );
+    });
+  }
+
+  @override
   Future<void> saveNote(Note note) => _saveEntity(
     table: 'notes',
     values: note.toDb(),

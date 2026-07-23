@@ -800,6 +800,10 @@ class ActiveTimerState {
 }
 
 class AppData {
+  static const String backupFormat = 'chronicle-backup';
+  static const int currentBackupFormatVersion = 5;
+  static const int minimumReadableBackupFormatVersion = 1;
+
   AppData({
     required this.projects,
     required this.tasks,
@@ -824,8 +828,9 @@ class AppData {
   List<CitationSource> citationSources;
 
   String encode() => jsonEncode({
-    'format': 'chronicle-backup',
-    'version': 5,
+    'format': backupFormat,
+    'version': currentBackupFormatVersion,
+    'minimumReaderVersion': minimumReadableBackupFormatVersion,
     'exportedAt': DateTime.now().toIso8601String(),
     'projects': projects.map((item) => item.toJson()).toList(),
     'tasks': tasks.map((item) => item.toJson()).toList(),
@@ -836,8 +841,54 @@ class AppData {
     'citationSources': citationSources.map((item) => item.toJson()).toList(),
   });
 
+  static int formatVersionOf(String raw) {
+    final json = _decodeBackupEnvelope(raw);
+    return _formatVersionOfJson(json);
+  }
+
+  static Map<String, dynamic> _decodeBackupEnvelope(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) {
+      throw const FormatException('Некорректный формат резервной копии.');
+    }
+    return Map<String, dynamic>.from(decoded);
+  }
+
+  static int _formatVersionOfJson(Map<String, dynamic> json) {
+    final format = json['format']?.toString();
+    if (format != null && format.isNotEmpty && format != backupFormat) {
+      throw FormatException('Неизвестный формат резервной копии: $format.');
+    }
+    final rawVersion = json['version'];
+    final version = rawVersion == null
+        ? minimumReadableBackupFormatVersion
+        : _readInt(rawVersion, fallback: 0);
+    if (version < minimumReadableBackupFormatVersion) {
+      throw FormatException('Некорректная версия резервной копии: $version.');
+    }
+    final minimumReaderVersion = _readInt(
+      json['minimumReaderVersion'],
+      fallback: minimumReadableBackupFormatVersion,
+    );
+    if (minimumReaderVersion < minimumReadableBackupFormatVersion) {
+      throw FormatException(
+        'Некорректная минимальная версия чтения: $minimumReaderVersion.',
+      );
+    }
+    if (version > currentBackupFormatVersion ||
+        minimumReaderVersion > currentBackupFormatVersion) {
+      throw UnsupportedError(
+        'Эта копия создана более новой версией Chronicle '
+        '(формат $version, требуется reader $minimumReaderVersion, '
+        'поддерживается до $currentBackupFormatVersion).',
+      );
+    }
+    return version;
+  }
+
   factory AppData.decode(String raw) {
-    final json = jsonDecode(raw) as Map<String, dynamic>;
+    final json = _decodeBackupEnvelope(raw);
+    _formatVersionOfJson(json);
     return AppData(
       projects:
           (json['projects'] as List<dynamic>? ?? const [])

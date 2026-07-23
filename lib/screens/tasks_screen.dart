@@ -262,7 +262,10 @@ class _TasksScreenState extends State<TasksScreen>
           ),
     );
     if (confirmed != true) return;
-    widget.store.deleteTask(task.id);
+    await widget.store.deleteTask(task.id);
+    if (!mounted) {
+      return;
+    }
     setState(() {});
   }
 

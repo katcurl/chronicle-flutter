@@ -1013,7 +1013,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                         ),
                   ),
                 PopupMenuButton<String>(
-                  onSelected: (value) {
+                  onSelected: (value) async {
                     switch (value) {
                       case 'copy_stable_link':
                         unawaited(_copyStableNoteLink());
@@ -1022,8 +1022,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                         unawaited(_linkUnlinkedMentions());
                         break;
                       case 'delete':
-                        widget.store.deleteNote(widget.note.id);
-                        Navigator.pop(context);
+                        await widget.store.deleteNote(widget.note.id);
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
                         break;
                     }
                   },

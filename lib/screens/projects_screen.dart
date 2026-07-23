@@ -89,12 +89,14 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                           globalAppearance: widget.globalAppearance,
                           onOpen: () => _open(projects[index]),
                           onEdit: () => _edit(projects[index]),
-                          onArchive: () {
-                            widget.store.setProjectArchived(
+                          onArchive: () async {
+                            await widget.store.setProjectArchived(
                               projects[index],
                               !projects[index].archived,
                             );
-                            setState(() {});
+                            if (mounted) {
+                              setState(() {});
+                            }
                           },
                         ),
                   );

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0+100
+
+- Declared the first stable Chronicle data contract with versioned structured backups and Markdown Vault manifests.
+- Added future-format protection: newer Vaults open read-only and unsupported future backup JSON is refused before replacement.
+- Added a read-only release-readiness audit for entity integrity, backup round-trip, Vault compatibility, unresolved conflicts and valid safety backups.
+- Added a shared session undo journal for note/task deletion, citation-source deletion and project archive changes, including restoration of task and wiki-link relationships.
+- Added stable Vault metadata for minimum reader version, unknown-frontmatter preservation and the no-silent-overwrite conflict policy.
+- Added regression coverage for legacy/future backup compatibility, future Vault write protection, undo recovery and notes larger than 1 MB.
+- Added the Chronicle 1.0 stability contract and step-by-step recovery guide, and refreshed the project README and roadmap around the Windows local-first application.
+- Strengthened the Windows release workflow with executable verification and release metadata before packaging.
+
 ## 0.32.2+90
 
 - Fixed DOCX and PDF export from ordinary note workspaces: document formats are now routed to the dedicated document generator instead of falling through to the portable ZIP branch.

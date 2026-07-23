@@ -14,8 +14,10 @@ import '../features/notes/note_wiki_link_syntax.dart';
 import '../features/notes/note_wiki_rename.dart';
 import '../features/references/citation_syntax.dart';
 import '../models/app_models.dart';
+import '../reliability/release_readiness.dart';
 import '../reliability/reliability_models.dart';
 import '../reliability/reliability_service.dart';
+import '../reliability/undo_journal.dart';
 import '../sync/lan_auto_sync_models.dart';
 import '../sync/lan_auto_sync_service.dart';
 import '../sync/lan_auto_sync_transport.dart';
@@ -84,6 +86,7 @@ class AppStore extends ChangeNotifier {
   final bool _reliabilityFeaturesEnabled;
   late final LanAutoSyncService autoSyncService;
   final _uuid = const Uuid();
+  final ChronicleUndoJournal _undoJournal = ChronicleUndoJournal();
   final ValueNotifier<int> _attachmentRefreshNotifier =
       ValueNotifier<int>(0);
 
@@ -126,6 +129,14 @@ class AppStore extends ChangeNotifier {
   bool reliabilityBusy = false;
   String? reliabilityError;
 
+  ReleaseReadinessReport? releaseReadinessReport;
+  bool releaseReadinessBusy = false;
+  String? releaseReadinessError;
+
+  bool get canUndo => _undoJournal.canUndo;
+  int get undoDepth => _undoJournal.length;
+  String? get nextUndoLabel => _undoJournal.nextLabel;
+
   DateTime? activeStartedAt;
   String activeDescription = '';
   String? activeProjectId;
@@ -144,6 +155,9 @@ class AppStore extends ChangeNotifier {
   Future<void> load() async {
     ready = false;
     loadError = null;
+    _undoJournal.clear();
+    releaseReadinessReport = null;
+    releaseReadinessError = null;
     notifyListeners();
 
     try {
@@ -1030,15 +1044,51 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     notifyListeners();
   }
 
-  void deleteTask(String id) {
+  Future<void> deleteTask(String id) async {
+    final index = data.tasks.indexWhere((task) => task.id == id);
+    if (index < 0) {
+      return;
+    }
+    final removed = _cloneTask(data.tasks[index]);
+    final childSnapshots = data.tasks
+        .where((task) => task.parentTaskId == id)
+        .map(_cloneTask)
+        .toList(growable: false);
     final deletedAt = DateTime.now();
-    data.tasks.removeWhere((task) => task.id == id);
+
+    data.tasks.removeAt(index);
     for (final child in data.tasks.where((task) => task.parentTaskId == id)) {
       child.parentTaskId = null;
       child.updatedAt = deletedAt;
-      unawaited(_repository.saveTask(child));
+      await _repository.saveTask(child);
     }
-    unawaited(_repository.softDeleteTask(id, deletedAt));
+    await _repository.softDeleteTask(id, deletedAt);
+    _registerUndo(
+      label: 'Удаление задачи «${removed.title}»',
+      restore: () async {
+        final restored = _cloneTask(removed)..deletedAt = null;
+        await _repository.restoreTask(restored.id);
+        await _repository.saveTask(restored);
+        data.tasks.removeWhere((task) => task.id == restored.id);
+        data.tasks.insert(
+          index.clamp(0, data.tasks.length).toInt(),
+          restored,
+        );
+        for (final snapshot in childSnapshots) {
+          final restoredChild = _cloneTask(snapshot);
+          final childIndex = data.tasks.indexWhere(
+            (task) => task.id == restoredChild.id,
+          );
+          if (childIndex >= 0) {
+            data.tasks[childIndex] = restoredChild;
+          } else {
+            data.tasks.add(restoredChild);
+          }
+          await _repository.saveTask(restoredChild);
+        }
+        _scheduleSyncOverviewRefresh();
+      },
+    );
     _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
@@ -1059,10 +1109,31 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     notifyListeners();
   }
 
-  void setProjectArchived(Project project, bool archived) {
+  Future<void> setProjectArchived(Project project, bool archived) async {
+    if (project.archived == archived) {
+      return;
+    }
+    final previous = project.archived;
+    final projectId = project.id;
+    final projectTitle = project.title;
     project.archived = archived;
     project.updatedAt = DateTime.now();
-    unawaited(_repository.saveProject(project));
+    await _repository.saveProject(project);
+    _registerUndo(
+      label: archived
+          ? 'Архивирование проекта «$projectTitle»'
+          : 'Возврат проекта «$projectTitle» из архива',
+      restore: () async {
+        final current = projectById(projectId);
+        if (current == null) {
+          return;
+        }
+        current.archived = previous;
+        current.updatedAt = DateTime.now();
+        await _repository.saveProject(current);
+        _scheduleSyncOverviewRefresh();
+      },
+    );
     _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
@@ -1092,9 +1163,25 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     notifyListeners();
   }
 
-  void deleteCitationSource(String id) {
-    data.citationSources.removeWhere((source) => source.id == id);
-    unawaited(_repository.saveCitationSources(data.citationSources));
+  Future<void> deleteCitationSource(String id) async {
+    final index = data.citationSources.indexWhere((source) => source.id == id);
+    if (index < 0) {
+      return;
+    }
+    final removed = _cloneCitationSource(data.citationSources[index]);
+    data.citationSources.removeAt(index);
+    await _repository.saveCitationSources(data.citationSources);
+    _registerUndo(
+      label: 'Удаление источника «${removed.title}»',
+      restore: () async {
+        data.citationSources.removeWhere((source) => source.id == removed.id);
+        data.citationSources.insert(
+          index.clamp(0, data.citationSources.length).toInt(),
+          removed,
+        );
+        await _repository.saveCitationSources(data.citationSources);
+      },
+    );
     notifyListeners();
   }
 
@@ -1166,10 +1253,22 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     updateNote(note);
   }
 
-  void deleteNote(String id) {
+  Future<void> deleteNote(String id) async {
     final deletedAt = DateTime.now();
     final noteIndex = data.notes.indexWhere((note) => note.id == id);
-    if (noteIndex < 0) return;
+    if (noteIndex < 0) {
+      return;
+    }
+
+    final removed = _cloneNote(data.notes[noteIndex]);
+    final taskSnapshots = data.tasks
+        .where((task) => task.noteId == id)
+        .map(_cloneTask)
+        .toList(growable: false);
+    final linkSnapshots = data.noteLinks
+        .where((link) => link.sourceNoteId == id || link.targetNoteId == id)
+        .map(_cloneNoteLink)
+        .toList(growable: false);
 
     data.notes.removeAt(noteIndex);
     data.noteLinks.removeWhere(
@@ -1178,10 +1277,65 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     for (final task in data.tasks.where((task) => task.noteId == id)) {
       task.noteId = null;
       task.updatedAt = deletedAt;
-      unawaited(_repository.saveTask(task));
+      await _repository.saveTask(task);
     }
-    unawaited(_repository.replaceNoteLinks(id, const []));
-    unawaited(_repository.softDeleteNote(id, deletedAt));
+    await _repository.replaceNoteLinks(id, const []);
+    await _repository.softDeleteNote(id, deletedAt);
+    _registerUndo(
+      label: 'Удаление заметки «${removed.title}»',
+      restore: () async {
+        final restored = _cloneNote(removed)..deletedAt = null;
+        await _repository.restoreNote(restored.id);
+        await _repository.saveNote(restored);
+        data.notes.removeWhere((note) => note.id == restored.id);
+        data.notes.insert(
+          noteIndex.clamp(0, data.notes.length).toInt(),
+          restored,
+        );
+        for (final snapshot in taskSnapshots) {
+          final restoredTask = _cloneTask(snapshot);
+          final taskIndex = data.tasks.indexWhere(
+            (task) => task.id == restoredTask.id,
+          );
+          if (taskIndex >= 0) {
+            data.tasks[taskIndex] = restoredTask;
+          } else {
+            data.tasks.add(restoredTask);
+          }
+          await _repository.saveTask(restoredTask);
+        }
+        data.noteLinks.removeWhere(
+          (link) =>
+              link.sourceNoteId == restored.id ||
+              link.targetNoteId == restored.id,
+        );
+        data.noteLinks.addAll(linkSnapshots.map(_cloneNoteLink));
+        try {
+          await rebuildAllNoteLinks(notify: false);
+        } on Object catch (error) {
+          await _recordReliability(
+            stage: ReliabilityStage.system,
+            level: ReliabilityLevel.warning,
+            message: 'Заметка восстановлена, но индекс связей требует перестроения.',
+            details: <String, Object?>{'error': error.toString()},
+            notify: false,
+          );
+        }
+        _scheduleSyncOverviewRefresh();
+        _scheduleVaultMirror();
+      },
+    );
+    try {
+      await rebuildAllNoteLinks(notify: false);
+    } on Object catch (error) {
+      await _recordReliability(
+        stage: ReliabilityStage.system,
+        level: ReliabilityLevel.warning,
+        message: 'Заметка удалена, но индекс связей требует перестроения.',
+        details: <String, Object?>{'error': error.toString()},
+        notify: false,
+      );
+    }
     _scheduleSyncOverviewRefresh();
     _scheduleVaultMirror();
     notifyListeners();
@@ -2309,7 +2463,7 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     try {
       return await _reliabilityService.exportDiagnosticReport(
         snapshot: <String, Object?>{
-          'appVersion': '0.18.1+26',
+          'appVersion': chronicleStableVersion,
           'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
           'deviceId': deviceIdentity?.deviceId,
           'deviceName': deviceIdentity?.displayName,
@@ -2546,6 +2700,8 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
   }
 
   Future<void> _replaceDataFromBackup(String raw) async {
+    _undoJournal.clear();
+    releaseReadinessReport = null;
     _ticker?.cancel();
     activeStartedAt = null;
     activeDescription = '';
@@ -2558,6 +2714,125 @@ E_n = -\frac{13.6}{n^2}\,\text{эВ}
     await _hydrateNoteMetadata();
     await rebuildAllNoteLinks();
   }
+
+  Future<String?> undoLastAction() async {
+    final label = await _undoJournal.undoLast();
+    if (label == null) {
+      return null;
+    }
+    try {
+      await refreshSyncFoundation(notify: false);
+    } on Object catch (error) {
+      await _recordReliability(
+        stage: ReliabilityStage.system,
+        level: ReliabilityLevel.warning,
+        message: 'Действие отменено, но обзор синхронизации не обновился.',
+        details: <String, Object?>{'error': error.toString()},
+        notify: false,
+      );
+    }
+    notifyListeners();
+    return label;
+  }
+
+  Future<ReleaseReadinessReport> runReleaseReadinessAudit() async {
+    if (releaseReadinessBusy) {
+      final existing = releaseReadinessReport;
+      if (existing != null) {
+        return existing;
+      }
+      throw StateError('Проверка готовности уже выполняется.');
+    }
+    releaseReadinessBusy = true;
+    releaseReadinessError = null;
+    notifyListeners();
+    try {
+      final integrity = ChronicleIntegrityAuditor.audit(data);
+      final rawBackup = await _repository.exportJson();
+      final roundTrip = ChronicleIntegrityAuditor.verifyBackupRoundTrip(
+        rawBackup,
+      );
+      final inspectedVault = await _vaultService.inspect();
+      VaultScanResult? readinessScan;
+      if (inspectedVault.supported &&
+          inspectedVault.rootPath.isNotEmpty &&
+          !inspectedVault.readOnly) {
+        readinessScan = await _vaultService.scan(data);
+      }
+      pendingVaultScan = readinessScan;
+      automaticBackups = await _vaultService.listAutomaticBackups();
+      vaultStatus = inspectedVault.copyWith(
+        pendingChangeCount: readinessScan?.pendingCount ?? 0,
+        conflictCount: readinessScan?.conflicts.length ?? 0,
+        missingFileCount: readinessScan?.missingFiles.length ?? 0,
+      );
+      final report = ReleaseReadinessReport(
+        checkedAt: DateTime.now(),
+        integrity: integrity,
+        backupRoundTrip: roundTrip,
+        vaultStatus: vaultStatus,
+        undoDepth: undoDepth,
+        automaticBackupCount: automaticBackups
+            .where((entry) => entry.isValid)
+            .length,
+        pendingConflictCount:
+            readinessScan?.conflicts.length ?? vaultStatus.conflictCount,
+      );
+      releaseReadinessReport = report;
+      var reliabilityLevel = ReliabilityLevel.warning;
+      if (report.ready) {
+        reliabilityLevel = ReliabilityLevel.success;
+      } else if (integrity.errorCount > 0 || !roundTrip.valid) {
+        reliabilityLevel = ReliabilityLevel.error;
+      }
+      await _recordReliability(
+        stage: ReliabilityStage.system,
+        level: reliabilityLevel,
+        message: report.ready
+            ? 'Проверка готовности Chronicle 1.0 завершена успешно.'
+            : 'Проверка готовности Chronicle 1.0 требует внимания.',
+        details: <String, Object?>{
+          'integrityErrors': integrity.errorCount,
+          'integrityWarnings': integrity.warningCount,
+          'backupRoundTrip': roundTrip.valid,
+          'vaultFormatVersion': vaultStatus.formatVersion,
+          'vaultReadOnly': vaultStatus.readOnly,
+          'pendingVaultChanges': vaultStatus.pendingChangeCount,
+          'pendingConflicts': report.pendingConflictCount,
+          'validAutomaticBackups': report.automaticBackupCount,
+        },
+        notify: false,
+      );
+      return report;
+    } on Object catch (error) {
+      releaseReadinessError = error.toString();
+      rethrow;
+    } finally {
+      releaseReadinessBusy = false;
+      notifyListeners();
+    }
+  }
+
+  void _registerUndo({
+    required String label,
+    required Future<void> Function() restore,
+  }) {
+    _undoJournal.push(
+      ChronicleUndoEntry(label: label, restore: restore),
+    );
+  }
+
+  Note _cloneNote(Note note) =>
+      Note.fromJson(Map<String, dynamic>.from(note.toJson()));
+
+  WorkTask _cloneTask(WorkTask task) =>
+      WorkTask.fromJson(Map<String, dynamic>.from(task.toJson()));
+
+  NoteLink _cloneNoteLink(NoteLink link) =>
+      NoteLink.fromJson(Map<String, dynamic>.from(link.toJson()));
+
+  CitationSource _cloneCitationSource(CitationSource source) =>
+      CitationSource.fromJson(Map<String, dynamic>.from(source.toJson()));
 
   void _notifyAttachmentRefresh() {
     _attachmentRefreshNotifier.value += 1;

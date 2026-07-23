@@ -114,6 +114,20 @@ class InMemoryAppRepository implements AppRepository {
   }
 
   @override
+  Future<void> restoreTask(String taskId) async {
+    final index = _data.tasks.indexWhere((item) => item.id == taskId);
+    if (index >= 0) {
+      _data.tasks[index].deletedAt = null;
+    }
+    await recordLocalChange(
+      entityType: 'task',
+      entityId: taskId,
+      operation: 'restore',
+      payload: {'restoredAt': DateTime.now().toIso8601String()},
+    );
+  }
+
+  @override
   Future<void> saveNote(Note note) async {
     _replaceById<Note>(_data.notes, note, (item) => item.id);
     await recordLocalChange(

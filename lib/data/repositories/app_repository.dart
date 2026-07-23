@@ -17,6 +17,8 @@ abstract class AppRepository {
 
   Future<void> softDeleteTask(String taskId, DateTime deletedAt);
 
+  Future<void> restoreTask(String taskId);
+
   Future<void> saveNote(Note note);
 
   Future<void> saveNoteVersion(NoteVersion version);
