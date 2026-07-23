@@ -15,7 +15,7 @@ void main() {
     readAttachment: (relativePath) async =>
         relativePath == 'Attachments/rmsd.png' ? png : null,
   );
-  const markdown = '''# ORF9b report
+  const markdown = r'''# ORF9b report
 
 ## Results
 
@@ -24,6 +24,22 @@ See [source](https://example.org).
 
 - First observation
 - [x] Verified observation
+
+Inline radius: $R_g = 1.8\,\mathrm{nm}$.
+
+$$
+RMSD = \sqrt{\frac{1}{N}\sum_i d_i^2}
+$$
+
+<!-- chronicle-columns widths=40,60 -->
+### Observation
+
+State A occupies 1200 frames.
+<!-- chronicle-column -->
+### Interpretation
+
+The transition is reversible.
+<!-- /chronicle-columns -->
 
 > This is a quoted conclusion.
 
@@ -66,9 +82,21 @@ final state = "A";
     expect(documentXml, contains('<w:i/>'));
     expect(documentXml, contains('<w:strike/>'));
     expect(documentXml, contains('<w:tbl>'));
+    expect(documentXml, contains('<w:tblLayout w:type="fixed"/>'));
+    expect(documentXml, contains('<w:insideV w:val="nil"/>'));
+    expect(documentXml, contains('<m:oMath>'));
+    expect(documentXml, contains('<m:oMathPara>'));
     expect(documentXml, contains('<w:drawing>'));
     final visibleText = _wordVisibleText(documentXml);
     expect(visibleText, contains('[x] Verified observation'));
+    expect(visibleText, contains('Observation'));
+    expect(visibleText, contains('State A occupies 1200 frames.'));
+    expect(visibleText, contains('Interpretation'));
+    expect(visibleText, contains('The transition is reversible.'));
+    final mathText = _wordMathText(documentXml);
+    expect(mathText, contains('RMSD'));
+    expect(mathText, contains('√'));
+    expect(mathText, contains('R_(g)'));
     expect(visibleText, contains('Рисунок 1. RMSD trajectory'));
     expect(visibleText, isNot(contains('Рисунок%201.')));
     expect(relationships, contains('relationships/image'));
@@ -109,6 +137,18 @@ String _wordVisibleText(String documentXml) {
   final text = StringBuffer();
   final textNode = RegExp(
     r'<w:t(?:\s+[^>]*)?>(.*?)</w:t>',
+    dotAll: true,
+  );
+  for (final match in textNode.allMatches(documentXml)) {
+    text.write(_decodeXmlText(match.group(1)!));
+  }
+  return text.toString();
+}
+
+String _wordMathText(String documentXml) {
+  final text = StringBuffer();
+  final textNode = RegExp(
+    r'<m:t(?:\s+[^>]*)?>(.*?)</m:t>',
     dotAll: true,
   );
   for (final match in textNode.allMatches(documentXml)) {

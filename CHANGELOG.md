@@ -1,3 +1,11 @@
+## 1.0.7+107 — Unified columns and formula rendering
+
+- Replaced the publication preview's plain Markdown renderer with Chronicle's full note renderer, so columns, display equations, inline equations, managed images, citations and scientific numbering match ordinary note previews.
+- Preserved Chronicle two- and three-column layouts in DOCX as borderless fixed-width Word tables and in PDF as proportional side-by-side regions.
+- Added display and inline formula export: Word receives editable Office Math objects, while PDF receives centered or inline readable mathematical text with Greek letters, operators, fractions, roots, superscripts and subscripts.
+- Kept nested Markdown, images, tables, lists and formulas inside each exported column.
+- Added regression coverage for column widths, column contents, Office Math markup and normalized formulas.
+
 ## 1.0.6+106 — Stable semantic DOCX export test
 
 - Fixed the DOCX regression test so it validates visible Word text across adjacent Open XML runs instead of assuming a single `<w:t>` node.

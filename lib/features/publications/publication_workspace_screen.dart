@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/app_models.dart';
@@ -8,6 +7,7 @@ import '../notes/note_document.dart';
 import '../notes/note_export.dart';
 import '../notes/note_export_dialog.dart';
 import '../notes/note_export_file_service.dart';
+import '../notes/note_markdown_view.dart';
 import 'publication_workspace.dart';
 import 'publication_document_export.dart';
 
@@ -393,11 +393,12 @@ class _PublicationWorkspaceScreenState
                   ],
                 ),
               Expanded(
-                child: SingleChildScrollView(
+                child: NoteMarkdownView(
+                  markdown: assembly.markdown,
+                  citationSources: widget.store.data.citationSources,
+                  vaultRootPath: widget.store.vaultStatus.rootPath,
+                  assetListenable: widget.store.attachmentRefreshListenable,
                   padding: const EdgeInsets.fromLTRB(28, 24, 28, 48),
-                  child: SelectionArea(
-                    child: MarkdownBody(data: assembly.markdown),
-                  ),
                 ),
               ),
             ],

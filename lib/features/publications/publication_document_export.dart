@@ -9,6 +9,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../notes/note_export.dart';
+import '../notes/note_columns_syntax.dart';
 import '../notes/note_image_syntax.dart';
 
 typedef PublicationAttachmentReader =
@@ -232,16 +233,49 @@ class PublicationDocumentExporter {
 
 class _MarkdownParser {
   _MarkdownDocument parse(String source) {
-    final nodes = md.Document(
-      extensionSet: md.ExtensionSet.gitHubFlavored,
-      encodeHtml: false,
-    ).parse(source);
     final blocks = <_MarkdownBlock>[];
-    _appendNodes(nodes, blocks);
+    _appendRichSource(source, blocks);
     if (blocks.isEmpty && source.trim().isNotEmpty) {
       blocks.add(_ParagraphBlock(<_Inline>[_Inline.text(source.trim())]));
     }
     return _MarkdownDocument(List<_MarkdownBlock>.unmodifiable(blocks));
+  }
+
+  void _appendRichSource(String source, List<_MarkdownBlock> output) {
+    for (final chunk in _splitExportDocument(source)) {
+      switch (chunk.kind) {
+        case _ExportChunkKind.markdown:
+          _appendMarkdownSource(chunk.markdown, output);
+          break;
+        case _ExportChunkKind.math:
+          output.add(_MathBlock(chunk.math));
+          break;
+        case _ExportChunkKind.columns:
+          final reference = chunk.columns!;
+          output.add(
+            _ColumnsBlock(
+              widths: reference.widths,
+              columns: <List<_MarkdownBlock>>[
+                for (final column in reference.columns)
+                  parse(column.markdown).blocks,
+              ],
+            ),
+          );
+          break;
+      }
+    }
+  }
+
+  void _appendMarkdownSource(String source, List<_MarkdownBlock> output) {
+    if (source.trim().isEmpty) {
+      return;
+    }
+    final nodes = md.Document(
+      extensionSet: md.ExtensionSet.gitHubFlavored,
+      inlineSyntaxes: <md.InlineSyntax>[_ExportInlineMathSyntax()],
+      encodeHtml: false,
+    ).parse(source);
+    _appendNodes(nodes, output);
   }
 
   void _appendNodes(List<md.Node>? nodes, List<_MarkdownBlock> output) {
@@ -451,6 +485,9 @@ class _MarkdownParser {
             ),
           );
           break;
+        case 'chronicle-math':
+          result.add(_Inline.math(node.textContent, style: style));
+          break;
         case 'a':
           result.addAll(
             _inlineNodes(
@@ -507,6 +544,338 @@ class _MarkdownParser {
     return codeNode?.attributes['data-metadata'] ?? '';
   }
 }
+
+enum _ExportChunkKind { markdown, math, columns }
+
+class _ExportChunk {
+  const _ExportChunk.markdown(this.markdown)
+      : kind = _ExportChunkKind.markdown,
+        math = '',
+        columns = null;
+
+  const _ExportChunk.math(this.math)
+      : kind = _ExportChunkKind.math,
+        markdown = '',
+        columns = null;
+
+  const _ExportChunk.columns(this.columns)
+      : kind = _ExportChunkKind.columns,
+        markdown = '',
+        math = '';
+
+  final _ExportChunkKind kind;
+  final String markdown;
+  final String math;
+  final NoteColumnsReference? columns;
+}
+
+class _ExportToken {
+  const _ExportToken({
+    required this.start,
+    required this.end,
+    required this.kind,
+    this.math = '',
+    this.columns,
+  });
+
+  final int start;
+  final int end;
+  final _ExportChunkKind kind;
+  final String math;
+  final NoteColumnsReference? columns;
+}
+
+List<_ExportChunk> _splitExportDocument(String source) {
+  final tokens = <_ExportToken>[];
+  final mathPattern = RegExp(r'(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$)');
+
+  for (final columns in NoteColumnsSyntax.all(source)) {
+    tokens.add(
+      _ExportToken(
+        start: columns.start,
+        end: columns.end,
+        kind: _ExportChunkKind.columns,
+        columns: columns,
+      ),
+    );
+  }
+  for (final match in mathPattern.allMatches(source)) {
+    if (_isInsideExportCode(source, match.start)) {
+      continue;
+    }
+    final raw = match.group(0) ?? '';
+    tokens.add(
+      _ExportToken(
+        start: match.start,
+        end: match.end,
+        kind: _ExportChunkKind.math,
+        math: raw.length >= 4
+            ? raw.substring(2, raw.length - 2).trim()
+            : raw,
+      ),
+    );
+  }
+
+  tokens.sort((left, right) {
+    final byStart = left.start.compareTo(right.start);
+    if (byStart != 0) {
+      return byStart;
+    }
+    return right.end.compareTo(left.end);
+  });
+
+  final result = <_ExportChunk>[];
+  var cursor = 0;
+  for (final token in tokens) {
+    if (token.start < cursor) {
+      continue;
+    }
+    if (token.start > cursor) {
+      result.add(_ExportChunk.markdown(source.substring(cursor, token.start)));
+    }
+    switch (token.kind) {
+      case _ExportChunkKind.markdown:
+        break;
+      case _ExportChunkKind.math:
+        result.add(_ExportChunk.math(token.math));
+        break;
+      case _ExportChunkKind.columns:
+        result.add(_ExportChunk.columns(token.columns));
+        break;
+    }
+    cursor = token.end;
+  }
+  if (cursor < source.length) {
+    result.add(_ExportChunk.markdown(source.substring(cursor)));
+  }
+  if (result.isEmpty) {
+    result.add(_ExportChunk.markdown(source));
+  }
+  return result;
+}
+
+bool _isInsideExportCode(String source, int offset) {
+  final before = source.substring(0, offset);
+  final fenceCount = RegExp(
+    r'^[ \t]*(?:```|~~~)',
+    multiLine: true,
+  ).allMatches(before).length;
+  if (fenceCount.isOdd) {
+    return true;
+  }
+
+  final lineStart =
+      source.lastIndexOf('\n', offset == 0 ? 0 : offset - 1) + 1;
+  final linePrefix = source.substring(lineStart, offset);
+  var backticks = 0;
+  for (var index = 0; index < linePrefix.length; index += 1) {
+    if (linePrefix.codeUnitAt(index) == 0x60 &&
+        (index == 0 || linePrefix.codeUnitAt(index - 1) != 0x5c)) {
+      backticks += 1;
+    }
+  }
+  return backticks.isOdd;
+}
+
+class _ExportInlineMathSyntax extends md.InlineSyntax {
+  _ExportInlineMathSyntax()
+      : super(r'\$([^$\n]+)\$', startCharacter: 0x24);
+
+  @override
+  bool onMatch(md.InlineParser parser, Match match) {
+    parser.addNode(
+      md.Element.text('chronicle-math', match.group(1)?.trim() ?? ''),
+    );
+    return true;
+  }
+}
+
+class _MathText {
+  const _MathText._();
+
+  static const Map<String, String> _commands = <String, String>{
+    r'\alpha': 'α',
+    r'\beta': 'β',
+    r'\gamma': 'γ',
+    r'\delta': 'δ',
+    r'\epsilon': 'ε',
+    r'\varepsilon': 'ε',
+    r'\zeta': 'ζ',
+    r'\eta': 'η',
+    r'\theta': 'θ',
+    r'\vartheta': 'ϑ',
+    r'\iota': 'ι',
+    r'\kappa': 'κ',
+    r'\lambda': 'λ',
+    r'\mu': 'μ',
+    r'\nu': 'ν',
+    r'\xi': 'ξ',
+    r'\pi': 'π',
+    r'\rho': 'ρ',
+    r'\sigma': 'σ',
+    r'\tau': 'τ',
+    r'\upsilon': 'υ',
+    r'\phi': 'φ',
+    r'\varphi': 'ϕ',
+    r'\chi': 'χ',
+    r'\psi': 'ψ',
+    r'\omega': 'ω',
+    r'\Gamma': 'Γ',
+    r'\Delta': 'Δ',
+    r'\Theta': 'Θ',
+    r'\Lambda': 'Λ',
+    r'\Xi': 'Ξ',
+    r'\Pi': 'Π',
+    r'\Sigma': 'Σ',
+    r'\Phi': 'Φ',
+    r'\Psi': 'Ψ',
+    r'\Omega': 'Ω',
+    r'\pm': '±',
+    r'\mp': '∓',
+    r'\times': '×',
+    r'\cdot': '·',
+    r'\leq': '≤',
+    r'\geq': '≥',
+    r'\neq': '≠',
+    r'\approx': '≈',
+    r'\sim': '∼',
+    r'\infty': '∞',
+    r'\rightarrow': '→',
+    r'\leftarrow': '←',
+    r'\leftrightarrow': '↔',
+    r'\Rightarrow': '⇒',
+    r'\Leftarrow': '⇐',
+    r'\Leftrightarrow': '⇔',
+    r'\partial': '∂',
+    r'\nabla': '∇',
+    r'\sum': '∑',
+    r'\prod': '∏',
+    r'\int': '∫',
+    r'\degree': '°',
+  };
+
+  static const Map<String, String> _superscripts = <String, String>{
+    '0': '⁰',
+    '1': '¹',
+    '2': '²',
+    '3': '³',
+    '4': '⁴',
+    '5': '⁵',
+    '6': '⁶',
+    '7': '⁷',
+    '8': '⁸',
+    '9': '⁹',
+    '+': '⁺',
+    '-': '⁻',
+    '=': '⁼',
+    '(': '⁽',
+    ')': '⁾',
+  };
+
+  static const Map<String, String> _subscripts = <String, String>{
+    '0': '₀',
+    '1': '₁',
+    '2': '₂',
+    '3': '₃',
+    '4': '₄',
+    '5': '₅',
+    '6': '₆',
+    '7': '₇',
+    '8': '₈',
+    '9': '₉',
+    '+': '₊',
+    '-': '₋',
+    '=': '₌',
+    '(': '₍',
+    ')': '₎',
+  };
+
+  static String normalize(String source) {
+    var value = source.trim();
+    value = _replaceRepeated(
+      value,
+      RegExp(r'\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}'),
+      (match) =>
+          '(${normalize(match.group(1)!)})⁄(${normalize(match.group(2)!)})',
+    );
+    value = _replaceRepeated(
+      value,
+      RegExp(r'\\sqrt\s*\{([^{}]*)\}'),
+      (match) => '√(${normalize(match.group(1)!)})',
+    );
+    value = _replaceRepeated(
+      value,
+      RegExp(r'\\(?:mathrm|mathbf|mathit|text|operatorname)\s*\{([^{}]*)\}'),
+      (match) => match.group(1)!,
+    );
+    for (final entry in _commands.entries) {
+      value = value.replaceAll(entry.key, entry.value);
+    }
+    value = value
+        .replaceAll(RegExp(r'\\(?:left|right)'), '')
+        .replaceAll(RegExp(r'\\[,;:! ]'), ' ')
+        .replaceAll(r'\,', ' ')
+        .replaceAll(r'\;', ' ')
+        .replaceAll(r'\:', ' ')
+        .replaceAll(r'\!', '')
+        .replaceAll(r'\ ', ' ');
+    value = _replaceScripts(value, '^', _superscripts);
+    value = _replaceScripts(value, '_', _subscripts);
+    value = value
+        .replaceAllMapped(
+          RegExp(r'\\([A-Za-z]+)'),
+          (match) => match.group(1) ?? '',
+        )
+        .replaceAll('{', '')
+        .replaceAll('}', '')
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
+        .trim();
+    return value.isEmpty ? source.trim() : value;
+  }
+
+  static String _replaceRepeated(
+    String value,
+    RegExp pattern,
+    String Function(RegExpMatch match) replacement,
+  ) {
+    var current = value;
+    while (true) {
+      final match = pattern.firstMatch(current);
+      if (match == null) {
+        return current;
+      }
+      current = current.replaceRange(
+        match.start,
+        match.end,
+        replacement(match),
+      );
+    }
+  }
+
+  static String _replaceScripts(
+    String value,
+    String marker,
+    Map<String, String> alphabet,
+  ) {
+    final pattern = RegExp(
+      '${RegExp.escape(marker)}(?:\\{([^{}]+)\\}|([A-Za-z0-9+\\-=()]))',
+    );
+    return value.replaceAllMapped(pattern, (match) {
+      final content = match.group(1) ?? match.group(2) ?? '';
+      final converted = StringBuffer();
+      for (final rune in content.runes) {
+        final character = String.fromCharCode(rune);
+        final mapped = alphabet[character];
+        if (mapped == null) {
+          return '$marker($content)';
+        }
+        converted.write(mapped);
+      }
+      return converted.toString();
+    });
+  }
+}
+
 
 class _DocxBuilder {
   _DocxBuilder({required this.title, required this.resolved});
@@ -590,6 +959,14 @@ class _DocxBuilder {
       );
       return;
     }
+    if (block is _MathBlock) {
+      output.write(_displayMath(block.source));
+      return;
+    }
+    if (block is _ColumnsBlock) {
+      output.write(_columns(block));
+      return;
+    }
     if (block is _ImageBlock) {
       output.write(_image(block.image));
       return;
@@ -627,6 +1004,11 @@ class _DocxBuilder {
     }
     final runs = StringBuffer();
     for (final inline in inlines) {
+      final mathSource = inline.math;
+      if (mathSource != null) {
+        runs.write(_inlineMath(mathSource));
+        continue;
+      }
       final image = inline.image;
       if (image == null) {
         runs.write(_run(inline));
@@ -675,6 +1057,61 @@ class _DocxBuilder {
     }
     final relationship = _hyperlinkRelationship(link);
     return '<w:hyperlink r:id="$relationship" w:history="1">$run</w:hyperlink>';
+  }
+
+  String _inlineMath(String source) {
+    return '<m:oMath>${_mathRun(source)}</m:oMath>';
+  }
+
+  String _displayMath(String source) {
+    return '<m:oMathPara><m:oMath>${_mathRun(source)}</m:oMath></m:oMathPara>';
+  }
+
+  String _mathRun(String source) {
+    final visible = _MathText.normalize(source);
+    return '<m:r><m:rPr><m:sty m:val="p"/></m:rPr>'
+        '<m:t>${_xml(visible)}</m:t></m:r>';
+  }
+
+  String _columns(_ColumnsBlock block) {
+    if (block.columns.length < 2 || block.columns.length > 3) {
+      return '';
+    }
+    final widths = NoteColumnsSyntax.normalizeWidths(
+      block.widths,
+      block.columns.length,
+    );
+    final table = StringBuffer(
+      '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>'
+      '<w:tblLayout w:type="fixed"/>'
+      '<w:tblCellMar><w:top w:w="80" w:type="dxa"/>'
+      '<w:left w:w="100" w:type="dxa"/>'
+      '<w:bottom w:w="80" w:type="dxa"/>'
+      '<w:right w:w="100" w:type="dxa"/></w:tblCellMar>'
+      '<w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/>'
+      '<w:bottom w:val="nil"/><w:right w:val="nil"/>'
+      '<w:insideH w:val="nil"/><w:insideV w:val="nil"/>'
+      '</w:tblBorders></w:tblPr><w:tblGrid>',
+    );
+    for (final width in widths) {
+      table.write('<w:gridCol w:w="${(9638 * width / 100).round()}"/>');
+    }
+    table.write('</w:tblGrid><w:tr>');
+    for (var index = 0; index < block.columns.length; index += 1) {
+      final cell = StringBuffer();
+      for (final child in block.columns[index]) {
+        _writeBlock(child, cell);
+      }
+      if (cell.isEmpty) {
+        cell.write('<w:p/>');
+      }
+      table.write(
+        '<w:tc><w:tcPr><w:tcW w:w="${widths[index] * 50}" '
+        'w:type="pct"/><w:vAlign w:val="top"/></w:tcPr>$cell</w:tc>',
+      );
+    }
+    table.write('</w:tr></w:tbl>');
+    return table.toString();
   }
 
   String _image(_MarkdownImage image) {
@@ -882,7 +1319,8 @@ class _DocxBuilder {
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
       'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
       'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
-      'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+      'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" '
+      'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
       '<w:body>$body<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
       '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/>'
       '</w:sectPr></w:body></w:document>';
@@ -1027,6 +1465,12 @@ class _PdfRenderer {
         ),
       ];
     }
+    if (block is _MathBlock) {
+      return <pw.Widget>[_displayMath(block.source)];
+    }
+    if (block is _ColumnsBlock) {
+      return <pw.Widget>[_columns(block)];
+    }
     if (block is _ImageBlock) {
       return <pw.Widget>[_image(block.image)];
     }
@@ -1060,6 +1504,58 @@ class _PdfRenderer {
     return const <pw.Widget>[];
   }
 
+  pw.Widget _displayMath(String source) {
+    return pw.Container(
+      width: double.infinity,
+      margin: const pw.EdgeInsets.only(top: 4, bottom: 10),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: pw.BoxDecoration(
+        color: PdfColor.fromInt(0xfff7f7f7),
+        borderRadius: pw.BorderRadius.circular(4),
+      ),
+      child: pw.Text(
+        _MathText.normalize(source),
+        textAlign: pw.TextAlign.center,
+        style: const pw.TextStyle(
+          fontSize: 12.5,
+          fontStyle: pw.FontStyle.italic,
+        ),
+      ),
+    );
+  }
+
+  pw.Widget _columns(_ColumnsBlock block) {
+    final widths = NoteColumnsSyntax.normalizeWidths(
+      block.widths,
+      block.columns.length,
+    );
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 10),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: <pw.Widget>[
+          for (var index = 0; index < block.columns.length; index += 1)
+            pw.Expanded(
+              flex: widths[index],
+              child: pw.Padding(
+                padding: pw.EdgeInsets.only(
+                  left: index == 0 ? 0 : 6,
+                  right: index == block.columns.length - 1 ? 0 : 6,
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: <pw.Widget>[
+                    for (final child in block.columns[index])
+                      ..._block(child),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   pw.Widget _paragraph(
     List<_Inline> inlines, {
     pw.TextStyle? baseStyle,
@@ -1081,6 +1577,12 @@ class _PdfRenderer {
   pw.InlineSpan _span(_Inline inline) {
     if (inline.image != null) {
       return _inlineImageSpan(inline.image!);
+    }
+    if (inline.math != null) {
+      return pw.TextSpan(
+        text: _MathText.normalize(inline.math!),
+        style: const pw.TextStyle(fontStyle: pw.FontStyle.italic),
+      );
     }
     final style = inline.style;
     return pw.TextSpan(
@@ -1272,6 +1774,14 @@ class _MarkdownDocument {
       }
       return;
     }
+    if (block is _ColumnsBlock) {
+      for (final column in block.columns) {
+        for (final child in column) {
+          yield* _imagesInBlock(child);
+        }
+      }
+      return;
+    }
     if (block is _QuoteBlock) {
       for (final child in block.children) {
         yield* _imagesInBlock(child);
@@ -1353,6 +1863,19 @@ class _HorizontalRuleBlock extends _MarkdownBlock {
   const _HorizontalRuleBlock();
 }
 
+class _MathBlock extends _MarkdownBlock {
+  const _MathBlock(this.source);
+
+  final String source;
+}
+
+class _ColumnsBlock extends _MarkdownBlock {
+  const _ColumnsBlock({required this.widths, required this.columns});
+
+  final List<int> widths;
+  final List<List<_MarkdownBlock>> columns;
+}
+
 class _ImageBlock extends _MarkdownBlock {
   const _ImageBlock(this.image);
 
@@ -1377,27 +1900,40 @@ class _Inline {
     required this.text,
     required this.style,
     required this.image,
+    required this.math,
   });
 
   factory _Inline.text(
     String text, {
     _InlineStyle style = const _InlineStyle(),
   }) =>
-      _Inline._(text: text, style: style, image: null);
+      _Inline._(text: text, style: style, image: null, math: null);
 
-  factory _Inline.image(_MarkdownImage image) =>
-      _Inline._(text: '', style: const _InlineStyle(), image: image);
+  factory _Inline.image(_MarkdownImage image) => _Inline._(
+        text: '',
+        style: const _InlineStyle(),
+        image: image,
+        math: null,
+      );
+
+  factory _Inline.math(
+    String source, {
+    _InlineStyle style = const _InlineStyle(),
+  }) =>
+      _Inline._(text: '', style: style, image: null, math: source);
 
   final String text;
   final _InlineStyle style;
   final _MarkdownImage? image;
+  final String? math;
 
-  String get plainText => image == null ? text : image!.alt;
+  String get plainText => image != null ? image!.alt : math ?? text;
 
   _Inline copyWith({_InlineStyle? style}) => _Inline._(
         text: text,
         style: style ?? this.style,
         image: image,
+        math: math,
       );
 }
 
