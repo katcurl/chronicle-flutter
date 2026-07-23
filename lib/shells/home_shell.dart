@@ -7,6 +7,7 @@ import '../features/appearance/app_appearance.dart';
 import '../features/appearance/app_appearance_dialog.dart';
 import '../features/appearance/app_appearance_theme.dart';
 import '../features/projects/project_appearance_store.dart';
+import '../features/settings/app_settings_dialog.dart';
 import '../features/workspaces/workspace_manager_dialog.dart';
 import '../features/workspaces/workspace_preferences_store.dart';
 import '../features/workspaces/workspace_profile.dart';
@@ -99,6 +100,10 @@ class _HomeShellState extends State<HomeShell> {
           meta: true,
           shift: true,
         ): () => unawaited(_openWorkspaceManager()),
+        const SingleActivator(LogicalKeyboardKey.comma, control: true):
+            () => unawaited(_openSettings()),
+        const SingleActivator(LogicalKeyboardKey.comma, meta: true):
+            () => unawaited(_openSettings()),
         const SingleActivator(
           LogicalKeyboardKey.keyA,
           control: true,
@@ -141,9 +146,9 @@ class _HomeShellState extends State<HomeShell> {
                   _workspaceSwitcher(compact: false),
                   const SizedBox(width: 8),
                   IconButton(
-                    tooltip: 'Внешний вид (Ctrl+Shift+A)',
-                    onPressed: () => unawaited(_openAppearance()),
-                    icon: const Icon(Icons.palette_outlined),
+                    tooltip: 'Настройки (Ctrl+,)',
+                    onPressed: () => unawaited(_openSettings()),
+                    icon: const Icon(Icons.settings_outlined),
                   ),
                 ],
               ),
@@ -215,9 +220,9 @@ class _HomeShellState extends State<HomeShell> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton.filledTonal(
-                        tooltip: 'Внешний вид (Ctrl+Shift+A)',
-                        onPressed: () => unawaited(_openAppearance()),
-                        icon: const Icon(Icons.palette_outlined),
+                        tooltip: 'Настройки (Ctrl+,)',
+                        onPressed: () => unawaited(_openSettings()),
+                        icon: const Icon(Icons.settings_outlined),
                       ),
                       const SizedBox(height: 8),
                       IconButton.filledTonal(
@@ -343,6 +348,24 @@ class _HomeShellState extends State<HomeShell> {
       section = result.activeProfile.startSection;
     });
     await _saveWorkspacePreferences(result);
+  }
+
+  Future<void> _openSettings() async {
+    final destination = await AppSettingsDialog.show(
+      context,
+      appearance: widget.appearance,
+      activeWorkspace: activeWorkspace,
+    );
+    if (!mounted || destination == null) return;
+    if (destination == AppSettingsDestination.appearance) {
+      await _openAppearance();
+      return;
+    }
+    if (destination == AppSettingsDestination.workspaces) {
+      await _openWorkspaceManager();
+      return;
+    }
+    _select(AppSection.projects);
   }
 
   Future<void> _openAppearance() async {

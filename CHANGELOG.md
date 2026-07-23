@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.0+80
+
+- Replaced the standalone palette button in compact and desktop navigation with one general Chronicle settings entry.
+- Added a focused settings center with separate rows for global appearance, workspaces and per-project visual customization.
+- Added `Ctrl+,` / `Cmd+,` for opening settings while preserving `Ctrl+Shift+A` / `Cmd+Shift+A` as a direct appearance shortcut.
+- Added clear summaries of the active palette, surface style, brightness mode and workspace before opening their dedicated editors.
+- Kept project themes and image/GIF icons in the existing project editor instead of introducing another configuration layer.
+- Preserved all existing appearance preferences, project icon files, notes, Vault data, database records and synchronization formats without migration.
+- Added deterministic tests for settings destinations and visible appearance/workspace summaries.
+
 ## 0.27.5+79
 
 - Added per-project appearance that can inherit the global Chronicle theme or use its own coordinated or mixed accent, icon, background and panel colors with a Matte, Glossy or Shiny surface style.
