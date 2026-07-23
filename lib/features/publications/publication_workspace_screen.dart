@@ -9,6 +9,7 @@ import '../notes/note_export.dart';
 import '../notes/note_export_dialog.dart';
 import '../notes/note_export_file_service.dart';
 import 'publication_workspace.dart';
+import 'publication_document_export.dart';
 
 class PublicationWorkspaceScreen extends StatefulWidget {
   const PublicationWorkspaceScreen({
@@ -433,13 +434,19 @@ class _PublicationWorkspaceScreenState
     temporary.body = NoteDocument.serialize(temporary, assembly.markdown);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final payload = await NoteExportComposer(
-        readAttachment: widget.store.readManagedAttachment,
-      ).exportNote(
-        note: temporary,
-        projectTitle: widget.project.title,
-        format: format,
-      );
+      final payload = switch (format) {
+        ChronicleExportFormat.docx => await const PublicationDocumentExporter().docx(
+            title: title, markdown: assembly.markdown),
+        ChronicleExportFormat.pdf => await const PublicationDocumentExporter().pdf(
+            title: title, markdown: assembly.markdown),
+        _ => await NoteExportComposer(
+            readAttachment: widget.store.readManagedAttachment,
+          ).exportNote(
+            note: temporary,
+            projectTitle: widget.project.title,
+            format: format,
+          ),
+      };
       final savedPath = await const NoteExportFileService().save(payload);
       if (savedPath == null || !mounted) return;
       final issueSuffix = assembly.issues.isEmpty

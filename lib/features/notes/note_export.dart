@@ -9,7 +9,7 @@ import 'note_document.dart';
 import 'note_image_syntax.dart';
 import 'note_wiki_link_syntax.dart';
 
-enum ChronicleExportFormat { markdown, html, portableArchive }
+enum ChronicleExportFormat { markdown, html, docx, pdf, portableArchive }
 
 class ChronicleExportPayload {
   const ChronicleExportPayload({

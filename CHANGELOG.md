@@ -557,3 +557,10 @@
 
 - added Chronicle Foundation documentation;
 - established product, architecture, data and design specifications.
+
+## 0.32.0+88
+
+- Added a fully local, removable per-project intelligence index.
+- Added semantic TF-IDF search, similar notes, suggested links, contradiction candidates, entity/term extraction, sourced project answers, and experiment-history summaries.
+- Added DOCX and PDF export for publication workspaces.
+- Chronicle suggestions remain read-only and never rewrite source notes automatically.

@@ -74,6 +74,22 @@ class _NoteExportDialogState extends State<NoteExportDialog> {
               onTap:
                   () => setState(() => format = ChronicleExportFormat.html),
             ),
+            if (!widget.isProject)
+              _ExportChoice(
+              selected: format == ChronicleExportFormat.docx,
+              icon: Icons.article_outlined,
+              title: 'DOCX',
+              subtitle: 'Редактируемый документ для Microsoft Word и LibreOffice.',
+              onTap: () => setState(() => format = ChronicleExportFormat.docx),
+            ),
+            if (!widget.isProject)
+              _ExportChoice(
+              selected: format == ChronicleExportFormat.pdf,
+              icon: Icons.picture_as_pdf_outlined,
+              title: 'PDF',
+              subtitle: 'Готовый документ с фиксированной вёрсткой для чтения и печати.',
+              onTap: () => setState(() => format = ChronicleExportFormat.pdf),
+            ),
             _ExportChoice(
               selected: format == ChronicleExportFormat.portableArchive,
               icon: Icons.folder_zip_outlined,

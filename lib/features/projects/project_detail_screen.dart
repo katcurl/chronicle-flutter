@@ -6,6 +6,7 @@ import '../../services/app_store.dart';
 import '../../widgets/common.dart';
 import '../appearance/app_appearance.dart';
 import '../notes/note_export.dart';
+import '../intelligence/local_intelligence_screen.dart';
 import '../notes/note_export_dialog.dart';
 import '../notes/note_export_file_service.dart';
 import '../publications/publication_workspace.dart';
@@ -201,6 +202,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               onEdit: project.archived
                   ? null
                   : () => _editResearch(project, sourceNotes),
+            ),
+            const SizedBox(height: 22),
+            _LocalIntelligenceCard(
+              noteCount: sourceNotes.length,
+              onOpen: () => LocalIntelligenceScreen.show(
+                context, store: widget.store, project: project),
             ),
             const SizedBox(height: 22),
             _PublicationOutputsSection(
@@ -744,6 +751,28 @@ class _PinnedResultsSection extends StatelessWidget {
       ],
     );
   }
+}
+
+class _LocalIntelligenceCard extends StatelessWidget {
+  const _LocalIntelligenceCard({required this.noteCount, required this.onOpen});
+  final int noteCount; final VoidCallback onOpen;
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(18),
+      child: Row(children: [
+        Icon(Icons.manage_search_rounded, size: 34, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Локальный интеллектуальный поиск', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 5),
+          Text('Смысловой поиск, похожие заметки, возможные связи и противоречия, ответы с источниками и история эксперимента. Индекс для $noteCount заметок хранится только на этом устройстве.', style: Theme.of(context).textTheme.bodySmall),
+        ])),
+        const SizedBox(width: 12),
+        FilledButton.tonalIcon(onPressed: onOpen, icon: const Icon(Icons.auto_awesome_outlined), label: const Text('Открыть')),
+      ]),
+    ),
+  );
 }
 
 class _PublicationOutputsSection extends StatelessWidget {
