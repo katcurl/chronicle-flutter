@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
 
 import '../features/appearance/app_appearance.dart';
 import '../features/projects/project_appearance_store.dart';
 import '../features/projects/project_appearance_widgets.dart';
 import '../features/projects/project_detail_screen.dart';
 import '../features/projects/project_editor_sheet.dart';
-import '../features/projects/project_research_dialog.dart';
 import '../features/tasks/task_metadata.dart';
 import '../models/app_models.dart';
 import '../services/app_store.dart';
@@ -106,57 +104,6 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   Future<void> _add() async {
-    final mode = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      constraints: const BoxConstraints(maxWidth: 560),
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.note_add_outlined),
-                title: const Text('Пустой проект'),
-                subtitle: const Text('Начать без заранее заданной структуры'),
-                onTap: () => Navigator.pop(sheetContext, 'blank'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.auto_awesome_rounded),
-                title: const Text('Создать из шаблона'),
-                subtitle: const Text('Получить стартовую цель и исследовательские вопросы'),
-                onTap: () => Navigator.pop(sheetContext, 'template'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (!mounted || mode == null) return;
-    if (mode == 'template') {
-      final selection = await ProjectTemplatePickerSheet.show(context);
-      if (!mounted || selection == null) return;
-      final template = selection.template;
-      final now = DateTime.now();
-      widget.store.addProject(
-        Project(
-          id: const Uuid().v4(),
-          title: selection.title,
-          emoji: template.emoji,
-          description: template.description,
-          researchGoal: template.researchGoal,
-          researchQuestions: template.researchQuestions,
-          knownFindings: template.knownFindings,
-          openChecks: template.openChecks,
-          createdAt: now,
-          updatedAt: now,
-        ),
-      );
-      setState(() {});
-      return;
-    }
-
     final result = await ProjectEditorSheet.show(
       context,
       appearanceController: widget.appearanceController,

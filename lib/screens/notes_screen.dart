@@ -5029,33 +5029,45 @@ class _NewNoteSheetState extends State<_NewNoteSheet> {
                   hintText: 'Например: Лекции/Химия',
                 ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Шаблон',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final template in widget.store.availableNoteTemplates)
+              if (widget.store.applicableNoteTemplates.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'Шаблон',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
                     ChoiceChip(
-                      avatar: Text(template.icon),
-                      label: Text(template.title),
-                      selected: templateId == template.id,
-                      onSelected:
-                          (_) => setState(() => templateId = template.id),
+                      avatar: const Text('📝'),
+                      label: const Text('Пустая заметка'),
+                      selected: templateId == 'blank',
+                      onSelected: (_) => setState(() => templateId = 'blank'),
                     ),
-                ],
-              ),
+                    for (final template in widget.store.applicableNoteTemplates)
+                      ChoiceChip(
+                        avatar: Text(template.icon),
+                        label: Text(template.title),
+                        selected: templateId == template.id,
+                        onSelected:
+                            (_) => setState(() => templateId = template.id),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _manageTemplates,
                 icon: const Icon(Icons.dashboard_customize_outlined),
-                label: const Text('Мои шаблоны'),
+                label: Text(
+                  widget.store.applicableNoteTemplates.isEmpty
+                      ? 'Создать свой шаблон'
+                      : 'Мои шаблоны',
+                ),
               ),
               const SizedBox(height: 20),
               SizedBox(

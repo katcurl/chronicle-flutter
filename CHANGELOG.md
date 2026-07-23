@@ -1,3 +1,12 @@
+## 1.0.3+103 — Public release polish: clean workspace
+
+- Removed the “Готова начать?” onboarding phrase from the Today screen and disabled focus start until a project exists.
+- New installations now start with an empty database: no sample projects, notes, tasks, time entries or bundled working templates.
+- Kept existing databases, Vaults and user-created templates unchanged during update.
+- Project creation now opens an empty project instead of the bundled research-template picker.
+- Hid empty template sections while retaining the ability to create and manage personal templates.
+- Added regression coverage for an empty first launch and the cleaned Today screen.
+
 # Changelog
 
 ## 1.0.2+102

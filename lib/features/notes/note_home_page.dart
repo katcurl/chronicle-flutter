@@ -41,6 +41,11 @@ class NoteHomePage extends StatelessWidget {
       ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
     final visibleSections = preferences.orderedSections
         .where(preferences.isVisible)
+        .where(
+          (section) =>
+              section != NoteHomeSection.templates ||
+              store.applicableNoteTemplates.isNotEmpty,
+        )
         .toList(growable: false);
 
     return CustomScrollView(

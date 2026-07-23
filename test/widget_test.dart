@@ -17,8 +17,11 @@ void main() {
 
     await _pumpUntilReady(tester, store);
 
-    expect(find.text('Готова начать?'), findsOneWidget);
-    expect(find.text('Следующие задачи'), findsOneWidget);
+    expect(find.text('Готова начать?'), findsNothing);
+    expect(find.text('Пустое пространство'), findsOneWidget);
+    expect(store.data.projects, isEmpty);
+    expect(store.data.notes, isEmpty);
+    expect(store.data.tasks, isEmpty);
   });
 }
 

@@ -174,7 +174,7 @@ class AppStore extends ChangeNotifier {
         final legacy = await _legacyImporter?.read();
         final vaultHasNotes = await _vaultService.hasExistingNoteContent();
         protectExistingVault = vaultHasNotes;
-        data = legacy ?? (vaultHasNotes ? AppData.empty() : _seed());
+        data = legacy ?? AppData.empty();
         await _repository.replaceAll(data);
         await _repository.markInitialized();
       } else {
@@ -238,111 +238,17 @@ class AppStore extends ChangeNotifier {
     }
   }
 
-  AppData _seed() {
-    final p1 = Project(
-      id: _uuid.v4(),
-      title: 'Лекции школьникам',
-      emoji: '🧪',
-      description: 'Курс естественных наук',
-    );
-    final p2 = Project(
-      id: _uuid.v4(),
-      title: 'Научная работа',
-      emoji: '🧬',
-      description: 'Исследования и анализ данных',
-    );
-
-    final n1 = Note(
-      id: _uuid.v4(),
-      title: 'Лекция 1. Строение атома',
-      projectId: p1.id,
-      tags: const ['химия', 'лекция'],
-      body: r'''---
-type: lecture
-status: draft
-audience: 8 класс
----
-
-# Строение атома
-
-## Цели занятия
-
-- понять устройство ядра;
-- разобраться с электронными оболочками;
-- научиться читать запись нуклида.
-
-## Формулы
-
-Энергия электрона в водородоподобном атоме:
-
-\[
-E_n = -\frac{13.6}{n^2}\,\text{эВ}
-\]
-
-> **Пример.** Для уровня $n=2$ энергия равна $-3.4$ эВ.
-
-## Что осталось
-
-- [ ] добавить схему орбиталей
-- [ ] составить пять задач
-- [ ] подготовить домашнее задание
-''',
-    );
-
-    final n2 = Note(
-      id: _uuid.v4(),
-      title: 'Журнал исследования Orf9b',
-      projectId: p2.id,
-      tags: const ['orf9b', 'md'],
-      body:
-          '# Журнал исследования Orf9b\n\n'
-          'Связано с [[Анализ TM-score]].\n\n'
-          '## Следующий шаг\n\n'
-          'Проверить метастабильные состояния по последней тысяче кадров.',
-    );
-
-    return AppData(
-      projects: [p1, p2],
-      tasks: [
-        WorkTask(
-          id: _uuid.v4(),
-          title: 'Дополнить лекцию 1',
-          projectId: p1.id,
-          noteId: n1.id,
-          estimateMinutes: 90,
-        ),
-        WorkTask(
-          id: _uuid.v4(),
-          title: 'Нарисовать схему орбиталей',
-          projectId: p1.id,
-          noteId: n1.id,
-          status: 'blocked',
-          estimateMinutes: 40,
-        ),
-        WorkTask(
-          id: _uuid.v4(),
-          title: 'Проанализировать TM-score',
-          projectId: p2.id,
-          noteId: n2.id,
-          status: 'doing',
-          estimateMinutes: 120,
-        ),
-      ],
-      notes: [n1, n2],
-      entries: [],
-    );
-  }
+  NoteTemplate get blankNoteTemplate =>
+      noteTemplates.firstWhere((template) => template.id == 'blank');
 
   List<NoteTemplate> get availableNoteTemplates =>
       List<NoteTemplate>.unmodifiable(<NoteTemplate>[
-        ...noteTemplates,
+        blankNoteTemplate,
         ...customNoteTemplates,
       ]);
 
   List<NoteTemplate> get applicableNoteTemplates =>
-      List<NoteTemplate>.unmodifiable(
-        availableNoteTemplates.where((template) => template.id != 'blank'),
-      );
+      List<NoteTemplate>.unmodifiable(customNoteTemplates);
 
   Future<void> _loadCustomNoteTemplates() async {
     final store = _customNoteTemplateStore;

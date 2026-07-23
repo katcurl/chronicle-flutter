@@ -57,14 +57,14 @@ class DashboardScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        store.activeStartedAt == null
-                            ? 'Готова начать?'
-                            : store.activeDescription,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 6),
+                      if (store.activeStartedAt != null) ...[
+                        Text(
+                          store.activeDescription,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 6),
+                      ],
                       Row(
                         children: [
                           Expanded(
@@ -81,7 +81,9 @@ class DashboardScreen extends StatelessWidget {
                           FilledButton.icon(
                             onPressed:
                                 store.activeStartedAt == null
-                                    ? onStart
+                                    ? (store.activeProjects.isEmpty
+                                        ? null
+                                        : onStart)
                                     : store.stopTimer,
                             icon: Icon(
                               store.activeStartedAt == null
@@ -89,7 +91,9 @@ class DashboardScreen extends StatelessWidget {
                                   : Icons.stop_rounded,
                             ),
                             label: Text(
-                              store.activeStartedAt == null ? 'Начать' : 'Стоп',
+                              store.activeStartedAt == null
+                                  ? 'Начать фокус'
+                                  : 'Стоп',
                             ),
                           ),
                         ],
@@ -118,16 +122,13 @@ class DashboardScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
-              const SectionTitle('Следующие задачи'),
-              if (activeTasks.isEmpty)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text('Активных задач пока нет'),
-                  ),
-                )
-              else
+              if (store.activeProjects.isEmpty && activeTasks.isEmpty) ...[
+                const SizedBox(height: 18),
+                const _EmptyWorkspaceCard(),
+              ],
+              if (activeTasks.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                const SectionTitle('Следующие задачи'),
                 ...activeTasks.take(5).map((task) {
                   final project = store.projectById(task.projectId);
                   return Card(
@@ -153,11 +154,13 @@ class DashboardScreen extends StatelessWidget {
                     ),
                   );
                 }),
-              const SizedBox(height: 18),
-              const SectionTitle('Проекты'),
-              SizedBox(
-                height: 126,
-                child: ListView.separated(
+              ],
+              if (store.activeProjects.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                const SectionTitle('Проекты'),
+                SizedBox(
+                  height: 126,
+                  child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: store.activeProjects.length,
                   separatorBuilder: (_, __) => const SizedBox(width: 10),
@@ -199,13 +202,50 @@ class DashboardScreen extends StatelessWidget {
                         ),
                       ),
                     );
-                  },
+                    },
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _EmptyWorkspaceCard extends StatelessWidget {
+  const _EmptyWorkspaceCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
+        child: Column(
+          children: [
+            Icon(
+              Icons.space_dashboard_outlined,
+              size: 34,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Пустое пространство',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Заметки, проекты и задачи появятся здесь только после того, '
+              'как ты их создашь.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
