@@ -47,6 +47,7 @@ import '../features/notes/scientific_table_editor_dialog.dart';
 import '../features/notes/scientific_reference_syntax.dart';
 import '../features/projects/project_appearance_store.dart';
 import '../features/projects/project_appearance_widgets.dart';
+import '../features/publications/publication_document_export.dart';
 import '../features/publications/publication_workspace.dart';
 import '../features/publications/publication_workspace_screen.dart';
 import '../features/references/citation_syntax.dart';
@@ -2531,13 +2532,22 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       final draft = _currentExportDraft();
       final projectTitle =
           widget.store.projectById(projectId)?.title ?? 'Без проекта';
-      final payload = await NoteExportComposer(
-        readAttachment: widget.store.readManagedAttachment,
-      ).exportNote(
-        note: draft,
-        projectTitle: projectTitle,
-        format: format,
-      );
+      final markdown = NoteDocument.parse(draft.body).content;
+      final payload = switch (format) {
+        ChronicleExportFormat.docx || ChronicleExportFormat.pdf =>
+          await const PublicationDocumentExporter().export(
+            format: format,
+            title: draft.title,
+            markdown: markdown,
+          ),
+        _ => await NoteExportComposer(
+            readAttachment: widget.store.readManagedAttachment,
+          ).exportNote(
+            note: draft,
+            projectTitle: projectTitle,
+            format: format,
+          ),
+      };
       final savedPath = await const NoteExportFileService().save(payload);
       if (savedPath == null || !mounted) {
         return;

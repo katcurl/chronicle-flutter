@@ -7,6 +7,22 @@ import '../notes/note_export.dart';
 
 class PublicationDocumentExporter {
   const PublicationDocumentExporter();
+
+  Future<ChronicleExportPayload> export({
+    required ChronicleExportFormat format,
+    required String title,
+    required String markdown,
+  }) {
+    return switch (format) {
+      ChronicleExportFormat.docx => docx(title: title, markdown: markdown),
+      ChronicleExportFormat.pdf => pdf(title: title, markdown: markdown),
+      _ => throw ArgumentError.value(
+          format,
+          'format',
+          'PublicationDocumentExporter supports only DOCX and PDF.',
+        ),
+    };
+  }
   Future<ChronicleExportPayload> docx({required String title,required String markdown}) async {
     final stem=NoteExportComposer.safeFileStem(title,fallback:'document'), body=StringBuffer();
     for(final p in _paragraphs(markdown)){final style=p.level==1?'<w:pStyle w:val="Title"/>':p.level>1?'<w:pStyle w:val="Heading${p.level.clamp(1,3)}"/>':'';body.writeln('<w:p><w:pPr>$style</w:pPr><w:r><w:t xml:space="preserve">${const HtmlEscape(HtmlEscapeMode.element).convert(p.text)}</w:t></w:r></w:p>');}

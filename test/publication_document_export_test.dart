@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:chronicle/features/notes/note_export.dart';
 import 'package:chronicle/features/publications/publication_document_export.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -7,7 +8,8 @@ void main() {
   const exporter = PublicationDocumentExporter();
 
   test('DOCX export contains Open XML document text', () async {
-    final payload = await exporter.docx(
+    final payload = await exporter.export(
+      format: ChronicleExportFormat.docx,
       title: 'ORF9b report',
       markdown: '# ORF9b report\n\n## Results\n\nMetastable state.',
     );
@@ -18,7 +20,8 @@ void main() {
   });
 
   test('PDF export uses a local Unicode font and creates a PDF', () async {
-    final payload = await exporter.pdf(
+    final payload = await exporter.export(
+      format: ChronicleExportFormat.pdf,
       title: 'Отчёт ORF9b',
       markdown: '# Отчёт ORF9b\n\n## Результаты\n\nМетастабильное состояние.',
     );

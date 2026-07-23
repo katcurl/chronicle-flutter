@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.2+90
+
+- Fixed DOCX and PDF export from ordinary note workspaces: document formats are now routed to the dedicated document generator instead of falling through to the portable ZIP branch.
+- Added an explicit guard in the legacy note archive composer so unsupported document formats can no longer silently produce ZIP files.
+- Centralized DOCX/PDF dispatch in `PublicationDocumentExporter.export` and added regression coverage for both document signatures and the non-ZIP guard.
+
 ## 0.32.1+89
 
 - Fixed strict Flutter analyzer failures in the first local-intelligence and document-export release.

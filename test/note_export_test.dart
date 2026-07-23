@@ -99,6 +99,29 @@ void main() {
     expect(normalizedHtml, contains('<!doctype html>'));
   });
 
+  test('document formats never fall through to portable ZIP export', () async {
+    final source = note(
+      id: 'note-doc',
+      title: 'Document export',
+      content: '# Results\n\nText.',
+    );
+    final composer = NoteExportComposer(readAttachment: (_) async => null);
+
+    for (final format in <ChronicleExportFormat>[
+      ChronicleExportFormat.docx,
+      ChronicleExportFormat.pdf,
+    ]) {
+      await expectLater(
+        composer.exportNote(
+          note: source,
+          projectTitle: 'ORF9b',
+          format: format,
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
+    }
+  });
+
   test('project archive rewrites wiki links and lists tasks', () async {
     final first = note(
       id: 'first',

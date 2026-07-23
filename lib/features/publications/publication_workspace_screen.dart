@@ -435,10 +435,12 @@ class _PublicationWorkspaceScreenState
     final messenger = ScaffoldMessenger.of(context);
     try {
       final payload = switch (format) {
-        ChronicleExportFormat.docx => await const PublicationDocumentExporter().docx(
-            title: title, markdown: assembly.markdown),
-        ChronicleExportFormat.pdf => await const PublicationDocumentExporter().pdf(
-            title: title, markdown: assembly.markdown),
+        ChronicleExportFormat.docx || ChronicleExportFormat.pdf =>
+          await const PublicationDocumentExporter().export(
+            format: format,
+            title: title,
+            markdown: assembly.markdown,
+          ),
         _ => await NoteExportComposer(
             readAttachment: widget.store.readManagedAttachment,
           ).exportNote(
