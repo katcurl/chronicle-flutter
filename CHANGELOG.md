@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.30.2+83
+
+- Migrated the research-project template picker to Flutter's `RadioGroup` API.
+- Removed the deprecated `RadioListTile.groupValue` and `RadioListTile.onChanged` usages that made the strict GitHub analyzer job fail on Flutter 3.44.7.
+- Preserved the existing template selection and automatic title suggestion behavior.
+
 ## 0.30.1+82
 
 - Rebuilt the project detail route as a flexible research-project home instead of a task-only dashboard.

@@ -350,26 +350,32 @@ class _ProjectTemplatePickerSheetState extends State<ProjectTemplatePickerSheet>
               const SizedBox(height: 6),
               const Text('Шаблон только задаёт стартовые вопросы. Его можно полностью переписать.'),
               const SizedBox(height: 16),
-              for (final template in projectResearchTemplates) ...[
-                Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: RadioListTile<ProjectResearchTemplate>(
-                    value: template,
-                    groupValue: selected,
-                    onChanged: (value) {
-                      setState(() {
-                        selected = value;
-                        if (titleController.text.trim().isEmpty && value != null) {
-                          titleController.text = value.title;
-                        }
-                      });
-                    },
-                    title: Text('${template.emoji}  ${template.title}'),
-                    subtitle: Text(template.description),
-                  ),
+              RadioGroup<ProjectResearchTemplate>(
+                groupValue: selected,
+                onChanged: (value) {
+                  setState(() {
+                    selected = value;
+                    if (titleController.text.trim().isEmpty && value != null) {
+                      titleController.text = value.title;
+                    }
+                  });
+                },
+                child: Column(
+                  children: [
+                    for (final template in projectResearchTemplates) ...[
+                      Card(
+                        clipBehavior: Clip.antiAlias,
+                        child: RadioListTile<ProjectResearchTemplate>(
+                          value: template,
+                          title: Text('${template.emoji}  ${template.title}'),
+                          subtitle: Text(template.description),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 6),
-              ],
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: titleController,
