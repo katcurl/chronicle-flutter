@@ -867,6 +867,12 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
               ? '📁'
               : emojiController.text.trim(),
           description: descriptionController.text.trim(),
+          researchGoal: existing?.researchGoal ?? '',
+          researchQuestions: existing?.researchQuestions ?? const <String>[],
+          knownFindings: existing?.knownFindings ?? const <String>[],
+          openChecks: existing?.openChecks ?? const <String>[],
+          pinnedNoteIds: existing?.pinnedNoteIds ?? const <String>[],
+          linkedSourceIds: existing?.linkedSourceIds ?? const <String>[],
           colorValue: colorValue,
           dueAt: dueAt,
           budgetMinutes: budgetHours == null

@@ -3,7 +3,17 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('backup JSON preserves core entities', () {
-    final project = Project(id: 'project-1', title: 'Проект', emoji: '🧬');
+    final project = Project(
+      id: 'project-1',
+      title: 'Проект',
+      emoji: '🧬',
+      researchGoal: 'Проверить гипотезу',
+      researchQuestions: const <String>['Какой результат воспроизводится?'],
+      knownFindings: const <String>['Есть два состояния'],
+      openChecks: const <String>['Проверить третью траекторию'],
+      pinnedNoteIds: const <String>['note-1'],
+      linkedSourceIds: const <String>['source-1'],
+    );
     final note = Note(
       id: 'note-1',
       title: 'Заметка',
@@ -47,6 +57,18 @@ void main() {
     );
 
     expect(restored.projects.single.title, 'Проект');
+    expect(restored.projects.single.researchGoal, 'Проверить гипотезу');
+    expect(restored.projects.single.researchQuestions, <String>[
+      'Какой результат воспроизводится?',
+    ]);
+    expect(restored.projects.single.knownFindings, <String>[
+      'Есть два состояния',
+    ]);
+    expect(restored.projects.single.openChecks, <String>[
+      'Проверить третью траекторию',
+    ]);
+    expect(restored.projects.single.pinnedNoteIds, <String>['note-1']);
+    expect(restored.projects.single.linkedSourceIds, <String>['source-1']);
     expect(restored.tasks.single.noteId, 'note-1');
     expect(restored.notes.single.tags, ['test']);
     expect(restored.entries.single.durationSeconds, 1200);

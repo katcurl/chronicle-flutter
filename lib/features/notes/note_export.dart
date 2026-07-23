@@ -457,6 +457,55 @@ class NoteExportComposer {
     );
   }
 
+  static void _writeProjectResearchSummary(
+    StringBuffer buffer,
+    Project project,
+  ) {
+    final hasSummary =
+        project.researchGoal.trim().isNotEmpty ||
+        project.researchQuestions.isNotEmpty ||
+        project.knownFindings.isNotEmpty ||
+        project.openChecks.isNotEmpty;
+    if (!hasSummary) return;
+    buffer
+      ..writeln('## Исследовательская рамка')
+      ..writeln();
+    if (project.researchGoal.trim().isNotEmpty) {
+      buffer
+        ..writeln('### Цель')
+        ..writeln()
+        ..writeln(project.researchGoal.trim())
+        ..writeln();
+    }
+    if (project.researchQuestions.isNotEmpty) {
+      buffer
+        ..writeln('### Исследовательские вопросы')
+        ..writeln();
+      for (final question in project.researchQuestions) {
+        buffer.writeln('- $question');
+      }
+      buffer.writeln();
+    }
+    if (project.knownFindings.isNotEmpty) {
+      buffer
+        ..writeln('### Уже известно')
+        ..writeln();
+      for (final finding in project.knownFindings) {
+        buffer.writeln('- $finding');
+      }
+      buffer.writeln();
+    }
+    if (project.openChecks.isNotEmpty) {
+      buffer
+        ..writeln('### Нужно проверить')
+        ..writeln();
+      for (final check in project.openChecks) {
+        buffer.writeln('- $check');
+      }
+      buffer.writeln();
+    }
+  }
+
   static String _renderProjectMarkdown(
     Project project,
     List<Note> notes,
@@ -471,6 +520,7 @@ class NoteExportComposer {
         ..writeln(project.description.trim())
         ..writeln();
     }
+    _writeProjectResearchSummary(buffer, project);
     buffer
       ..writeln('## Задачи')
       ..writeln();
@@ -519,6 +569,7 @@ class NoteExportComposer {
         ..writeln(project.description.trim())
         ..writeln();
     }
+    _writeProjectResearchSummary(buffer, project);
     buffer
       ..writeln('## Задачи')
       ..writeln();

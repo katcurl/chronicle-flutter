@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.30.1+82
+
+- Rebuilt the project detail route as a flexible research-project home instead of a task-only dashboard.
+- Added an editable project goal, research questions, confirmed findings and open checks without imposing a laboratory workflow.
+- Added project-level pinned result notes and explicit links to sources from Chronicle's shared citation library.
+- Added a related-materials overview for project notes, linked sources, managed note attachments and local source PDFs.
+- Added an automatic project timeline derived from project creation, note updates, completed tasks and time entries.
+- Added four optional project templates for open research, computational studies, experimental studies and literature reviews.
+- Stored the new research metadata inside the existing project record with backward-compatible decoding, avoiding a database migration and preserving legacy descriptions.
+- Included the research frame in project Markdown, HTML and portable ZIP exports.
+- Bumped Chronicle backup JSON to format version 5 while retaining decoding of older backups.
+- Added deterministic tests for legacy project rows, research metadata persistence, backup round-tripping, templates and attachment discovery.
+
 ## 0.30.0+81
 
 - Added managed PNG, JPEG, WebP and animated GIF backgrounds for the complete Chronicle interface with a 30 MB content-validated limit.

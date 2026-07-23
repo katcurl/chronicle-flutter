@@ -16,6 +16,12 @@ void main() {
       colorValue: 0xFF006A6A,
       dueAt: DateTime(2026, 12, 1),
       budgetMinutes: 600,
+      researchGoal: 'Identify robust metastable states',
+      researchQuestions: const <String>['Which states are reproducible?'],
+      knownFindings: const <String>['RMSD contains a stable transition'],
+      openChecks: const <String>['Compare an independent trajectory'],
+      pinnedNoteIds: const <String>['note-result'],
+      linkedSourceIds: const <String>['source-jaffe'],
     );
     store.addProject(project);
 
@@ -46,6 +52,22 @@ void main() {
       reloaded.tasks.singleWhere((item) => item.id == task.id).description,
       'Compare the two metastable regions',
     );
+
+    final restoredProject = reloaded.projects.singleWhere(
+      (item) => item.id == project.id,
+    );
+    expect(restoredProject.researchGoal, 'Identify robust metastable states');
+    expect(restoredProject.researchQuestions, <String>[
+      'Which states are reproducible?',
+    ]);
+    expect(restoredProject.knownFindings, <String>[
+      'RMSD contains a stable transition',
+    ]);
+    expect(restoredProject.openChecks, <String>[
+      'Compare an independent trajectory',
+    ]);
+    expect(restoredProject.pinnedNoteIds, <String>['note-result']);
+    expect(restoredProject.linkedSourceIds, <String>['source-jaffe']);
 
     store.dispose();
   });

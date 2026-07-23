@@ -28,25 +28,131 @@ int _readInt(dynamic value, {int fallback = 0}) {
   return fallback;
 }
 
+const String _projectResearchPrefix = 'chronicle-project-research-v1:';
+
+List<String> _readStringList(dynamic value) {
+  if (value is! List) return <String>[];
+  return value
+      .map((item) => item.toString().trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+}
+
+class _ProjectDescriptionPayload {
+  const _ProjectDescriptionPayload({
+    required this.description,
+    required this.researchGoal,
+    required this.researchQuestions,
+    required this.knownFindings,
+    required this.openChecks,
+    required this.pinnedNoteIds,
+    required this.linkedSourceIds,
+  });
+
+  final String description;
+  final String researchGoal;
+  final List<String> researchQuestions;
+  final List<String> knownFindings;
+  final List<String> openChecks;
+  final List<String> pinnedNoteIds;
+  final List<String> linkedSourceIds;
+}
+
+_ProjectDescriptionPayload _decodeProjectDescription(String raw) {
+  if (!raw.startsWith(_projectResearchPrefix)) {
+    return _ProjectDescriptionPayload(
+      description: raw,
+      researchGoal: '',
+      researchQuestions: const <String>[],
+      knownFindings: const <String>[],
+      openChecks: const <String>[],
+      pinnedNoteIds: const <String>[],
+      linkedSourceIds: const <String>[],
+    );
+  }
+  try {
+    final decoded = jsonDecode(raw.substring(_projectResearchPrefix.length));
+    if (decoded is! Map) throw const FormatException('Invalid project data');
+    final json = Map<String, dynamic>.from(decoded);
+    return _ProjectDescriptionPayload(
+      description: json['description'] as String? ?? '',
+      researchGoal: json['researchGoal'] as String? ?? '',
+      researchQuestions: _readStringList(json['researchQuestions']),
+      knownFindings: _readStringList(json['knownFindings']),
+      openChecks: _readStringList(json['openChecks']),
+      pinnedNoteIds: _readStringList(json['pinnedNoteIds']),
+      linkedSourceIds: _readStringList(json['linkedSourceIds']),
+    );
+  } on Object {
+    return _ProjectDescriptionPayload(
+      description: raw,
+      researchGoal: '',
+      researchQuestions: const <String>[],
+      knownFindings: const <String>[],
+      openChecks: const <String>[],
+      pinnedNoteIds: const <String>[],
+      linkedSourceIds: const <String>[],
+    );
+  }
+}
+
+String _encodeProjectDescription(Project project) {
+  final hasResearchData =
+      project.researchGoal.trim().isNotEmpty ||
+      project.researchQuestions.isNotEmpty ||
+      project.knownFindings.isNotEmpty ||
+      project.openChecks.isNotEmpty ||
+      project.pinnedNoteIds.isNotEmpty ||
+      project.linkedSourceIds.isNotEmpty;
+  if (!hasResearchData) return project.description;
+  final payload = jsonEncode(<String, Object?>{
+    'description': project.description,
+    'researchGoal': project.researchGoal,
+    'researchQuestions': project.researchQuestions,
+    'knownFindings': project.knownFindings,
+    'openChecks': project.openChecks,
+    'pinnedNoteIds': project.pinnedNoteIds,
+    'linkedSourceIds': project.linkedSourceIds,
+  });
+  return '$_projectResearchPrefix$payload';
+}
+
 class Project {
   Project({
     required this.id,
     required this.title,
     required this.emoji,
     this.description = '',
+    this.researchGoal = '',
+    List<String> researchQuestions = const <String>[],
+    List<String> knownFindings = const <String>[],
+    List<String> openChecks = const <String>[],
+    List<String> pinnedNoteIds = const <String>[],
+    List<String> linkedSourceIds = const <String>[],
     this.colorValue = 0xFF6750A4,
     this.dueAt,
     this.budgetMinutes,
     this.archived = false,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : createdAt = createdAt ?? DateTime.now(),
+  }) : researchQuestions = List<String>.from(researchQuestions),
+       knownFindings = List<String>.from(knownFindings),
+       openChecks = List<String>.from(openChecks),
+       pinnedNoteIds = List<String>.from(pinnedNoteIds),
+       linkedSourceIds = List<String>.from(linkedSourceIds),
+       createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
 
   final String id;
   String title;
   String emoji;
   String description;
+  String researchGoal;
+  List<String> researchQuestions;
+  List<String> knownFindings;
+  List<String> openChecks;
+  List<String> pinnedNoteIds;
+  List<String> linkedSourceIds;
   int colorValue;
   DateTime? dueAt;
   int? budgetMinutes;
@@ -54,11 +160,25 @@ class Project {
   DateTime createdAt;
   DateTime updatedAt;
 
+  bool get hasResearchProfile =>
+      researchGoal.trim().isNotEmpty ||
+      researchQuestions.isNotEmpty ||
+      knownFindings.isNotEmpty ||
+      openChecks.isNotEmpty ||
+      pinnedNoteIds.isNotEmpty ||
+      linkedSourceIds.isNotEmpty;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
     'emoji': emoji,
     'description': description,
+    'researchGoal': researchGoal,
+    'researchQuestions': researchQuestions,
+    'knownFindings': knownFindings,
+    'openChecks': openChecks,
+    'pinnedNoteIds': pinnedNoteIds,
+    'linkedSourceIds': linkedSourceIds,
     'colorValue': colorValue,
     'dueAt': dueAt?.toIso8601String(),
     'budgetMinutes': budgetMinutes,
@@ -71,7 +191,7 @@ class Project {
     'id': id,
     'title': title,
     'emoji': emoji,
-    'description': description,
+    'description': _encodeProjectDescription(this),
     'color_value': colorValue,
     'due_at': dueAt?.toIso8601String(),
     'budget_minutes': budgetMinutes,
@@ -85,6 +205,12 @@ class Project {
     title: json['title'] as String,
     emoji: json['emoji'] as String? ?? '📁',
     description: json['description'] as String? ?? '',
+    researchGoal: json['researchGoal'] as String? ?? '',
+    researchQuestions: _readStringList(json['researchQuestions']),
+    knownFindings: _readStringList(json['knownFindings']),
+    openChecks: _readStringList(json['openChecks']),
+    pinnedNoteIds: _readStringList(json['pinnedNoteIds']),
+    linkedSourceIds: _readStringList(json['linkedSourceIds']),
     colorValue: _readInt(json['colorValue'], fallback: 0xFF6750A4),
     dueAt: _readNullableDate(json['dueAt']),
     budgetMinutes:
@@ -94,19 +220,32 @@ class Project {
     updatedAt: _readDate(json['updatedAt']),
   );
 
-  factory Project.fromDb(Map<String, Object?> row) => Project(
-    id: row['id']! as String,
-    title: row['title']! as String,
-    emoji: row['emoji'] as String? ?? '📁',
-    description: row['description'] as String? ?? '',
-    colorValue: _readInt(row['color_value'], fallback: 0xFF6750A4),
-    dueAt: _readNullableDate(row['due_at']),
-    budgetMinutes:
-        row['budget_minutes'] == null ? null : _readInt(row['budget_minutes']),
-    archived: _readBool(row['archived']),
-    createdAt: _readDate(row['created_at']),
-    updatedAt: _readDate(row['updated_at']),
-  );
+  factory Project.fromDb(Map<String, Object?> row) {
+    final payload = _decodeProjectDescription(
+      row['description'] as String? ?? '',
+    );
+    return Project(
+      id: row['id']! as String,
+      title: row['title']! as String,
+      emoji: row['emoji'] as String? ?? '📁',
+      description: payload.description,
+      researchGoal: payload.researchGoal,
+      researchQuestions: payload.researchQuestions,
+      knownFindings: payload.knownFindings,
+      openChecks: payload.openChecks,
+      pinnedNoteIds: payload.pinnedNoteIds,
+      linkedSourceIds: payload.linkedSourceIds,
+      colorValue: _readInt(row['color_value'], fallback: 0xFF6750A4),
+      dueAt: _readNullableDate(row['due_at']),
+      budgetMinutes:
+          row['budget_minutes'] == null
+              ? null
+              : _readInt(row['budget_minutes']),
+      archived: _readBool(row['archived']),
+      createdAt: _readDate(row['created_at']),
+      updatedAt: _readDate(row['updated_at']),
+    );
+  }
 }
 
 class WorkTask {
@@ -686,7 +825,7 @@ class AppData {
 
   String encode() => jsonEncode({
     'format': 'chronicle-backup',
-    'version': 4,
+    'version': 5,
     'exportedAt': DateTime.now().toIso8601String(),
     'projects': projects.map((item) => item.toJson()).toList(),
     'tasks': tasks.map((item) => item.toJson()).toList(),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as path;
 
 import '../../models/app_models.dart';
 import '../../services/app_store.dart';
@@ -12,6 +13,8 @@ import '../tasks/task_metadata.dart';
 import 'project_appearance_store.dart';
 import 'project_appearance_widgets.dart';
 import 'project_editor_sheet.dart';
+import 'project_research.dart';
+import 'project_research_dialog.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   const ProjectDetailScreen({
@@ -39,30 +42,45 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       return const Scaffold(body: Center(child: Text('Проект не найден')));
     }
 
-    final tasks =
-        widget.store.data.tasks
-            .where((task) => task.projectId == project.id)
-            .toList()
-          ..sort((a, b) {
-            final priority = b.priority.compareTo(a.priority);
-            if (priority != 0) return priority;
-            return b.updatedAt.compareTo(a.updatedAt);
-          });
+    final tasks = widget.store.data.tasks
+        .where((task) => task.projectId == project.id)
+        .toList()
+      ..sort((a, b) {
+        final priority = b.priority.compareTo(a.priority);
+        if (priority != 0) return priority;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
     final rootTasks = tasks.where((task) => task.parentTaskId == null).toList();
-    final notes =
-        widget.store.data.notes
-            .where((note) => note.projectId == project.id)
-            .toList();
-    final entries =
-        widget.store.data.entries
-            .where((entry) => entry.projectId == project.id)
-            .toList();
+    final notes = widget.store.data.notes
+        .where((note) => note.projectId == project.id)
+        .toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final linkedSourceIds = project.linkedSourceIds.toSet();
+    final sources = widget.store.data.citationSources
+        .where((source) => linkedSourceIds.contains(source.id))
+        .toList()
+      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    final pinnedIds = project.pinnedNoteIds.toSet();
+    final pinnedNotes = notes
+        .where((note) => pinnedIds.contains(note.id))
+        .toList(growable: false);
+    final attachmentPaths = projectAttachmentPaths(notes);
+    final sourceFiles = sources
+        .map((source) => source.pdfPath.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    final files = <String>{...attachmentPaths, ...sourceFiles}.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final entries = widget.store.data.entries
+        .where((entry) => entry.projectId == project.id)
+        .toList();
     final seconds = entries.fold<int>(
       0,
       (sum, entry) => sum + entry.durationSeconds,
     );
     final done = tasks.where((task) => task.status == 'done').length;
     final progress = tasks.isEmpty ? 0.0 : done / tasks.length;
+    final timeline = _projectTimeline(project, notes, tasks, entries);
 
     return ProjectAppearanceScope(
       projectId: project.id,
@@ -87,7 +105,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ),
           actions: [
             IconButton(
-              tooltip: 'Редактировать',
+              tooltip: 'Исследовательская страница',
+              onPressed: project.archived
+                  ? null
+                  : () => _editResearch(project, notes),
+              icon: const Icon(Icons.science_outlined),
+            ),
+            IconButton(
+              tooltip: 'Редактировать проект',
               onPressed: () => _editProject(project),
               icon: const Icon(Icons.edit_outlined),
             ),
@@ -129,96 +154,81 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 icon: const Icon(Icons.add_task_rounded),
                 label: const Text('Задача'),
               ),
-        body: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              sliver: SliverToBoxAdapter(
-                child: _ProjectHero(
-                  project: project,
-                  appearanceController: widget.appearanceController,
-                  progress: progress,
-                  done: done,
-                  total: tasks.length,
-                  seconds: seconds,
-                ),
-              ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+          children: [
+            _ProjectHero(
+              project: project,
+              appearanceController: widget.appearanceController,
+              progress: progress,
+              done: done,
+              total: tasks.length,
+              seconds: seconds,
             ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: SliverToBoxAdapter(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: MetricCard(
-                        icon: Icons.checklist_rounded,
-                        label: 'Задачи',
-                        value: '$done / ${tasks.length}',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: MetricCard(
-                        icon: Icons.menu_book_rounded,
-                        label: 'Заметки',
-                        value: '${notes.length}',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            const SizedBox(height: 14),
+            _ResearchBriefCard(
+              project: project,
+              onEdit: project.archived ? null : () => _editResearch(project, notes),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 22)),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: SliverToBoxAdapter(
-                child: SectionTitle(
-                  'Задачи проекта',
-                  trailing: Text('${tasks.length}'),
-                ),
-              ),
+            const SizedBox(height: 14),
+            _ProjectMetrics(
+              taskCount: tasks.length,
+              noteCount: notes.length,
+              sourceCount: sources.length,
+              fileCount: files.length,
             ),
+            const SizedBox(height: 22),
+            _KnowledgeStatusSection(
+              knownFindings: project.knownFindings,
+              openChecks: project.openChecks,
+              onEdit: project.archived ? null : () => _editResearch(project, notes),
+            ),
+            const SizedBox(height: 22),
+            _PinnedResultsSection(
+              notes: pinnedNotes,
+              onEdit: project.archived ? null : () => _editResearch(project, notes),
+            ),
+            const SizedBox(height: 22),
+            _ProjectMaterialsSection(
+              notes: notes,
+              sources: sources,
+              files: files,
+            ),
+            const SizedBox(height: 22),
+            _ProjectTimelineSection(items: timeline),
+            const SizedBox(height: 22),
+            SectionTitle('Задачи проекта', trailing: Text('${tasks.length}')),
+            const SizedBox(height: 6),
             if (rootTasks.isEmpty)
-              const SliverPadding(
-                padding: EdgeInsets.fromLTRB(16, 6, 16, 120),
-                sliver: SliverToBoxAdapter(child: _EmptyProjectTasks()),
-              )
+              const _EmptyProjectTasks()
             else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate((context, rawIndex) {
-                    if (rawIndex.isOdd) return const SizedBox(height: 10);
-                    final index = rawIndex ~/ 2;
-                    final task = rootTasks[index];
-                    final children = tasks
-                        .where((item) => item.parentTaskId == task.id)
-                        .toList();
-                    return _ProjectTaskCard(
-                      task: task,
-                      children: children,
-                      onToggle: (value) {
-                        widget.store.updateTaskStatus(
-                          task,
-                          value ? 'done' : 'next',
-                        );
-                        setState(() {});
-                      },
-                      onEdit: () => _editTask(task),
-                      onAddSubtask: () => _addSubtask(task),
-                      onDelete: () => _deleteTask(task),
-                      onChildToggle: (child, value) {
-                        widget.store.updateTaskStatus(
-                          child,
-                          value ? 'done' : 'next',
-                        );
-                        setState(() {});
-                      },
-                      onChildEdit: _editTask,
+              for (var index = 0; index < rootTasks.length; index++) ...[
+                _ProjectTaskCard(
+                  task: rootTasks[index],
+                  children: tasks
+                      .where((item) => item.parentTaskId == rootTasks[index].id)
+                      .toList(),
+                  onToggle: (value) {
+                    widget.store.updateTaskStatus(
+                      rootTasks[index],
+                      value ? 'done' : 'next',
                     );
-                  }, childCount: rootTasks.length * 2 - 1),
+                    setState(() {});
+                  },
+                  onEdit: () => _editTask(rootTasks[index]),
+                  onAddSubtask: () => _addSubtask(rootTasks[index]),
+                  onDelete: () => _deleteTask(rootTasks[index]),
+                  onChildToggle: (child, value) {
+                    widget.store.updateTaskStatus(
+                      child,
+                      value ? 'done' : 'next',
+                    );
+                    setState(() {});
+                  },
+                  onChildEdit: _editTask,
                 ),
-              ),
+                if (index != rootTasks.length - 1) const SizedBox(height: 10),
+              ],
           ],
         ),
       ),
@@ -302,6 +312,24 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _editResearch(Project project, List<Note> notes) async {
+    final result = await ProjectResearchEditorSheet.show(
+      context,
+      project: project,
+      notes: notes,
+      sources: widget.store.data.citationSources,
+    );
+    if (result == null) return;
+    project.researchGoal = result.researchGoal;
+    project.researchQuestions = result.researchQuestions;
+    project.knownFindings = result.knownFindings;
+    project.openChecks = result.openChecks;
+    project.pinnedNoteIds = result.pinnedNoteIds;
+    project.linkedSourceIds = result.linkedSourceIds;
+    widget.store.updateProject(project);
+    if (mounted) setState(() {});
+  }
+
   Future<void> _addTask(Project project) async {
     final task = await TaskEditorSheet.show(
       context,
@@ -365,6 +393,546 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     if (confirmed != true) return;
     widget.store.deleteTask(task.id);
     setState(() {});
+  }
+}
+
+class _ResearchBriefCard extends StatelessWidget {
+  const _ResearchBriefCard({required this.project, required this.onEdit});
+
+  final Project project;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasGoal = project.researchGoal.trim().isNotEmpty;
+    final questions = project.researchQuestions;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.science_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Цель и исследовательские вопросы',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Редактировать',
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_note_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              hasGoal
+                  ? project.researchGoal
+                  : 'Цель пока не сформулирована. Можно оставить проект полностью свободным или описать, что именно здесь исследуется.',
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            if (questions.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final question in questions)
+                    Chip(
+                      avatar: const Icon(Icons.help_outline_rounded, size: 17),
+                      label: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 360),
+                        child: Text(question),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProjectMetrics extends StatelessWidget {
+  const _ProjectMetrics({
+    required this.taskCount,
+    required this.noteCount,
+    required this.sourceCount,
+    required this.fileCount,
+  });
+
+  final int taskCount;
+  final int noteCount;
+  final int sourceCount;
+  final int fileCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 800 ? 4 : 2;
+        final gap = 12.0;
+        final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+        final metrics = <Widget>[
+          MetricCard(
+            icon: Icons.checklist_rounded,
+            label: 'Задачи',
+            value: '$taskCount',
+          ),
+          MetricCard(
+            icon: Icons.menu_book_rounded,
+            label: 'Заметки',
+            value: '$noteCount',
+          ),
+          MetricCard(
+            icon: Icons.library_books_outlined,
+            label: 'Источники',
+            value: '$sourceCount',
+          ),
+          MetricCard(
+            icon: Icons.attach_file_rounded,
+            label: 'Файлы',
+            value: '$fileCount',
+          ),
+        ];
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [for (final metric in metrics) SizedBox(width: width, child: metric)],
+        );
+      },
+    );
+  }
+}
+
+class _KnowledgeStatusSection extends StatelessWidget {
+  const _KnowledgeStatusSection({
+    required this.knownFindings,
+    required this.openChecks,
+    required this.onEdit,
+  });
+
+  final List<String> knownFindings;
+  final List<String> openChecks;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionTitle(
+          'Карта знания',
+          trailing: TextButton.icon(
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Изменить'),
+          ),
+        ),
+        const SizedBox(height: 6),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final cards = <Widget>[
+              _KnowledgeListCard(
+                icon: Icons.verified_outlined,
+                title: 'Уже известно',
+                emptyText: 'Здесь появятся подтверждённые наблюдения и выводы.',
+                items: knownFindings,
+              ),
+              _KnowledgeListCard(
+                icon: Icons.manage_search_rounded,
+                title: 'Нужно проверить',
+                emptyText: 'Здесь можно держать пробелы, сомнения и следующие проверки.',
+                items: openChecks,
+              ),
+            ];
+            if (constraints.maxWidth < 720) {
+              return Column(
+                children: [
+                  cards.first,
+                  const SizedBox(height: 12),
+                  cards.last,
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: cards.first),
+                const SizedBox(width: 12),
+                Expanded(child: cards.last),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _KnowledgeListCard extends StatelessWidget {
+  const _KnowledgeListCard({
+    required this.icon,
+    required this.title,
+    required this.emptyText,
+    required this.items,
+  });
+
+  final IconData icon;
+  final String title;
+  final String emptyText;
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(17),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 9),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (items.isEmpty)
+              Text(emptyText, style: Theme.of(context).textTheme.bodySmall)
+            else
+              for (final item in items)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 9),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Icon(Icons.circle, size: 7),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(child: Text(item)),
+                    ],
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PinnedResultsSection extends StatelessWidget {
+  const _PinnedResultsSection({required this.notes, required this.onEdit});
+
+  final List<Note> notes;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionTitle(
+          'Закреплённые результаты',
+          trailing: TextButton.icon(
+            onPressed: onEdit,
+            icon: const Icon(Icons.push_pin_outlined, size: 18),
+            label: const Text('Настроить'),
+          ),
+        ),
+        const SizedBox(height: 6),
+        if (notes.isEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                children: [
+                  const Icon(Icons.bookmark_add_outlined),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Закрепи ключевые заметки: вывод, таблицу результатов, финальный график или недельный отчёт.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final note in notes)
+                SizedBox(
+                  width: 320,
+                  child: Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.push_pin_rounded),
+                      title: Text(note.title),
+                      subtitle: Text(
+                        '${note.noteType} · ${shortDate(note.updatedAt)}',
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _ProjectMaterialsSection extends StatelessWidget {
+  const _ProjectMaterialsSection({
+    required this.notes,
+    required this.sources,
+    required this.files,
+  });
+
+  final List<Note> notes;
+  final List<CitationSource> sources;
+  final List<String> files;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionTitle('Связанные материалы'),
+        const SizedBox(height: 6),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              children: [
+                _MaterialHeader(
+                  icon: Icons.menu_book_outlined,
+                  title: 'Заметки',
+                  count: notes.length,
+                ),
+                if (notes.isEmpty)
+                  const _MaterialEmpty('В проекте пока нет заметок.')
+                else
+                  for (final note in notes.take(5))
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.description_outlined),
+                      title: Text(note.title),
+                      subtitle: Text('${note.noteType} · ${shortDate(note.updatedAt)}'),
+                    ),
+                const Divider(height: 18),
+                _MaterialHeader(
+                  icon: Icons.library_books_outlined,
+                  title: 'Источники',
+                  count: sources.length,
+                ),
+                if (sources.isEmpty)
+                  const _MaterialEmpty('Источники можно связать через исследовательскую страницу.')
+                else
+                  for (final source in sources.take(5))
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.article_outlined),
+                      title: Text(source.title),
+                      subtitle: Text(
+                        [
+                          if (source.authors.isNotEmpty) source.authors.first,
+                          if (source.year != null) '${source.year}',
+                          if (source.citationKey.isNotEmpty) source.citationKey,
+                        ].join(' · '),
+                      ),
+                    ),
+                const Divider(height: 18),
+                _MaterialHeader(
+                  icon: Icons.attach_file_rounded,
+                  title: 'Файлы',
+                  count: files.length,
+                ),
+                if (files.isEmpty)
+                  const _MaterialEmpty('Файлы появятся из вложений заметок и PDF связанных источников.')
+                else
+                  for (final file in files.take(8))
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.insert_drive_file_outlined),
+                      title: Text(path.basename(file)),
+                      subtitle: Text(file, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MaterialHeader extends StatelessWidget {
+  const _MaterialHeader({
+    required this.icon,
+    required this.title,
+    required this.count,
+  });
+
+  final IconData icon;
+  final String title;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+      title: Text(
+        title,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+      ),
+      trailing: Text('$count'),
+    );
+  }
+}
+
+class _MaterialEmpty extends StatelessWidget {
+  const _MaterialEmpty(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(text, style: Theme.of(context).textTheme.bodySmall),
+        ),
+      );
+}
+
+class _ProjectTimelineItem {
+  const _ProjectTimelineItem({
+    required this.at,
+    required this.icon,
+    required this.title,
+    required this.detail,
+  });
+
+  final DateTime at;
+  final IconData icon;
+  final String title;
+  final String detail;
+}
+
+List<_ProjectTimelineItem> _projectTimeline(
+  Project project,
+  List<Note> notes,
+  List<WorkTask> tasks,
+  List<TimeEntry> entries,
+) {
+  final result = <_ProjectTimelineItem>[
+    _ProjectTimelineItem(
+      at: project.createdAt,
+      icon: Icons.flag_outlined,
+      title: 'Проект создан',
+      detail: project.title,
+    ),
+  ];
+  for (final note in notes) {
+    result.add(
+      _ProjectTimelineItem(
+        at: note.updatedAt,
+        icon: Icons.description_outlined,
+        title: note.createdAt == note.updatedAt ? 'Заметка создана' : 'Заметка обновлена',
+        detail: note.title,
+      ),
+    );
+  }
+  for (final task in tasks) {
+    final completedAt = task.completedAt;
+    if (completedAt != null || task.status == 'done') {
+      result.add(
+        _ProjectTimelineItem(
+          at: completedAt ?? task.updatedAt,
+          icon: Icons.task_alt_rounded,
+          title: 'Задача завершена',
+          detail: task.title,
+        ),
+      );
+    }
+  }
+  for (final entry in entries) {
+    result.add(
+      _ProjectTimelineItem(
+        at: entry.startedAt,
+        icon: Icons.timer_outlined,
+        title: 'Работа над проектом',
+        detail: entry.description.trim().isEmpty
+            ? formatDuration(entry.durationSeconds)
+            : '${entry.description} · ${formatDuration(entry.durationSeconds)}',
+      ),
+    );
+  }
+  result.sort((left, right) => right.at.compareTo(left.at));
+  return result.take(16).toList(growable: false);
+}
+
+class _ProjectTimelineSection extends StatelessWidget {
+  const _ProjectTimelineSection({required this.items});
+
+  final List<_ProjectTimelineItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionTitle('Временная шкала работы'),
+        const SizedBox(height: 6),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              children: [
+                for (var index = 0; index < items.length; index++)
+                  ListTile(
+                    leading: CircleAvatar(
+                      child: Icon(items[index].icon, size: 19),
+                    ),
+                    title: Text(items[index].title),
+                    subtitle: Text(items[index].detail),
+                    trailing: Text(
+                      shortDate(items[index].at),
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
