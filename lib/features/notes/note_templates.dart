@@ -526,6 +526,7 @@ String noteTypeLabel(String value) => switch (value) {
   'protein_purification' => 'Экспрессия и очистка',
   'nmr_experiment' => 'ЯМР-эксперимент',
   'solution' => 'Буфер или раствор',
+  'publication' => 'Публикация или отчёт',
   _ => 'Заметка',
 };
 
@@ -540,5 +541,6 @@ String noteTypeIcon(String value) => switch (value) {
   'protein_purification' => '🧬',
   'nmr_experiment' => '🧲',
   'solution' => '🧴',
+  'publication' => '📄',
   _ => '📝',
 };

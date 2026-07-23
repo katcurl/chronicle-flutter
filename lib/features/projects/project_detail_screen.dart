@@ -8,6 +8,8 @@ import '../appearance/app_appearance.dart';
 import '../notes/note_export.dart';
 import '../notes/note_export_dialog.dart';
 import '../notes/note_export_file_service.dart';
+import '../publications/publication_workspace.dart';
+import '../publications/publication_workspace_screen.dart';
 import '../tasks/task_editor_sheet.dart';
 import '../tasks/task_metadata.dart';
 import 'project_appearance_store.dart';
@@ -55,16 +57,22 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         .where((note) => note.projectId == project.id)
         .toList()
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final publicationNotes = notes
+        .where(PublicationWorkspaceCodec.isPublication)
+        .toList(growable: false);
+    final sourceNotes = notes
+        .where((note) => !PublicationWorkspaceCodec.isPublication(note))
+        .toList(growable: false);
     final linkedSourceIds = project.linkedSourceIds.toSet();
     final sources = widget.store.data.citationSources
         .where((source) => linkedSourceIds.contains(source.id))
         .toList()
       ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     final pinnedIds = project.pinnedNoteIds.toSet();
-    final pinnedNotes = notes
+    final pinnedNotes = sourceNotes
         .where((note) => pinnedIds.contains(note.id))
         .toList(growable: false);
-    final attachmentPaths = projectAttachmentPaths(notes);
+    final attachmentPaths = projectAttachmentPaths(sourceNotes);
     final sourceFiles = sources
         .map((source) => source.pdfPath.trim())
         .where((value) => value.isNotEmpty)
@@ -108,7 +116,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               tooltip: 'Исследовательская страница',
               onPressed: project.archived
                   ? null
-                  : () => _editResearch(project, notes),
+                  : () => _editResearch(project, sourceNotes),
               icon: const Icon(Icons.science_outlined),
             ),
             IconButton(
@@ -168,12 +176,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             const SizedBox(height: 14),
             _ResearchBriefCard(
               project: project,
-              onEdit: project.archived ? null : () => _editResearch(project, notes),
+              onEdit: project.archived
+                  ? null
+                  : () => _editResearch(project, sourceNotes),
             ),
             const SizedBox(height: 14),
             _ProjectMetrics(
               taskCount: tasks.length,
-              noteCount: notes.length,
+              noteCount: sourceNotes.length,
               sourceCount: sources.length,
               fileCount: files.length,
             ),
@@ -181,16 +191,28 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             _KnowledgeStatusSection(
               knownFindings: project.knownFindings,
               openChecks: project.openChecks,
-              onEdit: project.archived ? null : () => _editResearch(project, notes),
+              onEdit: project.archived
+                  ? null
+                  : () => _editResearch(project, sourceNotes),
             ),
             const SizedBox(height: 22),
             _PinnedResultsSection(
               notes: pinnedNotes,
-              onEdit: project.archived ? null : () => _editResearch(project, notes),
+              onEdit: project.archived
+                  ? null
+                  : () => _editResearch(project, sourceNotes),
+            ),
+            const SizedBox(height: 22),
+            _PublicationOutputsSection(
+              publications: publicationNotes,
+              readOnly: project.archived,
+              onCreate: () => _createPublication(project),
+              onOpen: (publication) =>
+                  _openPublication(project, publication),
             ),
             const SizedBox(height: 22),
             _ProjectMaterialsSection(
-              notes: notes,
+              notes: sourceNotes,
               sources: sources,
               files: files,
             ),
@@ -328,6 +350,26 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     project.linkedSourceIds = result.linkedSourceIds;
     widget.store.updateProject(project);
     if (mounted) setState(() {});
+  }
+
+  Future<void> _createPublication(Project project) async {
+    final changed = await PublicationWorkspaceScreen.show(
+      context,
+      store: widget.store,
+      project: project,
+    );
+    if (changed == true && mounted) setState(() {});
+  }
+
+  Future<void> _openPublication(Project project, Note publication) async {
+    final changed = await PublicationWorkspaceScreen.show(
+      context,
+      store: widget.store,
+      project: project,
+      publication: publication,
+      readOnly: project.archived,
+    );
+    if (changed == true && mounted) setState(() {});
   }
 
   Future<void> _addTask(Project project) async {
@@ -700,6 +742,164 @@ class _PinnedResultsSection extends StatelessWidget {
             ],
           ),
       ],
+    );
+  }
+}
+
+class _PublicationOutputsSection extends StatelessWidget {
+  const _PublicationOutputsSection({
+    required this.publications,
+    required this.readOnly,
+    required this.onCreate,
+    required this.onOpen,
+  });
+
+  final List<Note> publications;
+  final bool readOnly;
+  final VoidCallback onCreate;
+  final ValueChanged<Note> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionTitle(
+          'Публикации и отчёты',
+          trailing: FilledButton.tonalIcon(
+            onPressed: readOnly ? null : onCreate,
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Создать'),
+          ),
+        ),
+        const SizedBox(height: 6),
+        if (publications.isEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.auto_stories_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Собери результат из живых заметок',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          'Создай статью, отчёт или презентационный конспект. '
+                          'Разделы заметок останутся связанными с оригиналами, '
+                          'а Chronicle проверит потерянные связи, нумерацию и '
+                          'библиографию перед экспортом.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final publication in publications)
+                SizedBox(
+                  width: 340,
+                  child: _PublicationOutputCard(
+                    publication: publication,
+                    onTap: () => onOpen(publication),
+                  ),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _PublicationOutputCard extends StatelessWidget {
+  const _PublicationOutputCard({
+    required this.publication,
+    required this.onTap,
+  });
+
+  final Note publication;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    var fallbackId = 0;
+    final workspace = PublicationWorkspaceCodec.read(
+      publication,
+      idFactory: () => 'fallback-${publication.id}-${fallbackId++}',
+    );
+    final fragmentCount = workspace.sections.fold<int>(
+      0,
+      (sum, section) => sum + section.fragments.length,
+    );
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    workspace.kind.emoji,
+                    style: const TextStyle(fontSize: 24),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      publication.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                workspace.kind.label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 5,
+                children: [
+                  Text('${workspace.sections.length} разделов'),
+                  Text('$fragmentCount живых фрагментов'),
+                  Text('обновлено ${shortDate(publication.updatedAt)}'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -47,6 +47,8 @@ import '../features/notes/scientific_table_editor_dialog.dart';
 import '../features/notes/scientific_reference_syntax.dart';
 import '../features/projects/project_appearance_store.dart';
 import '../features/projects/project_appearance_widgets.dart';
+import '../features/publications/publication_workspace.dart';
+import '../features/publications/publication_workspace_screen.dart';
 import '../features/references/citation_syntax.dart';
 import '../features/tasks/task_editor_sheet.dart';
 import '../models/app_models.dart';
@@ -574,16 +576,36 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   Future<void> _open(Note note) async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => NoteWorkspaceScreen(
-          store: widget.store,
-          note: note,
-          appearanceController: widget.appearanceController,
-          globalAppearance: widget.globalAppearance,
+    if (PublicationWorkspaceCodec.isPublication(note)) {
+      final project = widget.store.projectById(note.projectId);
+      if (project == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Не найден проект этого документа.'),
+          ),
+        );
+        return;
+      }
+      await PublicationWorkspaceScreen.show(
+        context,
+        store: widget.store,
+        project: project,
+        publication: note,
+        readOnly: project.archived,
+      );
+    } else {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => NoteWorkspaceScreen(
+            store: widget.store,
+            note: note,
+            appearanceController: widget.appearanceController,
+            globalAppearance: widget.globalAppearance,
+          ),
         ),
-      ),
-    );
+      );
+    }
     if (mounted) setState(() {});
   }
 }

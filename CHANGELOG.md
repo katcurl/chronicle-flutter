@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.31.0+84
+
+- Added the first publication and report assembly workspace directly to research projects.
+- Added built-in structures for scientific articles, research or practice reports and presentation outlines.
+- Added editable document sections with independent connecting text and safe section/fragment ordering.
+- Added live fragments that reference an entire project note or the content beneath a selected Markdown heading without copying the source text.
+- Stored publication workspaces as ordinary Chronicle notes using existing note properties and stable wiki links, avoiding a database migration and inheriting Vault, backup, synchronization and version-history behavior.
+- Routed publication notes from the global note overview and knowledge links back into their dedicated protected workspace instead of the ordinary Markdown editor.
+- Added live-link validation that reports deleted source notes, renamed headings and empty fragments instead of silently exporting stale content.
+- Added assembled-document metrics for words, live fragments, figures, tables, abbreviations and unresolved links.
+- Added optional automatic figure and table numbering, abbreviation-list generation and bibliography rendering from existing `[@citation-key]` references.
+- Added full Markdown preview and reused Chronicle's existing Markdown, autonomous HTML and portable ZIP export pipeline with referenced attachments.
+- Added deterministic tests for templates, property round-tripping, non-copying manifests, heading extraction, numbering, citations, abbreviations and broken-link detection.
+
 ## 0.30.2+83
 
 - Migrated the research-project template picker to Flutter's `RadioGroup` API.
