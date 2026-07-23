@@ -8,7 +8,7 @@ import '../notes/note_export.dart';
 class PublicationDocumentExporter {
   const PublicationDocumentExporter();
   Future<ChronicleExportPayload> docx({required String title,required String markdown}) async {
-    final stem=safeFileStem(title,fallback:'document'), body=StringBuffer();
+    final stem=NoteExportComposer.safeFileStem(title,fallback:'document'), body=StringBuffer();
     for(final p in _paragraphs(markdown)){final style=p.level==1?'<w:pStyle w:val="Title"/>':p.level>1?'<w:pStyle w:val="Heading${p.level.clamp(1,3)}"/>':'';body.writeln('<w:p><w:pPr>$style</w:pPr><w:r><w:t xml:space="preserve">${const HtmlEscape(HtmlEscapeMode.element).convert(p.text)}</w:t></w:r></w:p>');}
     final zip=StoredZipArchiveBuilder()
       ..addText('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>')
@@ -20,12 +20,12 @@ class PublicationDocumentExporter {
   Future<ChronicleExportPayload> pdf({required String title,required String markdown}) async {
     final doc=pw.Document(), ps=_paragraphs(markdown), font=await _systemFont();
     doc.addPage(pw.MultiPage(pageFormat:PdfPageFormat.a4,margin:const pw.EdgeInsets.all(48),theme:pw.ThemeData.withFont(base:font,bold:font),build:(_)=>[for(final p in ps)if(p.level==1)pw.Header(level:0,child:pw.Text(p.text,style:pw.TextStyle(fontSize:22,fontWeight:pw.FontWeight.bold)))else if(p.level>1)pw.Header(level:p.level.clamp(1,3),text:p.text)else pw.Padding(padding:const pw.EdgeInsets.only(bottom:8),child:pw.Text(p.text))]));
-    return ChronicleExportPayload(fileName:'${safeFileStem(title,fallback:'document')}.pdf',extension:'pdf',bytes:Uint8List.fromList(await doc.save()),assetCount:0,missingAttachments:const[]);
+    return ChronicleExportPayload(fileName:'${NoteExportComposer.safeFileStem(title,fallback:'document')}.pdf',extension:'pdf',bytes:Uint8List.fromList(await doc.save()),assetCount:0,missingAttachments:const[]);
   }
   Future<pw.Font> _systemFont() async {
     for (final candidate in const <String>[r'C:\Windows\Fonts\arial.ttf', r'C:\Windows\Fonts\calibri.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/System/Library/Fonts/Supplemental/Arial.ttf']) {
       final file = File(candidate);
-      if (await file.exists()) return pw.Font.ttf(await file.readAsBytes());
+      if (await file.exists()) { final bytes=await file.readAsBytes(); return pw.Font.ttf(bytes.buffer.asByteData(bytes.offsetInBytes,bytes.lengthInBytes)); }
     }
     throw StateError('Не найден системный шрифт с поддержкой Unicode для PDF.');
   }

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.32.1+89
+
+- Fixed strict Flutter analyzer failures in the first local-intelligence and document-export release.
+- Replaced unqualified publication filename sanitization calls with the existing `NoteExportComposer.safeFileStem` API.
+- Converted local system-font bytes to the `ByteData` required by the PDF package before creating the Unicode font.
+- Expanded local-intelligence control flow into explicit blocks so the repository lint policy passes without informational diagnostics.
+- Added a PDF export regression test with Cyrillic content and moved the 0.32.0 changelog entry into chronological order.
+
+## 0.32.0+88
+
+- Added a fully local, removable per-project intelligence index.
+- Added semantic TF-IDF search, similar notes, suggested links, contradiction candidates, entity/term extraction, sourced project answers, and experiment-history summaries.
+- Added DOCX and PDF export for publication workspaces.
+- Chronicle suggestions remain read-only and never rewrite source notes automatically.
+
 ## 0.31.3+87
 
 - Replaced publication abbreviation extraction with a two-stage parser that first identifies the parenthesized abbreviation and then resolves its definition from the preceding text.
@@ -557,10 +572,3 @@
 
 - added Chronicle Foundation documentation;
 - established product, architecture, data and design specifications.
-
-## 0.32.0+88
-
-- Added a fully local, removable per-project intelligence index.
-- Added semantic TF-IDF search, similar notes, suggested links, contradiction candidates, entity/term extraction, sourced project answers, and experiment-history summaries.
-- Added DOCX and PDF export for publication workspaces.
-- Chronicle suggestions remain read-only and never rewrite source notes automatically.

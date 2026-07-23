@@ -98,15 +98,43 @@ class LocalIntelligenceEngine {
 
   List<IntelligenceLink> links(IntelligenceIndex index) {
     final idf=_idf(index.docs), out=<IntelligenceLink>[];
-    for(var i=0;i<index.docs.length;i++)for(var j=i+1;j<index.docs.length;j++){final a=index.docs[i],b=index.docs[j],s=_cos(a.terms,b.terms,idf);if(s<.16)continue;final sh=a.terms.keys.where(b.terms.containsKey).toList()..sort((x,y)=>(idf[y]??0).compareTo(idf[x]??0));out.add(IntelligenceLink(a,b,s,sh.take(7).toList()));}
+    for(var i=0;i<index.docs.length;i++) {
+      for(var j=i+1;j<index.docs.length;j++) {
+        final a=index.docs[i],b=index.docs[j],s=_cos(a.terms,b.terms,idf);
+        if(s<.16)continue;
+        final sh=a.terms.keys.where(b.terms.containsKey).toList()..sort((x,y)=>(idf[y]??0).compareTo(idf[x]??0));
+        out.add(IntelligenceLink(a,b,s,sh.take(7).toList()));
+      }
+    }
     out.sort((a,b)=>b.score.compareTo(a.score));return out.take(20).toList();
   }
 
   List<IntelligenceConflict> conflicts(IntelligenceIndex index) {
     final out=<IntelligenceConflict>[];
-    for(var i=0;i<index.docs.length;i++)for(var j=i+1;j<index.docs.length;j++){
-      final a=index.docs[i],b=index.docs[j];
-      for(final sa in _sentences(a.text)){final ta=_tf(sa).keys.toSet();if(ta.length<3)continue;for(final sb in _sentences(b.text)){final tb=_tf(sb).keys.toSet();if(ta.intersection(tb).length<3)continue;String? reason;final na=_negative(sa),nb=_negative(sb);final xa=_numbers(sa),xb=_numbers(sb);if(na!=nb)reason='Похожие утверждения используют противоположное отрицание.';else if(xa.isNotEmpty&&xb.isNotEmpty&&xa.intersection(xb).isEmpty)reason='Для похожего утверждения указаны разные числа.';if(reason!=null){out.add(IntelligenceConflict(a,b,sa.trim(),sb.trim(),reason));break;}}}
+    for(var i=0;i<index.docs.length;i++) {
+      for(var j=i+1;j<index.docs.length;j++) {
+        final a=index.docs[i],b=index.docs[j];
+        for(final sa in _sentences(a.text)) {
+          final ta=_tf(sa).keys.toSet();
+          if(ta.length<3)continue;
+          for(final sb in _sentences(b.text)) {
+            final tb=_tf(sb).keys.toSet();
+            if(ta.intersection(tb).length<3)continue;
+            String? reason;
+            final na=_negative(sa),nb=_negative(sb);
+            final xa=_numbers(sa),xb=_numbers(sb);
+            if(na!=nb) {
+              reason='Похожие утверждения используют противоположное отрицание.';
+            } else if(xa.isNotEmpty&&xb.isNotEmpty&&xa.intersection(xb).isEmpty) {
+              reason='Для похожего утверждения указаны разные числа.';
+            }
+            if(reason!=null) {
+              out.add(IntelligenceConflict(a,b,sa.trim(),sb.trim(),reason));
+              break;
+            }
+          }
+        }
+      }
     }
     return out.take(20).toList();
   }
@@ -114,13 +142,13 @@ class LocalIntelligenceEngine {
   IntelligenceAnswer answer(IntelligenceIndex index,String question){final hits=search(index,question,limit:5);if(hits.isEmpty)return const IntelligenceAnswer('В локальном индексе не найдено достаточно близких фрагментов.',[]);final q=_tf(question).keys.toSet(),parts=<String>[];for(final h in hits){final ss=_sentences(h.doc.text).toList()..sort((a,b)=>_score(b,q).compareTo(_score(a,q)));if(ss.isNotEmpty&&_score(ss.first,q)>0)parts.add(ss.first.trim());if(parts.length==3)break;}return IntelligenceAnswer(parts.isEmpty?'Найдены близкие заметки, но точный ответ не извлечён.':parts.join(' '),hits.take(3).toList());}
 
   String history(IntelligenceIndex index){final docs=List<IntelligenceDoc>.from(index.docs)..sort((a,b)=>a.updatedAt.compareTo(b.updatedAt));return docs.map((d){final s=_sentences(d.text).where((x)=>x.length>30).firstOrNull??d.text;final c=s.length>220?'${s.substring(0,217)}…':s;return '• ${d.updatedAt.day.toString().padLeft(2,'0')}.${d.updatedAt.month.toString().padLeft(2,'0')}.${d.updatedAt.year} — ${d.title}: $c';}).join('\n');}
-  Map<String,int> terms(IntelligenceIndex index){final m=<String,int>{};for(final d in index.docs){for(final e in d.terms.entries)m[e.key]=(m[e.key]??0)+e.value;for(final e in d.entities)m[e]=(m[e]??0)+2;}final es=m.entries.toList()..sort((a,b)=>b.value.compareTo(a.value));return {for(final e in es.take(40))e.key:e.value};}
+  Map<String,int> terms(IntelligenceIndex index){final m=<String,int>{};for(final d in index.docs){for(final e in d.terms.entries){m[e.key]=(m[e.key]??0)+e.value;}for(final e in d.entities){m[e]=(m[e]??0)+2;}}final es=m.entries.toList()..sort((a,b)=>b.value.compareTo(a.value));return {for(final e in es.take(40))e.key:e.value};}
 
-  Map<String,double> _idf(List<IntelligenceDoc> docs){final f=<String,int>{};for(final d in docs)for(final t in d.terms.keys)f[t]=(f[t]??0)+1;return {for(final e in f.entries)e.key:math.log((docs.length+1)/(e.value+1))+1};}
+  Map<String,double> _idf(List<IntelligenceDoc> docs){final f=<String,int>{};for(final d in docs){for(final t in d.terms.keys){f[t]=(f[t]??0)+1;}}return {for(final e in f.entries)e.key:math.log((docs.length+1)/(e.value+1))+1};}
   double _cos(Map<String,int>a,Map<String,int>b,Map<String,double>idf){var dot=0.0,an=0.0,bn=0.0;for(final e in a.entries){final w=e.value*(idf[e.key]??1);an+=w*w;if(b[e.key]!=null)dot+=w*b[e.key]!*(idf[e.key]??1);}for(final e in b.entries){final w=e.value*(idf[e.key]??1);bn+=w*w;}return an==0||bn==0?0:dot/(math.sqrt(an)*math.sqrt(bn));}
   Map<String,int> _tf(String text){final m=<String,int>{};for(final x in _words.allMatches(text.toLowerCase())){var t=x.group(0)!.replaceAll('ё','е');if(t.length<2||_stop.contains(t))continue;m[t]=(m[t]??0)+1;}return m;}
   String _plain(String s)=>s.replaceAll(RegExp(r'```[\s\S]*?```'),' ').replaceAll(RegExp(r'!\[[^\]]*\]\([^)]*\)'),' ').replaceAll(RegExp(r'\[([^\]]+)\]\([^)]*\)'),r'$1').replaceAll(RegExp(r'[#>*_`|~-]+'),' ').replaceAll(RegExp(r'\s+'),' ').trim();
-  List<String> _entities(String s){final x=<String>{};for(final m in RegExp(r'\b[A-ZА-ЯЁ][A-ZА-ЯЁ0-9-]{1,12}\b',unicode:true).allMatches(s))x.add(m.group(0)!);return x.take(30).toList();}
+  List<String> _entities(String s){final x=<String>{};for(final m in RegExp(r'\b[A-ZА-ЯЁ][A-ZА-ЯЁ0-9-]{1,12}\b',unicode:true).allMatches(s)){x.add(m.group(0)!);}return x.take(30).toList();}
   Iterable<String> _sentences(String s)=>RegExp(r'[^.!?\n]+[.!?]?',multiLine:true).allMatches(s).map((m)=>m.group(0)!.trim()).where((x)=>x.length>12);
   int _score(String s,Set<String>q)=>_tf(s).keys.toSet().intersection(q).length;
   String _snippet(String s,Set<String>q){var best='',score=-1;for(final x in _sentences(s)){final n=_score(x,q);if(n>score){score=n;best=x;}}return best.length>260?'${best.substring(0,257)}…':best;}
