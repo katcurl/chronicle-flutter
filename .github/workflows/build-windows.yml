@@ -1,0 +1,79 @@
+name: Build Windows desktop
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+          cache: true
+
+      - name: Create Windows host if missing
+        shell: pwsh
+        run: |
+          if (-not (Test-Path windows)) {
+            flutter create --platforms=windows .
+          }
+
+      - name: Show toolchain
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Generate Drift files
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Verify Windows release
+        shell: pwsh
+        run: |
+          $releaseDir = 'build/windows/x64/runner/Release'
+          $executable = Join-Path $releaseDir 'chronicle.exe'
+          if (-not (Test-Path $executable)) {
+            throw "Windows release is missing $executable"
+          }
+          $versionLine = Select-String -Path pubspec.yaml -Pattern '^version:\s*(.+)$'
+          $version = $versionLine.Matches[0].Groups[1].Value.Trim()
+          @(
+            "Chronicle $version",
+            "Commit: $env:GITHUB_SHA",
+            "Flutter: 3.44.7",
+            "Validated: analyze, test, windows release"
+          ) | Set-Content -Path (Join-Path $releaseDir 'RELEASE.txt') -Encoding UTF8
+
+      - name: Package portable Windows app
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path build/windows/x64/runner/Release/* `
+            -DestinationPath chronicle-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chronicle-windows-x64
+          path: chronicle-windows-x64.zip

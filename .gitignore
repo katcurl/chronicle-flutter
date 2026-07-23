@@ -1,0 +1,14 @@
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+.DS_Store
+android/.gradle/
+android/local.properties
+.idea/
+*.iml
+.chronicle_last_patch
+.chronicle_patch_backups/
