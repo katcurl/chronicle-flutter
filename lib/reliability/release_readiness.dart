@@ -6,7 +6,7 @@ import '../vault/vault_service.dart';
 
 // Keep this in one place so diagnostics, release metadata and the UI cannot
 // silently drift apart.
-const String chronicleStableVersion = '1.0.5+105';
+const String chronicleStableVersion = '1.0.6+106';
 
 enum IntegritySeverity { info, warning, error }
 

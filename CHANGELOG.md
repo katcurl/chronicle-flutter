@@ -1,3 +1,9 @@
+## 1.0.6+106 — Stable semantic DOCX export test
+
+- Fixed the DOCX regression test so it validates visible Word text across adjacent Open XML runs instead of assuming a single `<w:t>` node.
+- Kept the exporter unchanged because the generated document already preserved both the `[x]` task marker and task text correctly.
+- Added XML text reconstruction with entity decoding, retaining independent checks for headings, formatting, tables, embedded images and relationships.
+
 ## 1.0.5+105 — Correct exported captions and task markers
 
 - Fixed DOCX/PDF captions that retained URL-encoded spaces such as `%20`.

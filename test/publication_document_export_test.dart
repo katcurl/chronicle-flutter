@@ -67,9 +67,10 @@ final state = "A";
     expect(documentXml, contains('<w:strike/>'));
     expect(documentXml, contains('<w:tbl>'));
     expect(documentXml, contains('<w:drawing>'));
-    expect(documentXml, contains('[x] Verified observation'));
-    expect(documentXml, contains('Рисунок 1. RMSD trajectory'));
-    expect(documentXml, isNot(contains('Рисунок%201.')));
+    final visibleText = _wordVisibleText(documentXml);
+    expect(visibleText, contains('[x] Verified observation'));
+    expect(visibleText, contains('Рисунок 1. RMSD trajectory'));
+    expect(visibleText, isNot(contains('Рисунок%201.')));
     expect(relationships, contains('relationships/image'));
     expect(relationships, contains('relationships/hyperlink'));
   });
@@ -102,4 +103,25 @@ final state = "A";
     expect(documentXml, contains('Не удалось встроить Plot'));
     expect(documentXml, contains('Attachments/missing.png'));
   });
+}
+
+String _wordVisibleText(String documentXml) {
+  final text = StringBuffer();
+  final textNode = RegExp(
+    r'<w:t(?:\s+[^>]*)?>(.*?)</w:t>',
+    dotAll: true,
+  );
+  for (final match in textNode.allMatches(documentXml)) {
+    text.write(_decodeXmlText(match.group(1)!));
+  }
+  return text.toString();
+}
+
+String _decodeXmlText(String value) {
+  return value
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&apos;', "'")
+      .replaceAll('&amp;', '&');
 }
