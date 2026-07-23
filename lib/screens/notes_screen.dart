@@ -27,6 +27,10 @@ import '../features/notes/note_link_dialogs.dart';
 import '../features/notes/note_link_tools.dart';
 import '../features/notes/laboratory_template_dialog.dart';
 import '../features/notes/note_graph_screen.dart';
+import '../features/notes/note_home_page.dart';
+import '../features/notes/note_home_preferences.dart';
+import '../features/notes/note_home_preferences_dialog.dart';
+import '../features/notes/note_home_preferences_store.dart';
 import '../features/notes/research_canvas_screen.dart';
 import '../features/notes/note_markdown_view.dart';
 import '../features/notes/note_templates.dart';
@@ -91,10 +95,20 @@ class NotesScreen extends StatefulWidget {
 }
 
 class _NotesScreenState extends State<NotesScreen> {
+  final NoteHomePreferencesStore _homePreferencesStore =
+      NoteHomePreferencesStore();
+  NoteHomePreferences _homePreferences = NoteHomePreferences.defaults();
   String query = '';
   String? folderFilter;
   String? projectFilter;
   bool pinnedOnly = false;
+  bool _showHome = true;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadHomePreferences());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -135,8 +149,23 @@ class _NotesScreenState extends State<NotesScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Заметки'),
+        title: Text(_showHome ? 'Обзор заметок' : 'Заметки'),
         actions: [
+          IconButton(
+            tooltip: _showHome ? 'Все заметки' : 'Обзор заметок',
+            onPressed: () => setState(() => _showHome = !_showHome),
+            icon: Icon(
+              _showHome
+                  ? Icons.library_books_outlined
+                  : Icons.space_dashboard_outlined,
+            ),
+          ),
+          if (_showHome)
+            IconButton(
+              tooltip: 'Настроить обзор',
+              onPressed: _openHomePreferences,
+              icon: const Icon(Icons.tune_rounded),
+            ),
           IconButton(
             tooltip: 'Источники',
             onPressed: _openSources,
@@ -157,117 +186,176 @@ class _NotesScreenState extends State<NotesScreen> {
             onPressed: _openLinkHealth,
             icon: const Icon(Icons.link_off_rounded),
           ),
-          IconButton(
-            tooltip: pinnedOnly ? 'Показать все' : 'Только закреплённые',
-            onPressed: () => setState(() => pinnedOnly = !pinnedOnly),
-            icon: Icon(
-              pinnedOnly ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+          if (!_showHome)
+            IconButton(
+              tooltip: pinnedOnly ? 'Показать все' : 'Только закреплённые',
+              onPressed: () => setState(() => pinnedOnly = !pinnedOnly),
+              icon: Icon(
+                pinnedOnly ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+              ),
             ),
-          ),
           IconButton(
             tooltip: 'Новая заметка',
-            onPressed: widget.store.activeProjects.isEmpty ? null : _add,
+            onPressed: widget.store.activeProjects.isEmpty
+                ? null
+                : () => _add(),
             icon: const Icon(Icons.note_add_outlined),
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: SearchBar(
-              hintText: 'Поиск по базе знаний',
-              leading: const Icon(Icons.search_rounded),
-              onChanged: (value) => setState(() => query = value),
-            ),
-          ),
-          SizedBox(
-            height: 48,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+      body: _showHome
+          ? NoteHomePage(
+              store: widget.store,
+              preferences: _homePreferences,
+              onOpenNote: _open,
+              onOpenProject: (projectId) {
+                setState(() {
+                  projectFilter = projectId;
+                  folderFilter = null;
+                  pinnedOnly = false;
+                  _showHome = false;
+                });
+              },
+              onOpenFolder: (folder) {
+                setState(() {
+                  folderFilter = folder;
+                  projectFilter = null;
+                  pinnedOnly = false;
+                  _showHome = false;
+                });
+              },
+              onCreateFromTemplate: (template) =>
+                  _add(initialTemplateId: template.id),
+              onOpenLibrary: () => setState(() => _showHome = false),
+              onConfigure: _openHomePreferences,
+            )
+          : Column(
               children: [
-                DropdownButton<String?>(
-                  value: projectFilter,
-                  hint: const Text('Все проекты'),
-                  underline: const SizedBox.shrink(),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('Все проекты'),
-                    ),
-                    ...widget.store.activeProjects.map(
-                      (project) => DropdownMenuItem<String?>(
-                        value: project.id,
-                        child: Text('${project.emoji} ${project.title}'),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) => setState(() => projectFilter = value),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('Все папки'),
-                  selected: folderFilter == null,
-                  onSelected: (_) => setState(() => folderFilter = null),
-                ),
-                for (final folder in folders) ...[
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: Text(folder),
-                    selected: folderFilter == folder,
-                    onSelected: (_) => setState(() => folderFilter = folder),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: SearchBar(
+                    hintText: 'Поиск по базе знаний',
+                    leading: const Icon(Icons.search_rounded),
+                    onChanged: (value) => setState(() => query = value),
                   ),
-                ],
-              ],
-            ),
-          ),
-          Expanded(
-            child:
-                notes.isEmpty
-                    ? _EmptyNotes(
-                      hasFilters:
-                          normalizedQuery.isNotEmpty ||
-                          pinnedOnly ||
-                          folderFilter != null ||
-                          projectFilter != null,
-                    )
-                    : LayoutBuilder(
-                      builder: (context, constraints) {
-                        final columns =
-                            constraints.maxWidth >= 1180
+                ),
+                SizedBox(
+                  height: 48,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: [
+                      DropdownButton<String?>(
+                        value: projectFilter,
+                        hint: const Text('Все проекты'),
+                        underline: const SizedBox.shrink(),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Все проекты'),
+                          ),
+                          ...widget.store.activeProjects.map(
+                            (project) => DropdownMenuItem<String?>(
+                              value: project.id,
+                              child: Text('${project.emoji} ${project.title}'),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) =>
+                            setState(() => projectFilter = value),
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text('Все папки'),
+                        selected: folderFilter == null,
+                        onSelected: (_) => setState(() => folderFilter = null),
+                      ),
+                      for (final folder in folders) ...[
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(folder),
+                          selected: folderFilter == folder,
+                          onSelected: (_) =>
+                              setState(() => folderFilter = folder),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: notes.isEmpty
+                      ? _EmptyNotes(
+                          hasFilters: normalizedQuery.isNotEmpty ||
+                              pinnedOnly ||
+                              folderFilter != null ||
+                              projectFilter != null,
+                        )
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final columns = constraints.maxWidth >= 1180
                                 ? 3
                                 : constraints.maxWidth >= 760
-                                ? 2
-                                : 1;
-                        return GridView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
+                                    ? 2
+                                    : 1;
+                            return GridView.builder(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                10,
+                                16,
+                                110,
+                              ),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: columns,
                                 mainAxisExtent: 218,
                                 crossAxisSpacing: 12,
                                 mainAxisSpacing: 12,
                               ),
-                          itemCount: notes.length,
-                          itemBuilder:
-                              (_, index) => _NoteCard(
+                              itemCount: notes.length,
+                              itemBuilder: (_, index) => _NoteCard(
                                 store: widget.store,
                                 note: notes[index],
                                 onOpen: () => _open(notes[index]),
                               ),
-                        );
-                      },
-                    ),
-          ),
-        ],
-      ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: widget.store.activeProjects.isEmpty ? null : _add,
+        onPressed: widget.store.activeProjects.isEmpty ? null : () => _add(),
         icon: const Icon(Icons.add_rounded),
         label: const Text('Заметка'),
       ),
     );
+  }
+
+  Future<void> _loadHomePreferences() async {
+    final preferences = await _homePreferencesStore.load();
+    if (!mounted) return;
+    setState(() {
+      _homePreferences = preferences;
+      _showHome = preferences.openOnHome;
+    });
+  }
+
+  Future<void> _openHomePreferences() async {
+    final updated = await NoteHomePreferencesDialog.show(
+      context,
+      initialValue: _homePreferences,
+    );
+    if (updated == null || !mounted) return;
+    try {
+      await _homePreferencesStore.save(updated);
+      if (!mounted) return;
+      setState(() => _homePreferences = updated);
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось сохранить обзор: $error')),
+      );
+    }
   }
 
   Future<void> _openLinkHealth() async {
@@ -432,10 +520,11 @@ class _NotesScreenState extends State<NotesScreen> {
     }
   }
 
-  Future<void> _add() async {
+  Future<void> _add({String? initialTemplateId}) async {
     final request = await _NewNoteSheet.show(
       context,
       store: widget.store,
+      initialTemplateId: initialTemplateId,
     );
     if (request == null || !mounted) return;
 
@@ -4732,20 +4821,28 @@ class _LinkHealthDialog extends StatelessWidget {
 }
 
 class _NewNoteSheet extends StatefulWidget {
-  const _NewNoteSheet({required this.store});
+  const _NewNoteSheet({
+    required this.store,
+    this.initialTemplateId,
+  });
 
   final AppStore store;
+  final String? initialTemplateId;
 
   static Future<_NewNoteRequest?> show(
     BuildContext context, {
     required AppStore store,
+    String? initialTemplateId,
   }) {
     return showModalBottomSheet<_NewNoteRequest>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       constraints: const BoxConstraints(maxWidth: 700),
-      builder: (_) => _NewNoteSheet(store: store),
+      builder: (_) => _NewNoteSheet(
+        store: store,
+        initialTemplateId: initialTemplateId,
+      ),
     );
   }
 
@@ -4763,6 +4860,13 @@ class _NewNoteSheetState extends State<_NewNoteSheet> {
   void initState() {
     super.initState();
     projectId = widget.store.activeProjects.first.id;
+    final requestedTemplateId = widget.initialTemplateId;
+    if (requestedTemplateId != null &&
+        widget.store.availableNoteTemplates.any(
+          (template) => template.id == requestedTemplateId,
+        )) {
+      templateId = requestedTemplateId;
+    }
   }
 
   @override

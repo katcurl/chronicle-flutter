@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.27.3+77
+
+- Added a configurable local overview as the optional starting page of the Notes section.
+- Added separate Overview and Library modes without removing existing search, project, folder or pinned-note filters.
+- Added ordered sections for continuing work, pinned notes, recent notes, active projects, folders and note templates.
+- Added quick navigation from overview cards into a note, project-filtered library, folder-filtered library or preselected template flow.
+- Added local controls for section order and visibility, compact cards, per-section item limits and whether Notes opens on the overview.
+- Derived overview content from existing notes, tasks, projects and templates without adding database fields or rewriting Markdown.
+- Stored overview preferences in SharedPreferences without changing themes, editor profiles, toolbar profiles, Vault files or synchronization.
+- Added deterministic tests for defaults, normalization, JSON round-tripping and corrupt preference recovery.
+
 ## 0.27.2+76
 
 - Added local quick-action toolbar profiles without changing the fixed undo, redo and current-block controls.
