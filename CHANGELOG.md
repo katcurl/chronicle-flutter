@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.31.1+85
+
+- Fixed Chronicle image metadata parsing so legacy or manually written captions containing unescaped spaces remain intact.
+- Preserved complete figure captions during publication assembly and normalized them to URL-encoded metadata on output.
+- Added regression coverage for raw multi-word captions and the numbered publication figure that exposed the issue.
+
 ## 0.31.0+84
 
 - Added the first publication and report assembly workspace directly to research projects.

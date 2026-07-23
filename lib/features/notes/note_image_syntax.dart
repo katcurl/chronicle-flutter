@@ -57,13 +57,23 @@ class NoteImagePresentation {
     var caption = '';
     var figureId = '';
 
-    for (final token in value.split(RegExp(r'\s+')).skip(1)) {
-      final separator = token.indexOf('=');
-      if (separator <= 0 || separator == token.length - 1) {
-        continue;
-      }
-      final key = token.substring(0, separator);
-      final raw = token.substring(separator + 1);
+    final metadata = value
+        .substring(NoteImageSyntax.metadataPrefix.length)
+        .trim();
+    final fieldPattern = RegExp(
+      r'(?:^|\s)(width|align|caption|figure)=',
+    );
+    final fields = fieldPattern.allMatches(metadata).toList();
+
+    for (var index = 0; index < fields.length; index += 1) {
+      final field = fields[index];
+      final key = field.group(1)!;
+      final rawEnd = index + 1 < fields.length
+          ? fields[index + 1].start
+          : metadata.length;
+      final raw = metadata.substring(field.end, rawEnd).trim();
+      if (raw.isEmpty) continue;
+
       switch (key) {
         case 'width':
           width = int.tryParse(raw) ?? width;

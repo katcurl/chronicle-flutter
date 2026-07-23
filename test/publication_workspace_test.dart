@@ -1,4 +1,5 @@
 import 'package:chronicle/features/notes/note_document.dart';
+import 'package:chronicle/features/notes/note_image_syntax.dart';
 import 'package:chronicle/features/publications/publication_workspace.dart';
 import 'package:chronicle/models/app_models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -86,6 +87,21 @@ void main() {
     expect(restored.sections.single.fragments.single.noteId, source.id);
     expect(publication.body, contains('[[id:source-1|RMSD analysis]]'));
     expect(publication.body, isNot(contains('Transition at frame 1200.')));
+  });
+
+  test('legacy image captions keep unescaped spaces', () {
+    final reference = NoteImageSyntax.first(
+      '![RMSD plot](Attachments/rmsd.png '
+      '"chronicle-image width=75 align=center '
+      'caption=RMSD trajectory figure=figure-1")',
+    );
+
+    expect(reference, isNotNull);
+    expect(reference!.presentation.caption, 'RMSD trajectory');
+    expect(
+      reference.toMarkdown(),
+      contains('caption=RMSD%20trajectory'),
+    );
   });
 
   test('assembly resolves a live heading and builds document apparatus', () {
