@@ -59,7 +59,13 @@ void main() {
 
     expect(inspected.readOnly, isTrue);
     expect(attempted.readOnly, isTrue);
-    expect(attempted.message, contains('более новой версией'));
+    expect(
+      attempted.message,
+      allOf(
+        contains('более новой версией Chronicle'),
+        contains('только для чтения'),
+      ),
+    );
     expect(backend.writeCount, 0);
     expect(
       jsonDecode(await File('${root.path}/manifest.json').readAsString()),

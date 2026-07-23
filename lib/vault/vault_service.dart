@@ -154,9 +154,10 @@ class VaultService {
         minimumReaderVersion: compatibility.minimumReaderVersion,
         readOnly: compatibility.readOnly,
         message: compatibility.readOnly
-            ? 'Vault использует формат ${compatibility.formatVersion}, '
-                'который новее поддерживаемого '
-                '$currentVaultFormatVersion. Открыт только для чтения.'
+            ? 'Vault создан более новой версией Chronicle: формат '
+                '${compatibility.formatVersion}, тогда как эта версия '
+                'поддерживает формат до $currentVaultFormatVersion. '
+                'Открыт только для чтения.'
             : null,
       );
     } on Object {

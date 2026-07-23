@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2+102
+
+- Aligned the future-Vault read-only message with its compatibility regression test.
+- Clarified that the Vault was created by a newer Chronicle version and remains open only for reading.
+- Kept future-format write protection and manifest preservation unchanged.
+
 ## 1.0.1+101
 
 - Fixed strict Flutter analyzer diagnostics in the Chronicle 1.0 release-readiness recovery card by removing redundant nested `const` keywords.
