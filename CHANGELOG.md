@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.27.2+76
+
+- Added local quick-action toolbar profiles without changing the fixed undo, redo and current-block controls.
+- Added built-in Laboratory, Study and Minimal action sets for different note-writing workflows.
+- Added immediate toolbar switching directly from the Markdown editor.
+- Added profile creation, duplication, deletion, naming and emoji customization.
+- Added a searchable action catalogue with ordering and removal controls for up to 24 unique buttons per profile.
+- Stored toolbar profiles separately in SharedPreferences without changing editor appearance profiles, themes, Vault files, synchronization, database schema or note Markdown.
+- Added deterministic tests for defaults, JSON round-tripping, corrupt storage recovery and action/profile normalization.
+
 ## 0.27.1+75
 
 - Added local editor profiles with built-in Scientific, Focus and Compact presets.

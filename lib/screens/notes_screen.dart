@@ -32,6 +32,9 @@ import '../features/notes/note_markdown_view.dart';
 import '../features/notes/note_templates.dart';
 import '../features/notes/note_version_history_dialog.dart';
 import '../features/notes/note_table_syntax.dart';
+import '../features/notes/note_toolbar_preferences_store.dart';
+import '../features/notes/note_toolbar_profile.dart';
+import '../features/notes/note_toolbar_profile_dialog.dart';
 import '../features/notes/note_wiki_link_syntax.dart';
 import '../features/notes/note_wiki_rename.dart';
 import '../features/notes/scientific_object_dialogs.dart';
@@ -617,8 +620,13 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   late final DebouncedTextNotifier _statisticsTextNotifier;
   final NoteEditorPreferencesStore _editorPreferencesStore =
       NoteEditorPreferencesStore();
+  final NoteToolbarPreferencesStore _toolbarPreferencesStore =
+      NoteToolbarPreferencesStore();
   NoteEditorPreferences _editorPreferences = NoteEditorPreferences.defaults();
+  NoteToolbarPreferences _toolbarPreferences =
+      NoteToolbarPreferences.defaults();
   bool _editorProfileLoaded = false;
+  bool _toolbarPreferencesLoaded = false;
   bool _modeChangedManually = false;
   late final ScrollController _editorScrollController;
   late final ScrollController _previewScrollController;
@@ -680,6 +688,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     titleController.addListener(_markDirty);
     contentController.addListener(_markDirty);
     unawaited(_loadEditorPreferences());
+    unawaited(_loadToolbarPreferences());
   }
 
   @override
@@ -1028,6 +1037,12 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           _EditorToolbar(
             controller: contentController,
             history: _editHistory,
+            toolbarPreferences: _toolbarPreferences,
+            toolbarPreferencesLoaded: _toolbarPreferencesLoaded,
+            onActivateToolbarProfile: (id) =>
+                unawaited(_activateToolbarProfile(id)),
+            onManageToolbarProfiles: () =>
+                unawaited(_openToolbarProfileManager()),
             onUndo: () => _editHistory.undo(),
             onRedo: () => _editHistory.redo(),
             onAttach: _attachFile,
@@ -1302,6 +1317,53 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       ],
       icon: Text(profile.emoji, style: const TextStyle(fontSize: 18)),
     );
+  }
+
+  Future<void> _loadToolbarPreferences() async {
+    NoteToolbarPreferences loaded;
+    try {
+      loaded = await _toolbarPreferencesStore.load();
+    } on Object {
+      loaded = NoteToolbarPreferences.defaults();
+    }
+    if (!mounted) return;
+    setState(() {
+      _toolbarPreferences = loaded;
+      _toolbarPreferencesLoaded = true;
+    });
+  }
+
+  Future<void> _activateToolbarProfile(String id) async {
+    final exists = _toolbarPreferences.profiles.any(
+      (profile) => profile.id == id,
+    );
+    if (!exists) return;
+    final next = _toolbarPreferences.copyWith(activeProfileId: id);
+    setState(() => _toolbarPreferences = next);
+    await _saveToolbarPreferences(next);
+  }
+
+  Future<void> _openToolbarProfileManager() async {
+    final result = await NoteToolbarProfileDialog.show(
+      context,
+      preferences: _toolbarPreferences,
+    );
+    if (!mounted || result == null) return;
+    setState(() => _toolbarPreferences = result);
+    await _saveToolbarPreferences(result);
+  }
+
+  Future<void> _saveToolbarPreferences(NoteToolbarPreferences value) async {
+    try {
+      await _toolbarPreferencesStore.save(value);
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Не удалось сохранить панель действий: $error'),
+        ),
+      );
+    }
   }
 
   Widget _contextPanel({
@@ -3232,6 +3294,10 @@ class _EditorToolbar extends StatefulWidget {
   const _EditorToolbar({
     required this.controller,
     required this.history,
+    required this.toolbarPreferences,
+    required this.toolbarPreferencesLoaded,
+    required this.onActivateToolbarProfile,
+    required this.onManageToolbarProfiles,
     required this.onUndo,
     required this.onRedo,
     required this.onAttach,
@@ -3255,6 +3321,10 @@ class _EditorToolbar extends StatefulWidget {
 
   final TextEditingController controller;
   final NoteEditHistory history;
+  final NoteToolbarPreferences toolbarPreferences;
+  final bool toolbarPreferencesLoaded;
+  final ValueChanged<String> onActivateToolbarProfile;
+  final VoidCallback onManageToolbarProfiles;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final VoidCallback onAttach;
@@ -3542,97 +3612,218 @@ class _EditorToolbarState extends State<_EditorToolbar> {
             icon: const Icon(Icons.more_horiz_rounded),
           ),
           const VerticalDivider(indent: 10, endIndent: 10),
-          IconButton(
-            tooltip: 'Применить шаблон заметки',
-            onPressed: widget.onApplyLaboratoryTemplate,
-            icon: const Icon(Icons.dashboard_customize_outlined),
-          ),
-          IconButton(
-            tooltip: 'Сохранить заметку как шаблон',
-            onPressed: widget.onSaveAsTemplate,
-            icon: const Icon(Icons.bookmark_add_outlined),
-          ),
-          IconButton(
-            tooltip: 'Мои шаблоны',
-            onPressed: widget.onManageTemplates,
-            icon: const Icon(Icons.settings_outlined),
-          ),
-          _button(Icons.title_rounded, '# ', ''),
-          _button(Icons.format_bold_rounded, '**', '**'),
-          _button(Icons.format_italic_rounded, '_', '_'),
-          _button(Icons.format_list_bulleted_rounded, '- ', ''),
-          _button(Icons.check_box_outlined, '- [ ] ', ''),
-          IconButton(
-            tooltip: 'Вставить устойчивую ссылку на заметку',
-            onPressed: widget.onInsertNoteLink,
-            icon: const Icon(Icons.link_rounded),
-          ),
-          IconButton(
-            tooltip: 'Вставить научную цитату',
-            onPressed: widget.onInsertCitation,
-            icon: const Icon(Icons.format_quote_rounded),
-          ),
-          IconButton(
-            tooltip: 'Вставить блок библиографии',
-            onPressed: widget.onInsertBibliography,
-            icon: const Icon(Icons.library_books_outlined),
-          ),
-          IconButton(
-            tooltip: 'Импортировать данные из файлов',
-            onPressed: widget.onImportData,
-            icon: const Icon(Icons.upload_file_outlined),
-          ),
-          IconButton(
-            tooltip: 'Экспортировать заметку',
-            onPressed: widget.onExport,
-            icon: const Icon(Icons.download_outlined),
-          ),
-          IconButton(
-            tooltip: 'Добавить или редактировать научную таблицу',
-            onPressed: widget.onInsertScientificTable,
-            icon: const Icon(Icons.table_chart_outlined),
-          ),
-          IconButton(
-            tooltip: 'Вставить ссылку на рисунок или таблицу',
-            onPressed: widget.onInsertScientificReference,
-            icon: const Icon(Icons.numbers_rounded),
-          ),
-          IconButton(
-            tooltip: 'Проверить рисунки, таблицы и ссылки',
-            onPressed: widget.onInspectScientificObjects,
-            icon: const Icon(Icons.fact_check_outlined),
-          ),
-          _button(Icons.functions_rounded, r'$', r'$'),
-          _button(Icons.calculate_outlined, '\n\\[\n', '\n\\]\n'),
-          IconButton(
-            tooltip: 'Добавить локальное вложение',
-            onPressed: widget.onAttach,
-            icon: const Icon(Icons.attach_file_rounded),
-          ),
-          IconButton(
-            tooltip: 'Вставить изображение из буфера (Ctrl+V)',
-            onPressed: widget.onPasteImage,
-            icon: const Icon(Icons.content_paste_rounded),
-          ),
-          IconButton(
-            tooltip: 'Размер, выравнивание и подпись изображения',
-            onPressed: widget.onConfigureImage,
-            icon: const Icon(Icons.photo_size_select_large_rounded),
-          ),
-          IconButton(
-            tooltip: 'Вставить или настроить колонки',
-            onPressed: widget.onConfigureColumns,
-            icon: const Icon(Icons.view_column_outlined),
-          ),
-          _button(Icons.image_outlined, '![описание](', ')'),
-          _button(Icons.code_rounded, '```\n', '\n```'),
+          _toolbarProfileSwitcher(),
+          for (final action in widget.toolbarPreferences.activeProfile.actions)
+            _actionButton(action),
         ],
       ),
     );
   }
 
-  Widget _button(IconData icon, String before, String after) {
+  Widget _toolbarProfileSwitcher() {
+    final preferences = widget.toolbarPreferences;
+    final active = preferences.activeProfile;
+    final colors = Theme.of(context).colorScheme;
+    return PopupMenuButton<String>(
+      tooltip: widget.toolbarPreferencesLoaded
+          ? 'Панель действий: ${active.name}'
+          : 'Панель быстрых действий',
+      onSelected: (value) {
+        if (value == '__manage__') {
+          widget.onManageToolbarProfiles();
+        } else {
+          widget.onActivateToolbarProfile(value);
+        }
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        for (final profile in preferences.profiles)
+          PopupMenuItem<String>(
+            value: profile.id,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 32,
+                  child: Text(
+                    profile.emoji,
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                ),
+                Expanded(child: Text(profile.name)),
+                if (profile.id == preferences.activeProfileId)
+                  Icon(Icons.check_rounded, color: colors.primary),
+              ],
+            ),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<String>(
+          value: '__manage__',
+          child: Row(
+            children: [
+              Icon(Icons.tune_rounded),
+              SizedBox(width: 12),
+              Text('Настроить панель'),
+            ],
+          ),
+        ),
+      ],
+      icon: Text(active.emoji, style: const TextStyle(fontSize: 18)),
+    );
+  }
+
+  Widget _actionButton(NoteToolbarAction action) {
+    return switch (action) {
+      NoteToolbarAction.applyTemplate => _callbackButton(
+        action,
+        Icons.dashboard_customize_outlined,
+        widget.onApplyLaboratoryTemplate,
+      ),
+      NoteToolbarAction.saveAsTemplate => _callbackButton(
+        action,
+        Icons.bookmark_add_outlined,
+        widget.onSaveAsTemplate,
+      ),
+      NoteToolbarAction.manageTemplates => _callbackButton(
+        action,
+        Icons.settings_outlined,
+        widget.onManageTemplates,
+      ),
+      NoteToolbarAction.heading => _wrapButton(
+        action,
+        Icons.title_rounded,
+        '# ',
+        '',
+      ),
+      NoteToolbarAction.bold => _wrapButton(
+        action,
+        Icons.format_bold_rounded,
+        '**',
+        '**',
+      ),
+      NoteToolbarAction.italic => _wrapButton(
+        action,
+        Icons.format_italic_rounded,
+        '_',
+        '_',
+      ),
+      NoteToolbarAction.bulletedList => _wrapButton(
+        action,
+        Icons.format_list_bulleted_rounded,
+        '- ',
+        '',
+      ),
+      NoteToolbarAction.checklist => _wrapButton(
+        action,
+        Icons.check_box_outlined,
+        '- [ ] ',
+        '',
+      ),
+      NoteToolbarAction.inlineMath => _wrapButton(
+        action,
+        Icons.functions_rounded,
+        r'$',
+        r'$',
+      ),
+      NoteToolbarAction.displayMath => _wrapButton(
+        action,
+        Icons.calculate_outlined,
+        '\n\\[\n',
+        '\n\\]\n',
+      ),
+      NoteToolbarAction.codeBlock => _wrapButton(
+        action,
+        Icons.code_rounded,
+        '```\n',
+        '\n```',
+      ),
+      NoteToolbarAction.noteLink => _callbackButton(
+        action,
+        Icons.link_rounded,
+        widget.onInsertNoteLink,
+      ),
+      NoteToolbarAction.citation => _callbackButton(
+        action,
+        Icons.format_quote_rounded,
+        widget.onInsertCitation,
+      ),
+      NoteToolbarAction.bibliography => _callbackButton(
+        action,
+        Icons.library_books_outlined,
+        widget.onInsertBibliography,
+      ),
+      NoteToolbarAction.scientificReference => _callbackButton(
+        action,
+        Icons.numbers_rounded,
+        widget.onInsertScientificReference,
+      ),
+      NoteToolbarAction.importData => _callbackButton(
+        action,
+        Icons.upload_file_outlined,
+        widget.onImportData,
+      ),
+      NoteToolbarAction.exportNote => _callbackButton(
+        action,
+        Icons.download_outlined,
+        widget.onExport,
+      ),
+      NoteToolbarAction.scientificTable => _callbackButton(
+        action,
+        Icons.table_chart_outlined,
+        widget.onInsertScientificTable,
+      ),
+      NoteToolbarAction.inspectScientificObjects => _callbackButton(
+        action,
+        Icons.fact_check_outlined,
+        widget.onInspectScientificObjects,
+      ),
+      NoteToolbarAction.attach => _callbackButton(
+        action,
+        Icons.attach_file_rounded,
+        widget.onAttach,
+      ),
+      NoteToolbarAction.pasteImage => _callbackButton(
+        action,
+        Icons.content_paste_rounded,
+        widget.onPasteImage,
+      ),
+      NoteToolbarAction.configureImage => _callbackButton(
+        action,
+        Icons.photo_size_select_large_rounded,
+        widget.onConfigureImage,
+      ),
+      NoteToolbarAction.columns => _callbackButton(
+        action,
+        Icons.view_column_outlined,
+        widget.onConfigureColumns,
+      ),
+      NoteToolbarAction.imageSyntax => _wrapButton(
+        action,
+        Icons.image_outlined,
+        '![описание](',
+        ')',
+      ),
+    };
+  }
+
+  Widget _callbackButton(
+    NoteToolbarAction action,
+    IconData icon,
+    VoidCallback callback,
+  ) {
     return IconButton(
+      tooltip: action.label,
+      onPressed: callback,
+      icon: Icon(icon),
+    );
+  }
+
+  Widget _wrapButton(
+    NoteToolbarAction action,
+    IconData icon,
+    String before,
+    String after,
+  ) {
+    return IconButton(
+      tooltip: action.label,
       onPressed: () => _wrapSelection(before, after),
       icon: Icon(icon),
     );
