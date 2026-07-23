@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import 'features/appearance/app_appearance.dart';
+import 'features/appearance/app_appearance_store.dart';
+import 'features/appearance/app_appearance_theme.dart';
 import 'services/app_store.dart';
 import 'shells/home_shell.dart';
 
@@ -20,6 +25,8 @@ class ChronicleApp extends StatefulWidget {
 class _ChronicleAppState extends State<ChronicleApp>
     with WidgetsBindingObserver {
   late final AppStore store;
+  final AppAppearanceStore _appearanceStore = AppAppearanceStore();
+  AppAppearancePreferences _appearance = AppAppearancePreferences.defaults();
 
   @override
   void initState() {
@@ -27,6 +34,7 @@ class _ChronicleAppState extends State<ChronicleApp>
     WidgetsBinding.instance.addObserver(this);
     store = widget.store ?? AppStore.production();
     store.load();
+    unawaited(_loadAppearance());
   }
 
   @override
@@ -47,15 +55,14 @@ class _ChronicleAppState extends State<ChronicleApp>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: store,
-      builder:
-          (_, __) => MaterialApp(
-            debugShowCheckedModeBanner: false,
-            title: 'Chronicle',
-            themeMode: ThemeMode.system,
-            theme: _theme(Brightness.light),
-            darkTheme: _theme(Brightness.dark),
-            home: _home(),
-          ),
+      builder: (_, __) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Chronicle',
+        themeMode: _appearance.brightnessMode.themeMode,
+        theme: buildChronicleTheme(Brightness.light, _appearance),
+        darkTheme: buildChronicleTheme(Brightness.dark, _appearance),
+        home: _home(),
+      ),
     );
   }
 
@@ -66,76 +73,28 @@ class _ChronicleAppState extends State<ChronicleApp>
     if (store.loadError != null) {
       return _DatabaseErrorScreen(error: store.loadError!, onRetry: store.load);
     }
-    return HomeShell(store: store);
+    return HomeShell(
+      store: store,
+      appearance: _appearance,
+      onAppearanceChanged: _updateAppearance,
+    );
   }
 
-  ThemeData _theme(Brightness brightness) {
-    final colors = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF6750A4),
-      brightness: brightness,
-    );
-    final isLight = brightness == Brightness.light;
+  Future<void> _loadAppearance() async {
+    AppAppearancePreferences loaded;
+    try {
+      loaded = await _appearanceStore.load();
+    } on Object {
+      loaded = AppAppearancePreferences.defaults();
+    }
+    if (!mounted) return;
+    setState(() => _appearance = loaded);
+  }
 
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: colors,
-      scaffoldBackgroundColor:
-          isLight ? const Color(0xFFF8F7FC) : const Color(0xFF111116),
-      visualDensity: VisualDensity.standard,
-      appBarTheme: AppBarTheme(
-        centerTitle: false,
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        titleTextStyle: TextStyle(
-          color: colors.onSurface,
-          fontSize: 22,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      cardTheme: CardThemeData(
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        color: isLight ? Colors.white : const Color(0xFF1B1B22),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: isLight ? const Color(0xFFF1EFF7) : const Color(0xFF24242C),
-        border: OutlineInputBorder(
-          borderSide: BorderSide.none,
-          borderRadius: BorderRadius.circular(16),
-        ),
-      ),
-      navigationBarTheme: NavigationBarThemeData(
-        height: 76,
-        backgroundColor:
-            isLight ? colors.surfaceContainerLowest : const Color(0xFF1B181F),
-        indicatorColor: colors.secondaryContainer,
-        labelTextStyle: WidgetStatePropertyAll(
-          TextStyle(color: colors.onSurface, fontWeight: FontWeight.w600),
-        ),
-      ),
-      navigationRailTheme: NavigationRailThemeData(
-        indicatorColor: colors.secondaryContainer,
-        selectedIconTheme: IconThemeData(color: colors.onSecondaryContainer),
-        selectedLabelTextStyle: TextStyle(
-          color: colors.onSurface,
-          fontWeight: FontWeight.w700,
-        ),
-        unselectedIconTheme: IconThemeData(color: colors.onSurfaceVariant),
-        unselectedLabelTextStyle: TextStyle(color: colors.onSurfaceVariant),
-      ),
-      dividerTheme: DividerThemeData(color: colors.outlineVariant),
-      scrollbarTheme: ScrollbarThemeData(
-        thumbVisibility: const WidgetStatePropertyAll(false),
-        radius: const Radius.circular(99),
-        thickness: const WidgetStatePropertyAll(6),
-        thumbColor: WidgetStatePropertyAll(
-          colors.onSurfaceVariant.withValues(alpha: 0.35),
-        ),
-      ),
-    );
+  Future<void> _updateAppearance(AppAppearancePreferences value) async {
+    await _appearanceStore.save(value);
+    if (!mounted) return;
+    setState(() => _appearance = value);
   }
 }
 

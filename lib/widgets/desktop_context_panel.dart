@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../features/appearance/app_appearance_theme.dart';
 import '../features/workspaces/workspace_profile.dart';
 import '../models/app_models.dart';
 import '../navigation/app_section.dart';
@@ -96,8 +97,7 @@ class DesktopContextPanel extends StatelessWidget {
       }
     }
 
-    return ColoredBox(
-      color: colors.surfaceContainerLowest,
+    return ChroniclePanelSurface(
       child: SafeArea(
         left: false,
         child: SizedBox(

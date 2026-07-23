@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../features/appearance/app_appearance.dart';
+import '../features/appearance/app_appearance_dialog.dart';
+import '../features/appearance/app_appearance_theme.dart';
 import '../features/workspaces/workspace_manager_dialog.dart';
 import '../features/workspaces/workspace_preferences_store.dart';
 import '../features/workspaces/workspace_profile.dart';
@@ -17,9 +20,17 @@ import '../widgets/desktop_context_panel.dart';
 import '../widgets/responsive_breakpoints.dart';
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key, required this.store});
+  const HomeShell({
+    super.key,
+    required this.store,
+    required this.appearance,
+    required this.onAppearanceChanged,
+  });
 
   final AppStore store;
+  final AppAppearancePreferences appearance;
+  final Future<void> Function(AppAppearancePreferences value)
+      onAppearanceChanged;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -78,6 +89,16 @@ class _HomeShellState extends State<HomeShell> {
           meta: true,
           shift: true,
         ): () => unawaited(_openWorkspaceManager()),
+        const SingleActivator(
+          LogicalKeyboardKey.keyA,
+          control: true,
+          shift: true,
+        ): () => unawaited(_openAppearance()),
+        const SingleActivator(
+          LogicalKeyboardKey.keyA,
+          meta: true,
+          shift: true,
+        ): () => unawaited(_openAppearance()),
       },
       child: Focus(
         autofocus: true,
@@ -97,33 +118,44 @@ class _HomeShellState extends State<HomeShell> {
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
       body: _pages(),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Divider(height: 1, color: colors.outlineVariant),
-          ColoredBox(
-            color: colors.surfaceContainerLowest,
-            child: SizedBox(
-              height: 42,
-              child: Center(child: _workspaceSwitcher(compact: false)),
+      bottomNavigationBar: ChroniclePanelSurface(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Divider(height: 1, color: colors.outlineVariant),
+            SizedBox(
+              height: 46,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _workspaceSwitcher(compact: false),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Внешний вид (Ctrl+Shift+A)',
+                    onPressed: () => unawaited(_openAppearance()),
+                    icon: const Icon(Icons.palette_outlined),
+                  ),
+                ],
+              ),
             ),
-          ),
-          NavigationBar(
-            selectedIndex: index,
-            onDestinationSelected:
-                (value) => _select(AppSection.values[value]),
-            destinations:
-                AppSection.values
-                    .map(
-                      (item) => NavigationDestination(
-                        icon: Icon(item.icon),
-                        selectedIcon: Icon(item.selectedIcon),
-                        label: item.label,
-                      ),
-                    )
-                    .toList(),
-          ),
-        ],
+            NavigationBar(
+              backgroundColor: Colors.transparent,
+              selectedIndex: index,
+              onDestinationSelected:
+                  (value) => _select(AppSection.values[value]),
+              destinations:
+                  AppSection.values
+                      .map(
+                        (item) => NavigationDestination(
+                          icon: Icon(item.icon),
+                          selectedIcon: Icon(item.selectedIcon),
+                          label: item.label,
+                        ),
+                      )
+                      .toList(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -143,57 +175,70 @@ class _HomeShellState extends State<HomeShell> {
         children: [
           SafeArea(
             right: false,
-            child: NavigationRail(
-              selectedIndex: index,
-              onDestinationSelected:
-                  (value) => _select(AppSection.values[value]),
-              extended: extended,
-              minWidth: 80,
-              minExtendedWidth: 224,
-              groupAlignment: -0.68,
-              backgroundColor: colors.surfaceContainerLowest,
-              leading: Padding(
-                padding: const EdgeInsets.only(top: 12, bottom: 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (extended)
-                      const _ExtendedWordmark()
-                    else
-                      const _CompactWordmark(),
-                    const SizedBox(height: 12),
-                    _workspaceSwitcher(compact: !extended),
-                  ],
-                ),
-              ),
-              trailing: Padding(
-                padding: const EdgeInsets.only(bottom: 18),
-                child: IconButton.filledTonal(
-                  tooltip:
-                      widget.store.activeStartedAt == null
-                          ? 'Начать таймер (Ctrl+T)'
-                          : 'Остановить таймер',
-                  onPressed:
-                      widget.store.activeStartedAt == null
-                          ? _start
-                          : widget.store.stopTimer,
-                  icon: Icon(
-                    widget.store.activeStartedAt == null
-                        ? Icons.play_arrow_rounded
-                        : Icons.stop_rounded,
+            child: ChroniclePanelSurface(
+              child: NavigationRail(
+                backgroundColor: Colors.transparent,
+                selectedIndex: index,
+                onDestinationSelected:
+                    (value) => _select(AppSection.values[value]),
+                extended: extended,
+                minWidth: 80,
+                minExtendedWidth: 224,
+                groupAlignment: -0.68,
+                leading: Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (extended)
+                        const _ExtendedWordmark()
+                      else
+                        const _CompactWordmark(),
+                      const SizedBox(height: 12),
+                      _workspaceSwitcher(compact: !extended),
+                    ],
                   ),
                 ),
-              ),
-              destinations:
-                  AppSection.values
-                      .map(
-                        (item) => NavigationRailDestination(
-                          icon: Icon(item.icon),
-                          selectedIcon: Icon(item.selectedIcon),
-                          label: Text(item.label),
+                trailing: Padding(
+                  padding: const EdgeInsets.only(bottom: 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton.filledTonal(
+                        tooltip: 'Внешний вид (Ctrl+Shift+A)',
+                        onPressed: () => unawaited(_openAppearance()),
+                        icon: const Icon(Icons.palette_outlined),
+                      ),
+                      const SizedBox(height: 8),
+                      IconButton.filledTonal(
+                        tooltip:
+                            widget.store.activeStartedAt == null
+                                ? 'Начать таймер (Ctrl+T)'
+                                : 'Остановить таймер',
+                        onPressed:
+                            widget.store.activeStartedAt == null
+                                ? _start
+                                : widget.store.stopTimer,
+                        icon: Icon(
+                          widget.store.activeStartedAt == null
+                              ? Icons.play_arrow_rounded
+                              : Icons.stop_rounded,
                         ),
-                      )
-                      .toList(),
+                      ),
+                    ],
+                  ),
+                ),
+                destinations:
+                    AppSection.values
+                        .map(
+                          (item) => NavigationRailDestination(
+                            icon: Icon(item.icon),
+                            selectedIcon: Icon(item.selectedIcon),
+                            label: Text(item.label),
+                          ),
+                        )
+                        .toList(),
+              ),
             ),
           ),
           VerticalDivider(width: 1, thickness: 1, color: colors.outlineVariant),
@@ -282,6 +327,22 @@ class _HomeShellState extends State<HomeShell> {
     await _saveWorkspacePreferences(result);
   }
 
+  Future<void> _openAppearance() async {
+    final result = await AppAppearanceDialog.show(
+      context,
+      preferences: widget.appearance,
+    );
+    if (!mounted || result == null || result == widget.appearance) return;
+    try {
+      await widget.onAppearanceChanged(result);
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось сохранить оформление: $error')),
+      );
+    }
+  }
+
   Future<void> _saveWorkspacePreferences(WorkspacePreferences value) async {
     try {
       await _workspaceStore.save(value);
@@ -336,12 +397,9 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
       ],
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.surfaceContainer,
-          borderRadius: BorderRadius.circular(compact ? 14 : 12),
-          border: Border.all(color: colors.outlineVariant),
-        ),
+      child: ChroniclePanelSurface(
+        borderRadius: BorderRadius.circular(compact ? 14 : 12),
+        clipBehavior: Clip.antiAlias,
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: compact ? 10 : 12,

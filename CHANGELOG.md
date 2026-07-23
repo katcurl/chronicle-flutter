@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.27.4+78
+
+- Added a local appearance system with coordinated violet, orange, yellow, red, pink, blue, green and graphite themes.
+- Added independent palette controls for accents, active icons, the application background and panels/cards.
+- Added Matte, Glossy and Shiny surface styles without changing control geometry or note layout.
+- Added system, light and dark brightness modes with palette-specific backgrounds and panel colors.
+- Applied decorated surfaces to desktop navigation, compact navigation, the workspace switcher and the desktop context panel.
+- Added a live appearance preview and `Ctrl+Shift+A` / `Cmd+Shift+A` shortcut for opening the appearance dialog.
+- Stored appearance preferences locally in SharedPreferences without changing projects, notes, Vault files, synchronization or database schema.
+- Added deterministic tests for defaults, coordinated presets, independent palette round-tripping and corrupt preference recovery.
+
 ## 0.27.3+77
 
 - Added a configurable local overview as the optional starting page of the Notes section.
