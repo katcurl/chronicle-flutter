@@ -16,6 +16,7 @@ void main() {
       id: 'large-note',
       title: 'Long trajectory',
       projectId: 'project-1',
+      body: content,
       noteType: 'experiment',
       tags: const <String>['md', 'trajectory'],
     );

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1+101
+
+- Fixed strict Flutter analyzer diagnostics in the Chronicle 1.0 release-readiness recovery card by removing redundant nested `const` keywords.
+- Updated the large-note stability regression fixture to provide the required note body while preserving the same >1 MB parse/serialize round-trip coverage.
+- Kept the stable release version reported by readiness diagnostics and backup metadata aligned with the package version.
+
 ## 1.0.0+100
 
 - Declared the first stable Chronicle data contract with versioned structured backups and Markdown Vault manifests.

@@ -201,15 +201,15 @@ class _ReleaseReadinessDialogState extends State<ReleaseReadinessDialog> {
                     const SizedBox(height: 10),
                     const Card(
                       child: ExpansionTile(
-                        leading: const Icon(Icons.health_and_safety_outlined),
-                        title: const Text('Как восстановиться после ошибки'),
-                        childrenPadding: const EdgeInsets.fromLTRB(
+                        leading: Icon(Icons.health_and_safety_outlined),
+                        title: Text('Как восстановиться после ошибки'),
+                        childrenPadding: EdgeInsets.fromLTRB(
                           18,
                           0,
                           18,
                           18,
                         ),
-                        children: const [
+                        children: [
                           _RecoveryStep(
                             number: 1,
                             text:
