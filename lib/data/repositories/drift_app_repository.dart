@@ -580,12 +580,6 @@ class DriftAppRepository implements AppRepository {
   Future<String> exportJson() async => (await load()).encode();
 
   @override
-  Future<void> importJson(String raw) async {
-    await replaceAll(AppData.decode(raw));
-    await markInitialized();
-  }
-
-  @override
   Future<void> close() => _database.close();
 
   Future<void> _saveEntity({

@@ -150,11 +150,17 @@ class InsightsScreen extends StatelessWidget {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.settings_backup_restore_rounded),
-                    title: const Text('Восстановить из JSON'),
-                    subtitle: const Text('Текущие данные будут заменены'),
+                    title: const Text('Восстановить из файла'),
+                    subtitle: const Text(
+                      'С проверкой, предпросмотром и страховочной копией',
+                    ),
                     onTap: () {
                       Navigator.pop(sheetContext);
-                      _showImportDialog(context);
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => DevicesScreen(store: store),
+                        ),
+                      );
                     },
                   ),
                 ],
@@ -162,57 +168,5 @@ class InsightsScreen extends StatelessWidget {
             ),
           ),
     );
-  }
-
-  Future<void> _showImportDialog(BuildContext context) async {
-    final controller = TextEditingController();
-    final messenger = ScaffoldMessenger.of(context);
-
-    await showDialog<void>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: const Text('Восстановить данные'),
-            content: SizedBox(
-              width: 560,
-              child: TextField(
-                controller: controller,
-                autofocus: true,
-                minLines: 8,
-                maxLines: 14,
-                decoration: const InputDecoration(
-                  hintText: 'Вставь JSON резервной копии',
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Отмена'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  try {
-                    await store.importBackupJson(controller.text.trim());
-                    if (!dialogContext.mounted) return;
-                    Navigator.pop(dialogContext);
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('Данные восстановлены')),
-                    );
-                  } on Object catch (error) {
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content: Text('Не удалось импортировать: $error'),
-                      ),
-                    );
-                  }
-                },
-                child: const Text('Восстановить'),
-              ),
-            ],
-          ),
-    );
-
-    controller.dispose();
   }
 }

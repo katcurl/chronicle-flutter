@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 import '../data/repositories/app_repository.dart';
+import '../models/app_models.dart';
 
 class RestoreValidationResult {
   const RestoreValidationResult({
@@ -23,7 +24,7 @@ class RestoreService {
 
   Future<RestoreValidationResult> validate(String raw) async {
     try {
-      jsonDecode(raw);
+      AppData.decode(raw);
       final hash = sha256.convert(utf8.encode(raw)).toString();
       return RestoreValidationResult(
         valid: true,
@@ -44,7 +45,9 @@ class RestoreService {
       return result;
     }
 
-    await _repository.importJson(raw);
+    final data = AppData.decode(raw);
+    await _repository.replaceAll(data);
+    await _repository.markInitialized();
     return result;
   }
 }

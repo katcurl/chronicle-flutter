@@ -84,7 +84,5 @@ abstract class AppRepository {
 
   Future<String> exportJson();
 
-  Future<void> importJson(String raw);
-
   Future<void> close();
 }

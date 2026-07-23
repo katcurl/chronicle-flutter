@@ -444,12 +444,6 @@ class InMemoryAppRepository implements AppRepository {
   Future<String> exportJson() async => _data.encode();
 
   @override
-  Future<void> importJson(String raw) async {
-    await replaceAll(AppData.decode(raw));
-    _initialized = true;
-  }
-
-  @override
   Future<void> close() async {}
 
   bool _applyRemoteEntity(ChangeRecord change) {

@@ -2610,13 +2610,8 @@ class AppStore extends ChangeNotifier {
 
   Future<String> exportBackupJson() => _repository.exportJson();
 
-  Future<void> importBackupJson(String raw) async {
-    await _replaceDataFromBackup(raw);
-    _scheduleVaultMirror();
-    notifyListeners();
-  }
-
   Future<void> _replaceDataFromBackup(String raw) async {
+    final decoded = AppData.decode(raw);
     _undoJournal.clear();
     releaseReadinessReport = null;
     _ticker?.cancel();
@@ -2626,7 +2621,8 @@ class AppStore extends ChangeNotifier {
     activeTaskId = null;
     activeNoteId = null;
     await _repository.saveActiveTimer(null);
-    await _repository.importJson(raw);
+    await _repository.replaceAll(decoded);
+    await _repository.markInitialized();
     data = await _repository.load();
     await _hydrateNoteMetadata();
     await rebuildAllNoteLinks();

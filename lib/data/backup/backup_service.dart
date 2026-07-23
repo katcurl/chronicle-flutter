@@ -1,3 +1,4 @@
+import '../../models/app_models.dart';
 import '../repositories/app_repository.dart';
 
 class BackupService {
@@ -7,5 +8,9 @@ class BackupService {
 
   Future<String> exportJson() => _repository.exportJson();
 
-  Future<void> importJson(String raw) => _repository.importJson(raw);
+  Future<void> importJson(String raw) async {
+    final data = AppData.decode(raw);
+    await _repository.replaceAll(data);
+    await _repository.markInitialized();
+  }
 }

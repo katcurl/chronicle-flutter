@@ -802,6 +802,18 @@ class AppData {
   static const String backupFormat = 'chronicle-backup';
   static const int currentBackupFormatVersion = 5;
   static const int minimumReadableBackupFormatVersion = 1;
+  static const Set<String> _coreBackupCollections = {
+    'projects',
+    'tasks',
+    'notes',
+    'entries',
+  };
+  static const Set<String> _currentBackupCollections = {
+    ..._coreBackupCollections,
+    'noteLinks',
+    'noteVersions',
+    'citationSources',
+  };
 
   AppData({
     required this.projects,
@@ -854,22 +866,48 @@ class AppData {
   }
 
   static int _formatVersionOfJson(Map<String, dynamic> json) {
-    final format = json['format']?.toString();
-    if (format != null && format.isNotEmpty && format != backupFormat) {
-      throw FormatException('Неизвестный формат резервной копии: $format.');
+    final hasFormat = json.containsKey('format');
+    final hasVersion = json.containsKey('version');
+    final isLegacyV1 = !hasFormat && !hasVersion;
+
+    if (hasFormat != hasVersion) {
+      throw const FormatException(
+        'Резервная копия содержит неполный идентификатор формата.',
+      );
     }
+    if (hasFormat) {
+      final format = json['format'];
+      if (format is! String || format != backupFormat) {
+        throw FormatException('Неизвестный формат резервной копии: $format.');
+      }
+    }
+
     final rawVersion = json['version'];
+    if (!isLegacyV1 && rawVersion is! int) {
+      throw const FormatException(
+        'Версия резервной копии должна быть целым числом.',
+      );
+    }
     final version =
-        rawVersion == null
-            ? minimumReadableBackupFormatVersion
-            : _readInt(rawVersion, fallback: 0);
+        isLegacyV1 ? minimumReadableBackupFormatVersion : rawVersion! as int;
     if (version < minimumReadableBackupFormatVersion) {
       throw FormatException('Некорректная версия резервной копии: $version.');
     }
-    final minimumReaderVersion = _readInt(
-      json['minimumReaderVersion'],
-      fallback: minimumReadableBackupFormatVersion,
-    );
+
+    if (version == currentBackupFormatVersion &&
+        !json.containsKey('minimumReaderVersion')) {
+      throw const FormatException(
+        'В резервной копии отсутствует minimumReaderVersion.',
+      );
+    }
+    final rawMinimumReaderVersion = json['minimumReaderVersion'];
+    if (rawMinimumReaderVersion != null && rawMinimumReaderVersion is! int) {
+      throw const FormatException(
+        'minimumReaderVersion должен быть целым числом.',
+      );
+    }
+    final minimumReaderVersion =
+        rawMinimumReaderVersion as int? ?? minimumReadableBackupFormatVersion;
     if (minimumReaderVersion < minimumReadableBackupFormatVersion) {
       throw FormatException(
         'Некорректная минимальная версия чтения: $minimumReaderVersion.',
@@ -883,43 +921,80 @@ class AppData {
         'поддерживается до $currentBackupFormatVersion).',
       );
     }
+
+    _requireBackupCollections(
+      json,
+      version == currentBackupFormatVersion
+          ? _currentBackupCollections
+          : _coreBackupCollections,
+    );
     return version;
+  }
+
+  static void _requireBackupCollections(
+    Map<String, dynamic> json,
+    Set<String> requiredCollections,
+  ) {
+    for (final key in requiredCollections) {
+      if (!json.containsKey(key)) {
+        throw FormatException(
+          'В резервной копии отсутствует обязательное поле $key.',
+        );
+      }
+      if (json[key] is! List) {
+        throw FormatException(
+          'Поле $key в резервной копии должно быть списком.',
+        );
+      }
+    }
+
+    for (final key in _currentBackupCollections) {
+      if (json.containsKey(key) && json[key] is! List) {
+        throw FormatException(
+          'Поле $key в резервной копии должно быть списком.',
+        );
+      }
+    }
+  }
+
+  static List<T> _decodeBackupCollection<T>(
+    Map<String, dynamic> json,
+    String key,
+    T Function(Map<String, dynamic>) decode,
+  ) {
+    final rawCollection = json[key];
+    if (rawCollection == null) {
+      return <T>[];
+    }
+    return (rawCollection as List<dynamic>).map((item) {
+      if (item is! Map) {
+        throw FormatException(
+          'Элемент поля $key в резервной копии должен быть объектом.',
+        );
+      }
+      return decode(Map<String, dynamic>.from(item));
+    }).toList();
   }
 
   factory AppData.decode(String raw) {
     final json = _decodeBackupEnvelope(raw);
     _formatVersionOfJson(json);
     return AppData(
-      projects:
-          (json['projects'] as List<dynamic>? ?? const [])
-              .map((item) => Project.fromJson(item as Map<String, dynamic>))
-              .toList(),
-      tasks:
-          (json['tasks'] as List<dynamic>? ?? const [])
-              .map((item) => WorkTask.fromJson(item as Map<String, dynamic>))
-              .toList(),
-      notes:
-          (json['notes'] as List<dynamic>? ?? const [])
-              .map((item) => Note.fromJson(item as Map<String, dynamic>))
-              .toList(),
-      entries:
-          (json['entries'] as List<dynamic>? ?? const [])
-              .map((item) => TimeEntry.fromJson(item as Map<String, dynamic>))
-              .toList(),
-      noteLinks:
-          (json['noteLinks'] as List<dynamic>? ?? const [])
-              .map((item) => NoteLink.fromJson(item as Map<String, dynamic>))
-              .toList(),
-      noteVersions:
-          (json['noteVersions'] as List<dynamic>? ?? const [])
-              .map((item) => NoteVersion.fromJson(item as Map<String, dynamic>))
-              .toList(),
-      citationSources:
-          (json['citationSources'] as List<dynamic>? ?? const [])
-              .map(
-                (item) => CitationSource.fromJson(item as Map<String, dynamic>),
-              )
-              .toList(),
+      projects: _decodeBackupCollection(json, 'projects', Project.fromJson),
+      tasks: _decodeBackupCollection(json, 'tasks', WorkTask.fromJson),
+      notes: _decodeBackupCollection(json, 'notes', Note.fromJson),
+      entries: _decodeBackupCollection(json, 'entries', TimeEntry.fromJson),
+      noteLinks: _decodeBackupCollection(json, 'noteLinks', NoteLink.fromJson),
+      noteVersions: _decodeBackupCollection(
+        json,
+        'noteVersions',
+        NoteVersion.fromJson,
+      ),
+      citationSources: _decodeBackupCollection(
+        json,
+        'citationSources',
+        CitationSource.fromJson,
+      ),
     );
   }
 }
