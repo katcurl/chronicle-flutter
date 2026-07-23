@@ -409,6 +409,8 @@ PublicationAssembly assemblePublication({
 }) {
   final notesById = <String, Note>{for (final note in notes) note.id: note};
   final issues = <PublicationAssemblyIssue>[];
+  final abbreviationSourceBodies = <String>[];
+  final abbreviationSourceNoteIds = <String>{};
   final buffer = StringBuffer()
     ..writeln('# ${title.trim().isEmpty ? 'Без названия' : title.trim()}')
     ..writeln();
@@ -460,6 +462,9 @@ PublicationAssembly assemblePublication({
         );
         continue;
       }
+      if (abbreviationSourceNoteIds.add(source.id)) {
+        abbreviationSourceBodies.add(NoteDocument.parse(source.body).content);
+      }
       buffer
         ..writeln(normalized)
         ..writeln()
@@ -483,7 +488,11 @@ PublicationAssembly assemblePublication({
   );
   markdown = tableResult.markdown;
 
-  final abbreviations = _extractAbbreviations(markdown);
+  final abbreviationCorpus = <String>[
+    markdown,
+    ...abbreviationSourceBodies,
+  ].join('\n\n');
+  final abbreviations = _extractAbbreviations(abbreviationCorpus);
   if (workspace.includeAbbreviations && abbreviations.isNotEmpty) {
     final abbreviationBuffer = StringBuffer()
       ..writeln()

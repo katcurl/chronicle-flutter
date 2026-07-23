@@ -172,10 +172,51 @@ This paragraph must not be included.
     expect(assembly.markdown, contains('**Таблица 1.**'));
     expect(assembly.markdown, contains('## Список сокращений'));
     expect(assembly.markdown, contains('**MD**'));
+    expect(assembly.abbreviations['MD'], 'Molecular dynamics');
     expect(assembly.markdown, contains('## Литература'));
     expect(assembly.markdown, contains('Smith, 2024'));
     expect(assembly.figureCount, 1);
     expect(assembly.tableCount, 1);
+  });
+
+  test('unrelated notes do not add abbreviations to a publication', () {
+    final linked = sourceNote(
+      id: 'source-1',
+      title: 'Linked results',
+      content: '## Results\n\nThe transition is visible.',
+    );
+    final unrelated = sourceNote(
+      id: 'source-2',
+      title: 'Unrelated analysis',
+      content: '## Methods\n\nRoot mean square deviation (RMSD) was calculated.',
+    );
+    final workspace = PublicationWorkspace(
+      kind: PublicationKind.article,
+      sections: <PublicationSection>[
+        PublicationSection(
+          id: 'section-1',
+          title: 'Results',
+          fragments: <PublicationFragment>[
+            PublicationFragment(
+              id: 'fragment-1',
+              noteId: linked.id,
+              heading: 'Results',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final assembly = assemblePublication(
+      title: 'Focused manuscript',
+      workspace: workspace,
+      notes: <Note>[linked, unrelated],
+      sources: const <CitationSource>[],
+    );
+
+    expect(assembly.abbreviations, isEmpty);
+    expect(assembly.markdown, isNot(contains('## Список сокращений')));
+    expect(assembly.markdown, isNot(contains('**RMSD**')));
   });
 
   test('missing live heading is reported instead of silently copied', () {

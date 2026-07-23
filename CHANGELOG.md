@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.31.2+86
+
+- Fixed publication abbreviation assembly when a term is defined elsewhere in a linked source note rather than inside the selected live heading.
+- Limited abbreviation-definition lookup to notes that successfully contribute live fragments, so unrelated project notes cannot pollute the generated list.
+- Added regression coverage for linked-note abbreviation context and exclusion of unrelated notes.
+
 ## 0.31.1+85
 
 - Fixed Chronicle image metadata parsing so legacy or manually written captions containing unescaped spaces remain intact.
