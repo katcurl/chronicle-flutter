@@ -15,6 +15,9 @@ import '../features/notes/note_data_import.dart';
 import '../features/notes/note_data_import_dialog.dart';
 import '../features/notes/note_data_import_file_service.dart';
 import '../features/notes/note_edit_history.dart';
+import '../features/notes/note_editor_preferences_store.dart';
+import '../features/notes/note_editor_profile.dart';
+import '../features/notes/note_editor_profile_dialog.dart';
 import '../features/notes/note_export.dart';
 import '../features/notes/note_export_dialog.dart';
 import '../features/notes/note_export_file_service.dart';
@@ -612,6 +615,11 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   late final NoteEditHistory _editHistory;
   late final DebouncedTextNotifier _previewTextNotifier;
   late final DebouncedTextNotifier _statisticsTextNotifier;
+  final NoteEditorPreferencesStore _editorPreferencesStore =
+      NoteEditorPreferencesStore();
+  NoteEditorPreferences _editorPreferences = NoteEditorPreferences.defaults();
+  bool _editorProfileLoaded = false;
+  bool _modeChangedManually = false;
   late final ScrollController _editorScrollController;
   late final ScrollController _previewScrollController;
   Timer? _previewScrollResumeTimer;
@@ -671,6 +679,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     _lastContentText = contentController.text;
     titleController.addListener(_markDirty);
     contentController.addListener(_markDirty);
+    unawaited(_loadEditorPreferences());
   }
 
   @override
@@ -759,6 +768,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     final backlinks = widget.store.backlinksFor(widget.note);
     final outgoing = widget.store.outgoingLinksFor(widget.note.id);
     final versions = widget.store.versionsFor(widget.note.id);
+    final editorProfile = _editorPreferences.activeProfile;
 
     return PopScope(
       onPopInvokedWithResult: (_, __) {
@@ -766,8 +776,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       },
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final showPanel = constraints.maxWidth >= 860;
+          final showPanel =
+              constraints.maxWidth >= 860 && editorProfile.showContextPanel;
           final split = constraints.maxWidth >= 1180;
+          final effectiveMode = mode == 2 && !split ? 0 : mode;
           return Scaffold(
             appBar: AppBar(
               title: Row(
@@ -797,14 +809,14 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                   tooltip: 'Редактор',
                   onPressed: () => _switchMode(0),
                   icon: Icon(
-                    mode == 0 ? Icons.edit_rounded : Icons.edit_outlined,
+                    effectiveMode == 0 ? Icons.edit_rounded : Icons.edit_outlined,
                   ),
                 ),
                 IconButton(
                   tooltip: 'Предпросмотр',
                   onPressed: () => _switchMode(1),
                   icon: Icon(
-                    mode == 1
+                    effectiveMode == 1
                         ? Icons.visibility_rounded
                         : Icons.visibility_outlined,
                   ),
@@ -814,11 +826,12 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                     tooltip: 'Разделить редактор',
                     onPressed: () => _switchMode(2),
                     icon: Icon(
-                      mode == 2
+                      effectiveMode == 2
                           ? Icons.vertical_split_rounded
                           : Icons.vertical_split_outlined,
                     ),
                   ),
+                _editorProfileSwitcher(),
                 if (!showPanel)
                   Builder(
                     builder:
@@ -888,26 +901,28 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                         ),
                       ),
                     ),
-            floatingActionButton: FloatingActionButton.extended(
-              onPressed: () {
-                _save(createVersion: false);
-                widget.store.startTimer(
-                  description: 'Работа над ${widget.note.title}',
-                  projectId: projectId,
-                  noteId: widget.note.id,
-                );
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('Таймер запущен')));
-              },
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Работать'),
-            ),
+            floatingActionButton: editorProfile.showTimerButton
+                ? FloatingActionButton.extended(
+                    onPressed: () {
+                      _save(createVersion: false);
+                      widget.store.startTimer(
+                        description: 'Работа над ${widget.note.title}',
+                        projectId: projectId,
+                        noteId: widget.note.id,
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Таймер запущен')),
+                      );
+                    },
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Работать'),
+                  )
+                : null,
             body: Row(
               children: [
                 Expanded(
                   child:
-                      mode == 2 && split
+                      effectiveMode == 2 && split
                           ? Row(
                             children: [
                               Expanded(child: _editorPane()),
@@ -915,7 +930,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                               Expanded(child: _previewPane()),
                             ],
                           )
-                          : mode == 1
+                          : effectiveMode == 1
                           ? _previewPane()
                           : _editorPane(),
                 ),
@@ -940,6 +955,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   }
 
   void _switchMode(int nextMode) {
+    _modeChangedManually = true;
     if (nextMode == mode) {
       return;
     }
@@ -958,104 +974,126 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   }
 
   Widget _editorPane() {
+    final profile = _editorPreferences.activeProfile;
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 8, 10, 4),
-          child: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: titleController,
-            builder: (context, titleValue, _) {
-              final proposed = titleValue.text.trim();
-              final titleChanged =
-                  proposed.isNotEmpty && proposed != widget.note.title;
-              return Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: titleController,
-                      onSubmitted:
-                          (_) => unawaited(
-                            _saveWithRenameReview(createVersion: false),
-                          ),
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        filled: false,
-                        hintText: 'Название',
+        if (profile.showTitle)
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              profile.density.horizontalPadding,
+              8,
+              10,
+              4,
+            ),
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: titleController,
+              builder: (context, titleValue, _) {
+                final proposed = titleValue.text.trim();
+                final titleChanged =
+                    proposed.isNotEmpty && proposed != widget.note.title;
+                return Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: titleController,
+                        onSubmitted: (_) => unawaited(
+                          _saveWithRenameReview(createVersion: false),
+                        ),
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          filled: false,
+                          hintText: 'Название',
+                        ),
                       ),
                     ),
-                  ),
-                  if (titleChanged)
-                    IconButton(
-                      tooltip: 'Предпросмотр безопасного переименования',
-                      onPressed:
-                          _renameReviewBusy
-                              ? null
-                              : () => unawaited(
+                    if (titleChanged)
+                      IconButton(
+                        tooltip: 'Предпросмотр безопасного переименования',
+                        onPressed: _renameReviewBusy
+                            ? null
+                            : () => unawaited(
                                 _saveWithRenameReview(createVersion: false),
                               ),
-                      icon: const Icon(Icons.edit_outlined),
-                    ),
-                ],
-              );
-            },
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                  ],
+                );
+              },
+            ),
           ),
-        ),
-        _EditorToolbar(
-          controller: contentController,
-          history: _editHistory,
-          onUndo: () => _editHistory.undo(),
-          onRedo: () => _editHistory.redo(),
-          onAttach: _attachFile,
-          onPasteImage: () => unawaited(_pasteImageFromClipboard()),
-          onConfigureImage: _editImageAtCursor,
-          onConfigureColumns: _configureColumnsAtCursor,
-          onReorderBlocks: _reorderBlocks,
-          onBlockAction: _handleBlockAction,
-          onInsertNoteLink: _insertNoteLinks,
-          onInsertCitation: _insertCitation,
-          onInsertBibliography: _insertBibliography,
-          onInsertScientificTable: _insertScientificTable,
-          onImportData: () => unawaited(_importDataFiles()),
-          onExport: () => unawaited(_exportCurrentNote()),
-          onInsertScientificReference: _insertScientificReference,
-          onInspectScientificObjects: _inspectScientificObjects,
-          onApplyLaboratoryTemplate: _applyLaboratoryTemplate,
-          onSaveAsTemplate: _saveCurrentNoteAsTemplate,
-          onManageTemplates: _manageCustomTemplates,
-        ),
-        _WikiLinkSuggestionsBar(
-          controller: contentController,
-          store: widget.store,
-          currentNoteId: widget.note.id,
-          sourceProjectId: projectId,
-          sourceFolderPath: folderPath,
-        ),
+        if (profile.showToolbar)
+          _EditorToolbar(
+            controller: contentController,
+            history: _editHistory,
+            onUndo: () => _editHistory.undo(),
+            onRedo: () => _editHistory.redo(),
+            onAttach: _attachFile,
+            onPasteImage: () => unawaited(_pasteImageFromClipboard()),
+            onConfigureImage: _editImageAtCursor,
+            onConfigureColumns: _configureColumnsAtCursor,
+            onReorderBlocks: _reorderBlocks,
+            onBlockAction: _handleBlockAction,
+            onInsertNoteLink: _insertNoteLinks,
+            onInsertCitation: _insertCitation,
+            onInsertBibliography: _insertBibliography,
+            onInsertScientificTable: _insertScientificTable,
+            onImportData: () => unawaited(_importDataFiles()),
+            onExport: () => unawaited(_exportCurrentNote()),
+            onInsertScientificReference: _insertScientificReference,
+            onInspectScientificObjects: _inspectScientificObjects,
+            onApplyLaboratoryTemplate: _applyLaboratoryTemplate,
+            onSaveAsTemplate: _saveCurrentNoteAsTemplate,
+            onManageTemplates: _manageCustomTemplates,
+          ),
+        if (profile.showLinkSuggestions)
+          _WikiLinkSuggestionsBar(
+            controller: contentController,
+            store: widget.store,
+            currentNoteId: widget.note.id,
+            sourceProjectId: projectId,
+            sourceFolderPath: folderPath,
+          ),
         const Divider(height: 1),
         Expanded(
           child: NotificationListener<ScrollNotification>(
             onNotification: _handleEditorScrollNotification,
             child: Focus(
               onKeyEvent: _handleEditorKeyEvent,
-              child: TextField(
-                controller: contentController,
-                scrollController: _editorScrollController,
-                expands: true,
-                maxLines: null,
-                minLines: null,
-                textAlignVertical: TextAlignVertical.top,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 15,
-                  height: 1.6,
-                ),
-                decoration: const InputDecoration(
-                  contentPadding: EdgeInsets.all(20),
-                  border: InputBorder.none,
-                  filled: false,
-                  hintText: r'Markdown, $LaTeX$, [[ссылки]], изображения…',
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: profile.contentWidth > 0
+                        ? profile.contentWidth
+                        : double.infinity,
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: TextField(
+                      controller: contentController,
+                      scrollController: _editorScrollController,
+                      expands: true,
+                      maxLines: null,
+                      minLines: null,
+                      textAlignVertical: TextAlignVertical.top,
+                      style: TextStyle(
+                        fontFamily: profile.fontFamily,
+                        fontSize: profile.fontSize,
+                        height: profile.lineHeight,
+                      ),
+                      decoration: InputDecoration(
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: profile.density.horizontalPadding,
+                          vertical: profile.density.verticalPadding,
+                        ),
+                        border: InputBorder.none,
+                        filled: false,
+                        hintText: r'Markdown, $LaTeX$, [[ссылки]], изображения…',
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1066,24 +1104,51 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   }
 
   Widget _previewPane() {
+    final profile = _editorPreferences.activeProfile;
+    final mediaQuery = MediaQuery.of(context);
     return NotificationListener<ScrollNotification>(
       onNotification: _handlePreviewScrollNotification,
       child: ValueListenableBuilder<String>(
         valueListenable: _previewTextNotifier,
         builder: (context, text, _) {
           return RepaintBoundary(
-            child: NoteMarkdownView(
-              key: PageStorageKey<String>('note-preview-${widget.note.id}'),
-              markdown: text,
-              controller: _previewScrollController,
-              onWikiLink: _openWikiLink,
-              onEditImage: _editImageReference,
-              onResizeImage: _replaceImagePresentation,
-              onEditColumns: _editColumnsReference,
-              onResizeColumns: _replaceColumnsWidths,
-              assetListenable: widget.store.attachmentRefreshListenable,
-              citationSources: widget.store.data.citationSources,
-              vaultRootPath: widget.store.vaultStatus.rootPath,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: profile.contentWidth > 0
+                      ? profile.contentWidth
+                      : double.infinity,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: MediaQuery(
+                    data: mediaQuery.copyWith(
+                      textScaler: TextScaler.linear(profile.previewScale),
+                    ),
+                    child: NoteMarkdownView(
+                      key: PageStorageKey<String>(
+                        'note-preview-${widget.note.id}',
+                      ),
+                      markdown: text,
+                      controller: _previewScrollController,
+                      onWikiLink: _openWikiLink,
+                      onEditImage: _editImageReference,
+                      onResizeImage: _replaceImagePresentation,
+                      onEditColumns: _editColumnsReference,
+                      onResizeColumns: _replaceColumnsWidths,
+                      assetListenable: widget.store.attachmentRefreshListenable,
+                      citationSources: widget.store.data.citationSources,
+                      vaultRootPath: widget.store.vaultStatus.rootPath,
+                      padding: EdgeInsets.fromLTRB(
+                        profile.density.horizontalPadding,
+                        profile.density.verticalPadding,
+                        profile.density.horizontalPadding,
+                        120,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           );
         },
@@ -1118,6 +1183,125 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       );
     }
     return false;
+  }
+
+  Future<void> _loadEditorPreferences() async {
+    NoteEditorPreferences loaded;
+    try {
+      loaded = await _editorPreferencesStore.load();
+    } on Object {
+      loaded = NoteEditorPreferences.defaults();
+    }
+    if (!mounted) return;
+    setState(() {
+      _editorPreferences = loaded;
+      _editorProfileLoaded = true;
+      if (!_modeChangedManually) {
+        mode = loaded.activeProfile.startMode.value;
+      }
+    });
+    if (mode != 0) {
+      _previewTextNotifier.setImmediate(contentController.text);
+    }
+  }
+
+  Future<void> _activateEditorProfile(String id) async {
+    NoteEditorProfile? profile;
+    for (final candidate in _editorPreferences.profiles) {
+      if (candidate.id == id) {
+        profile = candidate;
+        break;
+      }
+    }
+    if (profile == null) return;
+    final selectedProfile = profile;
+    final next = _editorPreferences.copyWith(activeProfileId: id);
+    setState(() {
+      _editorPreferences = next;
+      mode = selectedProfile.startMode.value;
+      _modeChangedManually = false;
+    });
+    if (mode != 0) {
+      _previewTextNotifier.setImmediate(contentController.text);
+    }
+    await _saveEditorPreferences(next);
+  }
+
+  Future<void> _openEditorProfileManager() async {
+    final result = await NoteEditorProfileDialog.show(
+      context,
+      preferences: _editorPreferences,
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      _editorPreferences = result;
+      mode = result.activeProfile.startMode.value;
+      _modeChangedManually = false;
+    });
+    if (mode != 0) {
+      _previewTextNotifier.setImmediate(contentController.text);
+    }
+    await _saveEditorPreferences(result);
+  }
+
+  Future<void> _saveEditorPreferences(NoteEditorPreferences value) async {
+    try {
+      await _editorPreferencesStore.save(value);
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось сохранить профиль: $error')),
+      );
+    }
+  }
+
+  Widget _editorProfileSwitcher() {
+    final profile = _editorPreferences.activeProfile;
+    final colors = Theme.of(context).colorScheme;
+    return PopupMenuButton<String>(
+      tooltip: _editorProfileLoaded
+          ? 'Профиль редактора: ${profile.name}'
+          : 'Профиль редактора',
+      onSelected: (value) {
+        if (value == '__manage__') {
+          unawaited(_openEditorProfileManager());
+        } else {
+          unawaited(_activateEditorProfile(value));
+        }
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        for (final candidate in _editorPreferences.profiles)
+          PopupMenuItem<String>(
+            value: candidate.id,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 32,
+                  child: Text(
+                    candidate.emoji,
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                ),
+                Expanded(child: Text(candidate.name)),
+                if (candidate.id == _editorPreferences.activeProfileId)
+                  Icon(Icons.check_rounded, color: colors.primary),
+              ],
+            ),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<String>(
+          value: '__manage__',
+          child: Row(
+            children: [
+              Icon(Icons.tune_rounded),
+              SizedBox(width: 12),
+              Text('Настроить редактор'),
+            ],
+          ),
+        ),
+      ],
+      icon: Text(profile.emoji, style: const TextStyle(fontSize: 18)),
+    );
   }
 
   Widget _contextPanel({

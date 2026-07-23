@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.27.1+75
+
+- Added local editor profiles with built-in Scientific, Focus and Compact presets.
+- Added profile creation, duplication, deletion and immediate switching from the note app bar.
+- Added configurable editor font, font size, line height, content width, preview scale and interface density.
+- Added per-profile default editor mode and visibility controls for the title, Markdown toolbar, wiki-link suggestions, note context panel and timer action.
+- Kept profiles in local SharedPreferences without changing themes, Vault files, synchronization, database schema or note Markdown.
+- Added deterministic tests for defaults, JSON round-tripping, corrupt preference recovery and bounded numeric settings.
+
 ## 0.27.0+74
 
 - Добавлена отдельная визуальная карта исследования с несколькими локальными полотнами.
