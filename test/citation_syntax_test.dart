@@ -29,10 +29,7 @@ void main() {
 
 Again [@Jaffe2005].''';
 
-    expect(
-      CitationSyntax.extractKeys(markdown),
-      ['Jaffe2005', 'Smith2023'],
-    );
+    expect(CitationSyntax.extractKeys(markdown), ['Jaffe2005', 'Smith2023']);
     expect(CitationSyntax.countKey(markdown, 'Jaffe2005'), 2);
     expect(CitationSyntax.countKey(markdown, 'Ignored2024'), 0);
   });
@@ -41,19 +38,21 @@ Again [@Jaffe2005].''';
     const markdown = '''Result [@Smith2023; @Jaffe2005].
 
 :::bibliography''';
-    final bibliography = CitationSyntax.bibliographyFor(
-      markdown,
-      [jaffe, smith],
-    );
-    final rendered = CitationSyntax.renderMarkdownChunk(
-      markdown,
-      [jaffe, smith],
-      bibliography: bibliography,
-    );
+    final bibliography = CitationSyntax.bibliographyFor(markdown, [
+      jaffe,
+      smith,
+    ]);
+    final rendered = CitationSyntax.renderMarkdownChunk(markdown, [
+      jaffe,
+      smith,
+    ], bibliography: bibliography);
 
     expect(rendered, contains('(Smith и Doe, 2023; Jaffe, 2005)'));
     expect(rendered, contains('## Литература'));
-    expect(rendered.indexOf('Protein dynamics'), lessThan(rendered.indexOf('Multistate proteins')));
+    expect(
+      rendered.indexOf('Protein dynamics'),
+      lessThan(rendered.indexOf('Multistate proteins')),
+    );
     expect(rendered, contains('https://doi.org/10.1016/j.tibs.2005.07.003'));
   });
 

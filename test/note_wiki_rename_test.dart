@@ -42,20 +42,24 @@ void main() {
       if (parsed.noteId != null) {
         return notes.where((note) => note.id == parsed.noteId).toList();
       }
-      var result = notes
-          .where(
-            (note) =>
-                note.title.toLowerCase() == parsed.noteTitle.toLowerCase(),
-          )
-          .toList();
+      var result =
+          notes
+              .where(
+                (note) =>
+                    note.title.toLowerCase() == parsed.noteTitle.toLowerCase(),
+              )
+              .toList();
       if (parsed.projectTitle != null) {
-        result = result.where((note) {
-          final project = [projectA, projectB, projectC].singleWhere(
-            (item) => item.id == note.projectId,
-          );
-          return project.title.toLowerCase() ==
-              parsed.projectTitle!.toLowerCase();
-        }).toList();
+        result =
+            result.where((note) {
+              final project = [
+                projectA,
+                projectB,
+                projectC,
+              ].singleWhere((item) => item.id == note.projectId);
+              return project.title.toLowerCase() ==
+                  parsed.projectTitle!.toLowerCase();
+            }).toList();
       }
       return result;
     }
@@ -63,9 +67,8 @@ void main() {
     Note? resolve(Note source, String rawTarget) {
       final matches = candidates(source, rawTarget);
       if (matches.length == 1) return matches.single;
-      final sameProject = matches
-          .where((note) => note.projectId == source.projectId)
-          .toList();
+      final sameProject =
+          matches.where((note) => note.projectId == source.projectId).toList();
       return sameProject.length == 1 ? sameProject.single : null;
     }
 
@@ -87,75 +90,75 @@ void main() {
     expect(ambiguousSource.body, 'См. [[RMSD]].');
   });
 
-  test('store applies and undoes a linked rename with persistent versions', () async {
-    final project = Project(id: 'project', title: 'Research', emoji: '🧬');
-    final target = Note(
-      id: 'target',
-      title: 'Old title',
-      projectId: project.id,
-      body: '# Old title',
-    );
-    final source = Note(
-      id: 'source',
-      title: 'Journal',
-      projectId: project.id,
-      body: 'Before [[Old title]] after.',
-    );
-    final repository = InMemoryAppRepository(
-      initialData: AppData(
-        projects: [project],
-        tasks: [],
-        notes: [target, source],
-        entries: [],
-      ),
-    );
-    await repository.markInitialized();
-    final store = AppStore(repository: repository);
-    await store.load();
-    await store.rebuildAllNoteLinks();
+  test(
+    'store applies and undoes a linked rename with persistent versions',
+    () async {
+      final project = Project(id: 'project', title: 'Research', emoji: '🧬');
+      final target = Note(
+        id: 'target',
+        title: 'Old title',
+        projectId: project.id,
+        body: '# Old title',
+      );
+      final source = Note(
+        id: 'source',
+        title: 'Journal',
+        projectId: project.id,
+        body: 'Before [[Old title]] after.',
+      );
+      final repository = InMemoryAppRepository(
+        initialData: AppData(
+          projects: [project],
+          tasks: [],
+          notes: [target, source],
+          entries: [],
+        ),
+      );
+      await repository.markInitialized();
+      final store = AppStore(repository: repository);
+      await store.load();
+      await store.rebuildAllNoteLinks();
 
-    final loadedTarget = store.noteById(target.id)!;
-    final plan = store.buildWikiRenamePlan(loadedTarget, 'New title');
-    final undo = await store.applyWikiRenamePlan(plan);
+      final loadedTarget = store.noteById(target.id)!;
+      final plan = store.buildWikiRenamePlan(loadedTarget, 'New title');
+      final undo = await store.applyWikiRenamePlan(plan);
 
-    expect(loadedTarget.title, 'New title');
-    final loadedSource = store.noteById(source.id)!;
-    expect(
-      NoteDocument.parse(loadedSource.body).content,
-      contains('[[id:target|New title]]'),
-    );
-    expect(store.resolveWikiTarget('id:target')?.id, target.id);
-    expect(store.versionsFor(target.id), isNotEmpty);
-    expect(store.versionsFor(source.id), isNotEmpty);
+      expect(loadedTarget.title, 'New title');
+      final loadedSource = store.noteById(source.id)!;
+      expect(
+        NoteDocument.parse(loadedSource.body).content,
+        contains('[[id:target|New title]]'),
+      );
+      expect(store.resolveWikiTarget('id:target')?.id, target.id);
+      expect(store.versionsFor(target.id), isNotEmpty);
+      expect(store.versionsFor(source.id), isNotEmpty);
 
-    final expectedSource = undo.appliedSnapshots.singleWhere(
-      (snapshot) => snapshot.noteId == source.id,
-    );
-    loadedSource.body = '${loadedSource.body} changed';
-    await expectLater(
-      store.undoWikiRename(undo),
-      throwsA(isA<StateError>()),
-    );
-    loadedSource.body = expectedSource.body;
+      final expectedSource = undo.appliedSnapshots.singleWhere(
+        (snapshot) => snapshot.noteId == source.id,
+      );
+      loadedSource.body = '${loadedSource.body} changed';
+      await expectLater(store.undoWikiRename(undo), throwsA(isA<StateError>()));
+      loadedSource.body = expectedSource.body;
 
-    await store.undoWikiRename(undo);
-    expect(loadedTarget.title, 'Old title');
-    expect(
-      NoteDocument.parse(loadedSource.body).content,
-      'Before [[Old title]] after.',
-    );
+      await store.undoWikiRename(undo);
+      expect(loadedTarget.title, 'Old title');
+      expect(
+        NoteDocument.parse(loadedSource.body).content,
+        'Before [[Old title]] after.',
+      );
 
-    await store.repairWikiLink(
-      source: loadedSource,
-      rawTarget: 'Old title',
-      target: loadedTarget,
-    );
-    expect(
-      NoteDocument.parse(loadedSource.body).content,
-      'Before [[id:target|Old title]] after.',
-    );
-    store.dispose();
-  });
+      await store.repairWikiLink(
+        source: loadedSource,
+        rawTarget: 'Old title',
+        target: loadedTarget,
+      );
+      expect(
+        NoteDocument.parse(loadedSource.body).content,
+        'Before [[id:target|Old title]] after.',
+      );
+      store.dispose();
+    },
+  );
 
   test('link health distinguishes missing and ambiguous targets', () async {
     final projectA = Project(id: 'a', title: 'A', emoji: '🧪');

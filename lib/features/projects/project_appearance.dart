@@ -129,9 +129,10 @@ class ProjectAppearancePreferences {
       iconFileName:
           clearIconFileName ? null : iconFileName ?? this.iconFileName,
       iconRevision: iconRevision ?? this.iconRevision,
-      backgroundFileName: clearBackgroundFileName
-          ? null
-          : backgroundFileName ?? this.backgroundFileName,
+      backgroundFileName:
+          clearBackgroundFileName
+              ? null
+              : backgroundFileName ?? this.backgroundFileName,
       backgroundRevision: backgroundRevision ?? this.backgroundRevision,
       wallpaperOpacity: _clamp(
         wallpaperOpacity ?? this.wallpaperOpacity,
@@ -144,16 +145,8 @@ class ProjectAppearancePreferences {
         0.85,
       ),
       panelOpacity: _clamp(panelOpacity ?? this.panelOpacity, 0.35, 1),
-      panelBlurSigma: _clamp(
-        panelBlurSigma ?? this.panelBlurSigma,
-        0,
-        30,
-      ),
-      sparkleIntensity: _clamp(
-        sparkleIntensity ?? this.sparkleIntensity,
-        0,
-        2,
-      ),
+      panelBlurSigma: _clamp(panelBlurSigma ?? this.panelBlurSigma, 0, 30),
+      sparkleIntensity: _clamp(sparkleIntensity ?? this.sparkleIntensity, 0, 2),
     );
   }
 
@@ -201,20 +194,17 @@ class ProjectAppearancePreferences {
       ),
       surfaceStyle: ChronicleSurfaceStyle.fromId(json['surfaceStyle']),
       iconFileName: _cleanOptionalText(json['iconFileName']),
-      iconRevision: rawIconRevision is int
-          ? rawIconRevision
-          : int.tryParse(rawIconRevision?.toString() ?? '') ?? 0,
+      iconRevision:
+          rawIconRevision is int
+              ? rawIconRevision
+              : int.tryParse(rawIconRevision?.toString() ?? '') ?? 0,
       backgroundFileName: _cleanOptionalText(json['backgroundFileName']),
-      backgroundRevision: rawBackgroundRevision is int
-          ? rawBackgroundRevision
-          : int.tryParse(rawBackgroundRevision?.toString() ?? '') ?? 0,
+      backgroundRevision:
+          rawBackgroundRevision is int
+              ? rawBackgroundRevision
+              : int.tryParse(rawBackgroundRevision?.toString() ?? '') ?? 0,
       wallpaperOpacity: _readDouble(json['wallpaperOpacity'], 1, 0.1, 1),
-      wallpaperOverlay: _readDouble(
-        json['wallpaperOverlay'],
-        0.18,
-        0,
-        0.85,
-      ),
+      wallpaperOverlay: _readDouble(json['wallpaperOverlay'], 0.18, 0, 0.85),
       panelOpacity: _readDouble(json['panelOpacity'], 1, 0.35, 1),
       panelBlurSigma: _readDouble(json['panelBlurSigma'], 0, 0, 30),
       sparkleIntensity: _readDouble(json['sparkleIntensity'], 1, 0, 2),

@@ -612,7 +612,6 @@ class NoteVersion {
   }
 }
 
-
 class CitationSource {
   CitationSource({
     required this.id,
@@ -860,9 +859,10 @@ class AppData {
       throw FormatException('Неизвестный формат резервной копии: $format.');
     }
     final rawVersion = json['version'];
-    final version = rawVersion == null
-        ? minimumReadableBackupFormatVersion
-        : _readInt(rawVersion, fallback: 0);
+    final version =
+        rawVersion == null
+            ? minimumReadableBackupFormatVersion
+            : _readInt(rawVersion, fallback: 0);
     if (version < minimumReadableBackupFormatVersion) {
       throw FormatException('Некорректная версия резервной копии: $version.');
     }
@@ -917,9 +917,7 @@ class AppData {
       citationSources:
           (json['citationSources'] as List<dynamic>? ?? const [])
               .map(
-                (item) => CitationSource.fromJson(
-                  item as Map<String, dynamic>,
-                ),
+                (item) => CitationSource.fromJson(item as Map<String, dynamic>),
               )
               .toList(),
     );

@@ -20,13 +20,16 @@ void main() {
   test('laboratory templates are included without replacing existing ones', () {
     final ids = noteTemplates.map((template) => template.id).toSet();
 
-    expect(ids, containsAll(<String>[
-      'blank',
-      'lecture',
-      'research',
-      'literature',
-      'meeting',
-    ]));
+    expect(
+      ids,
+      containsAll(<String>[
+        'blank',
+        'lecture',
+        'research',
+        'literature',
+        'meeting',
+      ]),
+    );
     expect(ids, containsAll(laboratoryNoteTemplates.map((item) => item.id)));
   });
 
@@ -47,10 +50,7 @@ void main() {
     };
 
     expect(byId['sample']!.content, contains('## История образца'));
-    expect(
-      byId['protein_purification']!.content,
-      contains('## Хроматография'),
-    );
+    expect(byId['protein_purification']!.content, contains('## Хроматография'));
     expect(byId['nmr_experiment']!.content, contains('## Спектрометр и зонд'));
     expect(byId['solution']!.content, contains('## Расчёт состава'));
   });

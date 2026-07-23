@@ -78,23 +78,22 @@ void main() {
     ReleaseReadinessReport build({
       required int backups,
       int pendingChanges = 0,
-    }) =>
-        ReleaseReadinessReport(
-          checkedAt: DateTime.utc(2026, 7, 23),
-          integrity: integrity,
-          backupRoundTrip: roundTrip,
-          vaultStatus: VaultStatus(
-            supported: true,
-            rootPath: '',
-            noteCount: 0,
-            fileCount: 0,
-            formatVersion: 2,
-            pendingChangeCount: pendingChanges,
-          ),
-          undoDepth: 0,
-          automaticBackupCount: backups,
-          pendingConflictCount: 0,
-        );
+    }) => ReleaseReadinessReport(
+      checkedAt: DateTime.utc(2026, 7, 23),
+      integrity: integrity,
+      backupRoundTrip: roundTrip,
+      vaultStatus: VaultStatus(
+        supported: true,
+        rootPath: '',
+        noteCount: 0,
+        fileCount: 0,
+        formatVersion: 2,
+        pendingChangeCount: pendingChanges,
+      ),
+      undoDepth: 0,
+      automaticBackupCount: backups,
+      pendingConflictCount: 0,
+    );
 
     expect(build(backups: 0).ready, isFalse);
     expect(build(backups: 1).ready, isTrue);

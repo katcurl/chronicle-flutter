@@ -71,11 +71,7 @@ void main() {
       ],
     );
 
-    PublicationWorkspaceCodec.write(
-      publication,
-      workspace,
-      <Note>[source],
-    );
+    PublicationWorkspaceCodec.write(publication, workspace, <Note>[source]);
     final restored = PublicationWorkspaceCodec.read(
       Note.fromDb(publication.toDb()),
       idFactory: nextId,
@@ -98,10 +94,7 @@ void main() {
 
     expect(reference, isNotNull);
     expect(reference!.presentation.caption, 'RMSD trajectory');
-    expect(
-      reference.toMarkdown(),
-      contains('caption=RMSD%20trajectory'),
-    );
+    expect(reference.toMarkdown(), contains('caption=RMSD%20trajectory'));
   });
 
   test('assembly resolves a live heading and builds document apparatus', () {
@@ -162,7 +155,10 @@ This paragraph must not be included.
 
     expect(assembly.issues, isEmpty);
     expect(assembly.markdown, contains('The metastable transition is visible'));
-    expect(assembly.markdown, isNot(contains('This paragraph must not be included')));
+    expect(
+      assembly.markdown,
+      isNot(contains('This paragraph must not be included')),
+    );
     expect(
       assembly.markdown,
       contains(
@@ -211,10 +207,7 @@ This paragraph must not be included.
     );
 
     expect(assembly.abbreviations, containsPair('MD', 'molecular dynamics'));
-    expect(
-      assembly.markdown,
-      contains('- **MD** — molecular dynamics'),
-    );
+    expect(assembly.markdown, contains('- **MD** — molecular dynamics'));
   });
 
   test('unrelated notes do not add abbreviations to a publication', () {
@@ -226,7 +219,8 @@ This paragraph must not be included.
     final unrelated = sourceNote(
       id: 'source-2',
       title: 'Unrelated analysis',
-      content: '## Methods\n\nRoot mean square deviation (RMSD) was calculated.',
+      content:
+          '## Methods\n\nRoot mean square deviation (RMSD) was calculated.',
     );
     final workspace = PublicationWorkspace(
       kind: PublicationKind.article,

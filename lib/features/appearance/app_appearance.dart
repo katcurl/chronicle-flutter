@@ -269,9 +269,10 @@ class AppAppearancePreferences {
       panelPalette: panelPalette ?? this.panelPalette,
       surfaceStyle: surfaceStyle ?? this.surfaceStyle,
       brightnessMode: brightnessMode ?? this.brightnessMode,
-      backgroundFileName: clearBackgroundFileName
-          ? null
-          : backgroundFileName ?? this.backgroundFileName,
+      backgroundFileName:
+          clearBackgroundFileName
+              ? null
+              : backgroundFileName ?? this.backgroundFileName,
       backgroundRevision: backgroundRevision ?? this.backgroundRevision,
       wallpaperOpacity: _clampDouble(
         wallpaperOpacity ?? this.wallpaperOpacity,
@@ -283,11 +284,7 @@ class AppAppearancePreferences {
         0,
         0.85,
       ),
-      panelOpacity: _clampDouble(
-        panelOpacity ?? this.panelOpacity,
-        0.35,
-        1,
-      ),
+      panelOpacity: _clampDouble(panelOpacity ?? this.panelOpacity, 0.35, 1),
       panelBlurSigma: _clampDouble(
         panelBlurSigma ?? this.panelBlurSigma,
         0,
@@ -336,16 +333,12 @@ class AppAppearancePreferences {
       surfaceStyle: ChronicleSurfaceStyle.fromId(json['surfaceStyle']),
       brightnessMode: ChronicleBrightnessMode.fromId(json['brightnessMode']),
       backgroundFileName: _cleanOptionalText(json['backgroundFileName']),
-      backgroundRevision: rawRevision is int
-          ? rawRevision
-          : int.tryParse(rawRevision?.toString() ?? '') ?? 0,
+      backgroundRevision:
+          rawRevision is int
+              ? rawRevision
+              : int.tryParse(rawRevision?.toString() ?? '') ?? 0,
       wallpaperOpacity: _readDouble(json['wallpaperOpacity'], 1, 0.1, 1),
-      wallpaperOverlay: _readDouble(
-        json['wallpaperOverlay'],
-        0.18,
-        0,
-        0.85,
-      ),
+      wallpaperOverlay: _readDouble(json['wallpaperOverlay'], 0.18, 0, 0.85),
       panelOpacity: _readDouble(json['panelOpacity'], 1, 0.35, 1),
       panelBlurSigma: _readDouble(json['panelBlurSigma'], 0, 0, 30),
       sparkleIntensity: _readDouble(json['sparkleIntensity'], 1, 0, 2),

@@ -59,20 +59,16 @@ class NoteImagePresentation {
     var caption = '';
     var figureId = '';
 
-    final metadata = value
-        .substring(NoteImageSyntax.metadataPrefix.length)
-        .trim();
-    final fieldPattern = RegExp(
-      r'(?:^|\s)(width|align|caption|figure)=',
-    );
+    final metadata =
+        value.substring(NoteImageSyntax.metadataPrefix.length).trim();
+    final fieldPattern = RegExp(r'(?:^|\s)(width|align|caption|figure)=');
     final fields = fieldPattern.allMatches(metadata).toList();
 
     for (var index = 0; index < fields.length; index += 1) {
       final field = fields[index];
       final key = field.group(1)!;
-      final rawEnd = index + 1 < fields.length
-          ? fields[index + 1].start
-          : metadata.length;
+      final rawEnd =
+          index + 1 < fields.length ? fields[index + 1].start : metadata.length;
       final raw = metadata.substring(field.end, rawEnd).trim();
       if (raw.isEmpty) continue;
 
@@ -193,10 +189,7 @@ class NoteImageSyntax {
   static const List<int> widthPresets = <int>[25, 50, 75, 100];
 
   static int normalizeWidthPercent(num value) {
-    return value
-        .round()
-        .clamp(minWidthPercent, maxWidthPercent)
-        .toInt();
+    return value.round().clamp(minWidthPercent, maxWidthPercent).toInt();
   }
 
   static final RegExp _imagePattern = RegExp(
@@ -270,9 +263,6 @@ class NoteImageSyntax {
   }
 
   static String _unescapeAlt(String value) {
-    return value.replaceAllMapped(
-      RegExp(r'\\(.)'),
-      (match) => match.group(1)!,
-    );
+    return value.replaceAllMapped(RegExp(r'\\(.)'), (match) => match.group(1)!);
   }
 }

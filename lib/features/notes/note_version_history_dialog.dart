@@ -77,20 +77,23 @@ class _NoteVersionHistoryDialogState extends State<NoteVersionHistoryDialog> {
     if (query.isEmpty) {
       return widget.versions;
     }
-    return widget.versions.where((version) {
-      final searchable = <String>[
-        version.title,
-        version.reason,
-        version.noteType,
-        version.status,
-        version.folderPath,
-        ...version.tags,
-        ...version.properties.keys,
-        ...version.properties.values,
-        _formatDate(version.createdAt),
-      ].join(' ').toLowerCase();
-      return searchable.contains(query);
-    }).toList(growable: false);
+    return widget.versions
+        .where((version) {
+          final searchable =
+              <String>[
+                version.title,
+                version.reason,
+                version.noteType,
+                version.status,
+                version.folderPath,
+                ...version.tags,
+                ...version.properties.keys,
+                ...version.properties.values,
+                _formatDate(version.createdAt),
+              ].join(' ').toLowerCase();
+          return searchable.contains(query);
+        })
+        .toList(growable: false);
   }
 
   NoteVersion? get _selectedVersion {
@@ -168,9 +171,7 @@ class _NoteVersionHistoryDialogState extends State<NoteVersionHistoryDialog> {
                         child: _buildVersionList(context, versions),
                       ),
                       const VerticalDivider(width: 1),
-                      Expanded(
-                        child: _buildVersionDetails(context, selected),
-                      ),
+                      Expanded(child: _buildVersionDetails(context, selected)),
                     ],
                   );
                 },
@@ -182,10 +183,7 @@ class _NoteVersionHistoryDialogState extends State<NoteVersionHistoryDialog> {
     );
   }
 
-  Widget _buildVersionList(
-    BuildContext context,
-    List<NoteVersion> versions,
-  ) {
+  Widget _buildVersionList(BuildContext context, List<NoteVersion> versions) {
     return Column(
       children: [
         Padding(
@@ -219,9 +217,8 @@ class _NoteVersionHistoryDialogState extends State<NoteVersionHistoryDialog> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         onTap:
-                            () => setState(
-                              () => _selectedVersionId = version.id,
-                            ),
+                            () =>
+                                setState(() => _selectedVersionId = version.id),
                       );
                     },
                   ),
@@ -297,10 +294,7 @@ class _NoteVersionHistoryDialogState extends State<NoteVersionHistoryDialog> {
             ),
           ),
           const TabBar(
-            tabs: [
-              Tab(text: 'Изменения'),
-              Tab(text: 'Содержимое версии'),
-            ],
+            tabs: [Tab(text: 'Изменения'), Tab(text: 'Содержимое версии')],
           ),
           Expanded(
             child: TabBarView(
@@ -428,10 +422,9 @@ class _VersionDiffView extends StatelessWidget {
       return const Center(child: Text('Текст заметки не изменился'));
     }
     final scheme = Theme.of(context).colorScheme;
-    final monospace = Theme.of(context).textTheme.bodySmall?.copyWith(
-      fontFamily: 'monospace',
-      height: 1.35,
-    );
+    final monospace = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace', height: 1.35);
     return SelectionArea(
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8),

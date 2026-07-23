@@ -9,15 +9,15 @@ class NoteTableModel {
     required List<String> headers,
     required List<List<String>> rows,
     List<NoteTableAlignment>? alignments,
-  })  : headers = List<String>.from(headers),
-        rows = [for (final row in rows) List<String>.from(row)],
-        alignments = List<NoteTableAlignment>.from(
-          alignments ??
-              List<NoteTableAlignment>.filled(
-                headers.length,
-                NoteTableAlignment.left,
-              ),
-        ) {
+  }) : headers = List<String>.from(headers),
+       rows = [for (final row in rows) List<String>.from(row)],
+       alignments = List<NoteTableAlignment>.from(
+         alignments ??
+             List<NoteTableAlignment>.filled(
+               headers.length,
+               NoteTableAlignment.left,
+             ),
+       ) {
     _normalizeShape();
   }
 
@@ -94,8 +94,10 @@ class ClipboardTableData {
 
   final List<List<String>> rows;
 
-  int get columnCount =>
-      rows.fold<int>(0, (maximum, row) => row.length > maximum ? row.length : maximum);
+  int get columnCount => rows.fold<int>(
+    0,
+    (maximum, row) => row.length > maximum ? row.length : maximum,
+  );
 
   bool get isEmpty => rows.isEmpty || columnCount == 0;
 }
@@ -130,8 +132,8 @@ class NoteTableSyntax {
         normalized.startsWith(':') && normalized.endsWith(':')
             ? NoteTableAlignment.center
             : normalized.endsWith(':')
-                ? NoteTableAlignment.right
-                : NoteTableAlignment.left,
+            ? NoteTableAlignment.right
+            : NoteTableAlignment.left,
       );
     }
     final rows = <List<String>>[];
@@ -219,18 +221,22 @@ class NoteTableSyntax {
       }
       rows.add(_parseDelimitedLine(line, delimiter));
     }
-    final width = rows.fold<int>(0, (maximum, row) => row.length > maximum ? row.length : maximum);
+    final width = rows.fold<int>(
+      0,
+      (maximum, row) => row.length > maximum ? row.length : maximum,
+    );
     if (width == 0) {
       return const ClipboardTableData(rows: []);
     }
     final safeWidth = width.clamp(minColumns, maxColumns).toInt();
-    final safeRows = rows.take(maxRows + 1).map((row) {
-      final cells = row.take(safeWidth).toList();
-      while (cells.length < safeWidth) {
-        cells.add('');
-      }
-      return cells;
-    }).toList();
+    final safeRows =
+        rows.take(maxRows + 1).map((row) {
+          final cells = row.take(safeWidth).toList();
+          while (cells.length < safeWidth) {
+            cells.add('');
+          }
+          return cells;
+        }).toList();
     return ClipboardTableData(rows: safeRows);
   }
 
@@ -280,13 +286,14 @@ class NoteTableSyntax {
   }
 
   static String _encodeCell(String value) {
-    final normalized = value
-        .replaceAll('\r\n', '\n')
-        .replaceAll('\r', '\n')
-        .replaceAll('\\', r'\\')
-        .replaceAll('|', r'\|')
-        .replaceAll('\n', '<br>')
-        .trim();
+    final normalized =
+        value
+            .replaceAll('\r\n', '\n')
+            .replaceAll('\r', '\n')
+            .replaceAll('\\', r'\\')
+            .replaceAll('|', r'\|')
+            .replaceAll('\n', '<br>')
+            .trim();
     return normalized.isEmpty ? ' ' : normalized;
   }
 
@@ -299,7 +306,11 @@ class NoteTableSyntax {
       return false;
     }
     var backslashes = 0;
-    for (var index = value.length - 2; index >= 0 && value[index] == '\\'; index -= 1) {
+    for (
+      var index = value.length - 2;
+      index >= 0 && value[index] == '\\';
+      index -= 1
+    ) {
       backslashes += 1;
     }
     return backslashes.isEven;

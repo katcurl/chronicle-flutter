@@ -27,56 +27,61 @@ void main() {
     return value;
   }
 
-  test('note archive includes portable documents and referenced assets', () async {
-    final source = note(
-      id: 'note-1',
-      title: 'RMSD analysis',
-      content: '''# Results
+  test(
+    'note archive includes portable documents and referenced assets',
+    () async {
+      final source = note(
+        id: 'note-1',
+        title: 'RMSD analysis',
+        content: '''# Results
 
 ![Plot](../../Attachments/plot--abc.png "chronicle-image width=50 align=center caption=RMSD")
 
 [Data](../../Attachments/data--def.csv)
 ''',
-    );
-    final bytesByPath = <String, Uint8List>{
-      'Attachments/plot--abc.png': Uint8List.fromList(<int>[137, 80, 78, 71]),
-      'Attachments/data--def.csv': Uint8List.fromList(utf8.encode('x,y\n1,2')),
-    };
+      );
+      final bytesByPath = <String, Uint8List>{
+        'Attachments/plot--abc.png': Uint8List.fromList(<int>[137, 80, 78, 71]),
+        'Attachments/data--def.csv': Uint8List.fromList(
+          utf8.encode('x,y\n1,2'),
+        ),
+      };
 
-    final payload = await NoteExportComposer(
-      readAttachment: (path) async => bytesByPath[path],
-    ).exportNote(
-      note: source,
-      projectTitle: 'ORF9b',
-      format: ChronicleExportFormat.portableArchive,
-    );
+      final payload = await NoteExportComposer(
+        readAttachment: (path) async => bytesByPath[path],
+      ).exportNote(
+        note: source,
+        projectTitle: 'ORF9b',
+        format: ChronicleExportFormat.portableArchive,
+      );
 
-    expect(payload.extension, 'zip');
-    expect(payload.assetCount, 2);
-    expect(payload.missingAttachments, isEmpty);
+      expect(payload.extension, 'zip');
+      expect(payload.assetCount, 2);
+      expect(payload.missingAttachments, isEmpty);
 
-    final entries = StoredZipArchiveBuilder.readStoredEntries(payload.bytes);
-    expect(
-      entries.keys,
-      containsAll(<String>[
-        'RMSD analysis.md',
-        'RMSD analysis.html',
-        'manifest.json',
-        'assets/plot--abc.png',
-        'assets/data--def.csv',
-      ]),
-    );
-    final markdown = utf8.decode(entries['RMSD analysis.md']!);
-    expect(markdown, contains('chronicle_id: "note-1"'));
-    expect(markdown, contains('assets/plot--abc.png'));
-    final html = utf8.decode(entries['RMSD analysis.html']!);
-    final normalizedHtml = html.replaceAll('&#47;', '/');
-    expect(
-      normalizedHtml,
-      contains('<figure class="align-center" style="width:50%">'),
-    );
-    expect(normalizedHtml, contains('assets/plot--abc.png'));
-  });
+      final entries = StoredZipArchiveBuilder.readStoredEntries(payload.bytes);
+      expect(
+        entries.keys,
+        containsAll(<String>[
+          'RMSD analysis.md',
+          'RMSD analysis.html',
+          'manifest.json',
+          'assets/plot--abc.png',
+          'assets/data--def.csv',
+        ]),
+      );
+      final markdown = utf8.decode(entries['RMSD analysis.md']!);
+      expect(markdown, contains('chronicle_id: "note-1"'));
+      expect(markdown, contains('assets/plot--abc.png'));
+      final html = utf8.decode(entries['RMSD analysis.html']!);
+      final normalizedHtml = html.replaceAll('&#47;', '/');
+      expect(
+        normalizedHtml,
+        contains('<figure class="align-center" style="width:50%">'),
+      );
+      expect(normalizedHtml, contains('assets/plot--abc.png'));
+    },
+  );
 
   test('standalone HTML embeds images as data URIs', () async {
     final source = note(
@@ -85,8 +90,7 @@ void main() {
       content: '![Plot](../../Attachments/plot.png)',
     );
     final payload = await NoteExportComposer(
-      readAttachment:
-          (_) async => Uint8List.fromList(<int>[137, 80, 78, 71]),
+      readAttachment: (_) async => Uint8List.fromList(<int>[137, 80, 78, 71]),
     ).exportNote(
       note: source,
       projectTitle: 'ORF9b',

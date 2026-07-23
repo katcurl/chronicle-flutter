@@ -220,9 +220,7 @@ class DriftAppRepository implements AppRepository {
       return decoded
           .whereType<Map>()
           .map(
-            (item) => CitationSource.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
+            (item) => CitationSource.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList();
     } on Object {

@@ -60,13 +60,15 @@ void main() {
         id: 'note-a',
         title: 'A',
         projectId: 'project',
-        body: '![plot](Attachments/result%20plot.png)\n[file](../Attachments/data.csv)',
+        body:
+            '![plot](Attachments/result%20plot.png)\n[file](../Attachments/data.csv)',
       ),
       Note(
         id: 'note-b',
         title: 'B',
         projectId: 'project',
-        body: '[same](Attachments/result%20plot.png)\n[web](https://example.com)',
+        body:
+            '[same](Attachments/result%20plot.png)\n[web](https://example.com)',
       ),
     ];
 

@@ -49,12 +49,12 @@ class DataIntegrityReport {
   final int entryCount;
   final int citationCount;
 
-  int get errorCount => issues
-      .where((issue) => issue.severity == IntegritySeverity.error)
-      .length;
-  int get warningCount => issues
-      .where((issue) => issue.severity == IntegritySeverity.warning)
-      .length;
+  int get errorCount =>
+      issues.where((issue) => issue.severity == IntegritySeverity.error).length;
+  int get warningCount =>
+      issues
+          .where((issue) => issue.severity == IntegritySeverity.warning)
+          .length;
   bool get healthy => errorCount == 0;
   bool get clean => errorCount == 0 && warningCount == 0;
 }
@@ -216,10 +216,7 @@ class ChronicleIntegrityAuditor {
     );
 
     final brokenTaskNotes = data.tasks
-        .where(
-          (task) =>
-              task.noteId != null && !noteIds.contains(task.noteId),
-        )
+        .where((task) => task.noteId != null && !noteIds.contains(task.noteId))
         .map((task) => task.id)
         .toList(growable: false);
     _addOrphanIssue(
@@ -334,9 +331,10 @@ class ChronicleIntegrityAuditor {
       final valid = firstCanonical == secondCanonical;
       return BackupRoundTripReport(
         valid: valid,
-        message: valid
-            ? 'Экспорт и повторный импорт сохраняют все сущности без изменений.'
-            : 'Повторный импорт изменил содержимое резервной копии.',
+        message:
+            valid
+                ? 'Экспорт и повторный импорт сохраняют все сущности без изменений.'
+                : 'Повторный импорт изменил содержимое резервной копии.',
         formatVersion: AppData.formatVersionOf(raw),
         projectCount: first.projects.length,
         taskCount: first.tasks.length,
@@ -375,18 +373,9 @@ class ChronicleIntegrityAuditor {
       'tasks': sorted(data.tasks, (item) => item.toJson()),
       'notes': sorted(data.notes, (item) => item.toJson()),
       'entries': sorted(data.entries, (item) => item.toJson()),
-      'noteLinks': sorted(
-        data.noteLinks,
-        (item) => item.toJson(),
-      ),
-      'noteVersions': sorted(
-        data.noteVersions,
-        (item) => item.toJson(),
-      ),
-      'citationSources': sorted(
-        data.citationSources,
-        (item) => item.toJson(),
-      ),
+      'noteLinks': sorted(data.noteLinks, (item) => item.toJson()),
+      'noteVersions': sorted(data.noteVersions, (item) => item.toJson()),
+      'citationSources': sorted(data.citationSources, (item) => item.toJson()),
     };
     return jsonEncode(snapshot);
   }
@@ -406,9 +395,10 @@ class ChronicleIntegrityAuditor {
       IntegrityIssue(
         code: code,
         title: 'Неуникальные идентификаторы $label',
-        details: emptyCount > 0
-            ? 'Найдены пустые идентификаторы: $emptyCount.'
-            : 'Повторяются: ${duplicateIds.join(', ')}.',
+        details:
+            emptyCount > 0
+                ? 'Найдены пустые идентификаторы: $emptyCount.'
+                : 'Повторяются: ${duplicateIds.join(', ')}.',
         severity: IntegritySeverity.error,
         entityIds: duplicateIds,
       ),

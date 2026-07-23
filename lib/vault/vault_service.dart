@@ -63,7 +63,8 @@ class VaultService {
       final current = await inspect();
       return current.copyWith(
         noteCount: data.notes.length,
-        message: current.message ??
+        message:
+            current.message ??
             'Совместимость Vault нельзя безопасно подтвердить. '
                 'Автоматическая запись отключена, чтобы не повредить данные.',
         readOnly: true,
@@ -153,12 +154,13 @@ class VaultService {
         formatVersion: compatibility.formatVersion,
         minimumReaderVersion: compatibility.minimumReaderVersion,
         readOnly: compatibility.readOnly,
-        message: compatibility.readOnly
-            ? 'Vault создан более новой версией Chronicle: формат '
-                '${compatibility.formatVersion}, тогда как эта версия '
-                'поддерживает формат до $currentVaultFormatVersion. '
-                'Открыт только для чтения.'
-            : null,
+        message:
+            compatibility.readOnly
+                ? 'Vault создан более новой версией Chronicle: формат '
+                    '${compatibility.formatVersion}, тогда как эта версия '
+                    'поддерживает формат до $currentVaultFormatVersion. '
+                    'Открыт только для чтения.'
+                : null,
       );
     } on Object {
       return VaultStatus(
@@ -508,9 +510,7 @@ class VaultService {
     );
   }
 
-  Future<Uint8List?> readAttachmentForSync(
-    AttachmentSyncEntry entry,
-  ) async {
+  Future<Uint8List?> readAttachmentForSync(AttachmentSyncEntry entry) async {
     _validateActiveSyncEntry(entry);
     final rootPath = await _backend.resolveRootPath();
     if (rootPath == null || rootPath.isEmpty) {
@@ -1554,10 +1554,7 @@ class VaultService {
     }
   }
 
-  void _validateAttachmentBytes(
-    AttachmentSyncEntry entry,
-    Uint8List bytes,
-  ) {
+  void _validateAttachmentBytes(AttachmentSyncEntry entry, Uint8List bytes) {
     if (bytes.length != entry.byteLength) {
       throw const FormatException('Размер вложения не совпадает с манифестом.');
     }
@@ -1768,8 +1765,7 @@ class _VaultManifestCompatibility {
     final formatVersion = _manifestInt(json['version']);
     final minimumReaderVersion = _manifestInt(json['minimumReaderVersion']);
     if (formatVersion < VaultService.minimumReadableVaultFormatVersion ||
-        minimumReaderVersion <
-            VaultService.minimumReadableVaultFormatVersion) {
+        minimumReaderVersion < VaultService.minimumReadableVaultFormatVersion) {
       throw const FormatException('Invalid Vault compatibility version.');
     }
     return _VaultManifestCompatibility(

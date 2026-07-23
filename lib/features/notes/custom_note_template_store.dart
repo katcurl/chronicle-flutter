@@ -78,11 +78,12 @@ class CustomNoteTemplateStore {
     }
 
     final normalized = <String, Object?>{
-      for (final entry in decoded.entries)
-        entry.key.toString(): entry.value,
+      for (final entry in decoded.entries) entry.key.toString(): entry.value,
     };
     if (normalized['format'] != exportFormat) {
-      throw const FormatException('Файл создан не библиотекой шаблонов Chronicle.');
+      throw const FormatException(
+        'Файл создан не библиотекой шаблонов Chronicle.',
+      );
     }
     if (normalized['version'] != exportVersion) {
       throw const FormatException('Версия файла шаблонов не поддерживается.');
@@ -121,8 +122,7 @@ class CustomNoteTemplateStore {
         continue;
       }
       final normalized = <String, Object?>{
-        for (final entry in item.entries)
-          entry.key.toString(): entry.value,
+        for (final entry in item.entries) entry.key.toString(): entry.value,
       };
       final template = NoteTemplate.fromJson(normalized);
       if (!isValid(template) || !seenIds.add(template.id)) {

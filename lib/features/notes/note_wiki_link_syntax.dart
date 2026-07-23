@@ -18,7 +18,9 @@ class NoteWikiTarget {
     final withAnchor = raw.trim();
     final anchorIndex = withAnchor.indexOf('#');
     final normalized =
-        anchorIndex < 0 ? withAnchor : withAnchor.substring(0, anchorIndex).trim();
+        anchorIndex < 0
+            ? withAnchor
+            : withAnchor.substring(0, anchorIndex).trim();
     if (normalized.toLowerCase().startsWith('id:')) {
       final id = normalized.substring(3).trim();
       if (id.isNotEmpty) {
@@ -31,10 +33,7 @@ class NoteWikiTarget {
       final project = normalized.substring(0, separator).trim();
       final title = normalized.substring(separator + 2).trim();
       if (project.isNotEmpty && title.isNotEmpty) {
-        return NoteWikiTarget(
-          projectTitle: project,
-          noteTitle: title,
-        );
+        return NoteWikiTarget(projectTitle: project, noteTitle: title);
       }
     }
     return NoteWikiTarget(noteTitle: normalized);
@@ -151,10 +150,7 @@ class NoteWikiLinkSyntax {
     });
   }
 
-  static NoteWikiAutocompleteQuery? autocompleteAt(
-    String text,
-    int cursor,
-  ) {
+  static NoteWikiAutocompleteQuery? autocompleteAt(String text, int cursor) {
     if (cursor < 2 || cursor > text.length) {
       return null;
     }
@@ -229,11 +225,12 @@ class NoteWikiLinkSyntax {
     for (final link in all(excerpt).toList().reversed) {
       excerpt = excerpt.replaceRange(link.start, link.end, link.visibleLabel);
     }
-    excerpt = excerpt
-        .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
-        .replaceAll(RegExp(r'[#>*_`~]'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    excerpt =
+        excerpt
+            .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
+            .replaceAll(RegExp(r'[#>*_`~]'), ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
     if (start > 0 && excerpt.isNotEmpty) {
       excerpt = '…$excerpt';
     }

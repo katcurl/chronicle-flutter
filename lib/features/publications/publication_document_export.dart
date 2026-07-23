@@ -27,7 +27,8 @@ class PublicationDocumentExporter {
     return switch (format) {
       ChronicleExportFormat.docx => docx(title: title, markdown: markdown),
       ChronicleExportFormat.pdf => pdf(title: title, markdown: markdown),
-      _ => throw ArgumentError.value(
+      _ =>
+        throw ArgumentError.value(
           format,
           'format',
           'PublicationDocumentExporter supports only DOCX and PDF.',
@@ -75,16 +76,17 @@ class PublicationDocumentExporter {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.fromLTRB(48, 48, 48, 54),
         build: (_) => renderer.widgets(),
-        footer: (context) => pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Text(
-            '${context.pageNumber} / ${context.pagesCount}',
-            style: const pw.TextStyle(
-              fontSize: 8.5,
-              color: PdfColors.grey600,
+        footer:
+            (context) => pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Text(
+                '${context.pageNumber} / ${context.pagesCount}',
+                style: const pw.TextStyle(
+                  fontSize: 8.5,
+                  color: PdfColors.grey600,
+                ),
+              ),
             ),
-          ),
-        ),
       ),
     );
     final stem = NoteExportComposer.safeFileStem(title, fallback: 'document');
@@ -224,9 +226,7 @@ class PublicationDocumentExporter {
         );
       }
     }
-    throw StateError(
-      'Не найден системный шрифт с поддержкой Unicode для PDF.',
-    );
+    throw StateError('Не найден системный шрифт с поддержкой Unicode для PDF.');
   }
 }
 
@@ -284,10 +284,11 @@ class _MarkdownParser {
           _appendList(node, output, ordered: true, depth: 0);
           break;
         case 'pre':
-          final codeNode = node.children
-              ?.whereType<md.Element>()
-              .where((element) => element.tag == 'code')
-              .firstOrNull;
+          final codeNode =
+              node.children
+                  ?.whereType<md.Element>()
+                  .where((element) => element.tag == 'code')
+                  .firstOrNull;
           output.add(
             _CodeBlock(
               codeNode?.textContent ?? node.textContent,
@@ -310,10 +311,7 @@ class _MarkdownParser {
     }
   }
 
-  void _appendParagraph(
-    List<md.Node>? nodes,
-    List<_MarkdownBlock> output,
-  ) {
+  void _appendParagraph(List<md.Node>? nodes, List<_MarkdownBlock> output) {
     final inlines = _inlineNodes(nodes);
     final buffer = <_Inline>[];
 
@@ -391,8 +389,7 @@ class _MarkdownParser {
       if (node.tag == 'tr') {
         final cells = <List<_Inline>>[];
         for (final child in node.children ?? const <md.Node>[]) {
-          if (child is md.Element &&
-              (child.tag == 'th' || child.tag == 'td')) {
+          if (child is md.Element && (child.tag == 'th' || child.tag == 'td')) {
             cells.add(_inlineNodes(child.children));
           }
         }
@@ -445,10 +442,7 @@ class _MarkdownParser {
           break;
         case 'code':
           result.add(
-            _Inline.text(
-              node.textContent,
-              style: style.copyWith(code: true),
-            ),
+            _Inline.text(node.textContent, style: style.copyWith(code: true)),
           );
           break;
         case 'a':
@@ -467,13 +461,13 @@ class _MarkdownParser {
           final title = node.attributes['title'];
           var presentation = NoteImagePresentation.fromMarkdownTitle(title);
           if ((title ?? '').trim().isNotEmpty &&
-              !(title ?? '').trim().startsWith(NoteImageSyntax.metadataPrefix)) {
+              !(title ?? '').trim().startsWith(
+                NoteImageSyntax.metadataPrefix,
+              )) {
             presentation = presentation.copyWith(caption: title!.trim());
           }
           presentation = presentation.copyWith(
-            caption: NoteImageSyntax.decodeMetadataValue(
-              presentation.caption,
-            ),
+            caption: NoteImageSyntax.decodeMetadataValue(presentation.caption),
             figureId: NoteImageSyntax.decodeMetadataValue(
               presentation.figureId,
             ),
@@ -534,10 +528,7 @@ class _DocxBuilder {
       ..addText('_rels/.rels', _packageRelationshipsXml())
       ..addText('word/document.xml', _documentXml(body.toString()))
       ..addText('word/styles.xml', _stylesXml())
-      ..addText(
-        'word/_rels/document.xml.rels',
-        _documentRelationshipsXml(),
-      )
+      ..addText('word/_rels/document.xml.rels', _documentRelationshipsXml())
       ..addText('docProps/core.xml', _corePropertiesXml(generated))
       ..addText('docProps/app.xml', _appPropertiesXml());
     return _archive.build();
@@ -549,9 +540,7 @@ class _DocxBuilder {
       return;
     }
     if (block is _HeadingBlock) {
-      output.write(
-        _paragraph(block.inlines, style: 'Heading${block.level}'),
-      );
+      output.write(_paragraph(block.inlines, style: 'Heading${block.level}'));
       return;
     }
     if (block is _ListItemBlock) {
@@ -566,19 +555,15 @@ class _DocxBuilder {
       return;
     }
     if (block is _CodeBlock) {
-      final label = block.language.trim().isEmpty
-          ? ''
-          : '${block.language.trim()}\n';
+      final label =
+          block.language.trim().isEmpty ? '' : '${block.language.trim()}\n';
       output.write(
-        _paragraph(
-          <_Inline>[
-            _Inline.text(
-              '$label${block.code}',
-              style: const _InlineStyle(code: true),
-            ),
-          ],
-          style: 'Code',
-        ),
+        _paragraph(<_Inline>[
+          _Inline.text(
+            '$label${block.code}',
+            style: const _InlineStyle(code: true),
+          ),
+        ], style: 'Code'),
       );
       return;
     }
@@ -682,17 +667,19 @@ class _DocxBuilder {
     if (resolvedImage == null) {
       return '<w:p>${_missingImageRun(image)}</w:p>';
     }
-    final width = (5486400 *
-            image.presentation.widthPercent.clamp(20, 100).toDouble() /
-            100)
-        .round();
+    final width =
+        (5486400 *
+                image.presentation.widthPercent.clamp(20, 100).toDouble() /
+                100)
+            .round();
     final height = _drawingHeight(width, resolvedImage.size);
     final alignment = switch (image.presentation.alignment) {
       NoteImageAlignment.left => 'left',
       NoteImageAlignment.center => 'center',
       NoteImageAlignment.right => 'right',
     };
-    final drawing = '<w:p><w:pPr><w:jc w:val="$alignment"/></w:pPr>'
+    final drawing =
+        '<w:p><w:pPr><w:jc w:val="$alignment"/></w:pPr>'
         '${_drawingRun(image, resolvedImage, width: width, height: height)}</w:p>';
     final caption = image.presentation.caption.trim();
     if (caption.isEmpty) {
@@ -701,14 +688,12 @@ class _DocxBuilder {
     return '$drawing${_paragraph(<_Inline>[_Inline.text(caption)], style: 'Caption')}';
   }
 
-  String _inlineImageRun(
-    _MarkdownImage image,
-    _ResolvedImage resolvedImage,
-  ) {
-    final width = (1800000 *
-            image.presentation.widthPercent.clamp(20, 100).toDouble() /
-            100)
-        .round();
+  String _inlineImageRun(_MarkdownImage image, _ResolvedImage resolvedImage) {
+    final width =
+        (1800000 *
+                image.presentation.widthPercent.clamp(20, 100).toDouble() /
+                100)
+            .round();
     return _drawingRun(
       image,
       resolvedImage,
@@ -777,12 +762,13 @@ class _DocxBuilder {
     for (final row in block.rows) {
       output.write('<w:tr>');
       for (final cell in row.cells) {
-        final cellInlines = row.header
-            ? <_Inline>[
-                for (final inline in cell)
-                  inline.copyWith(style: inline.style.copyWith(bold: true)),
-              ]
-            : cell;
+        final cellInlines =
+            row.header
+                ? <_Inline>[
+                  for (final inline in cell)
+                    inline.copyWith(style: inline.style.copyWith(bold: true)),
+                ]
+                : cell;
         output.write(
           '<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/>'
           '${row.header ? '<w:shd w:val="clear" w:fill="EDEDED"/>' : ''}'
@@ -829,12 +815,14 @@ class _DocxBuilder {
   }
 
   String _contentTypesXml() {
-    final imageDefaults = _contentTypes.entries
-        .map(
-          (entry) => '<Default Extension="${_xmlAttribute(entry.key)}" '
-              'ContentType="${_xmlAttribute(entry.value)}"/>',
-        )
-        .join();
+    final imageDefaults =
+        _contentTypes.entries
+            .map(
+              (entry) =>
+                  '<Default Extension="${_xmlAttribute(entry.key)}" '
+                  'ContentType="${_xmlAttribute(entry.value)}"/>',
+            )
+            .join();
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
         '<Default Extension="rels" '
@@ -1003,9 +991,8 @@ class _PdfRenderer {
       ];
     }
     if (block is _CodeBlock) {
-      final label = block.language.trim().isEmpty
-          ? ''
-          : '${block.language.trim()}\n';
+      final label =
+          block.language.trim().isEmpty ? '' : '${block.language.trim()}\n';
       return <pw.Widget>[
         pw.Container(
           width: double.infinity,
@@ -1031,10 +1018,7 @@ class _PdfRenderer {
       return <pw.Widget>[_image(block.image)];
     }
     if (block is _TableBlock) {
-      return <pw.Widget>[
-        _table(block),
-        pw.SizedBox(height: 10),
-      ];
+      return <pw.Widget>[_table(block), pw.SizedBox(height: 10)];
     }
     if (block is _QuoteBlock) {
       final quoted = <pw.Widget>[];
@@ -1089,9 +1073,10 @@ class _PdfRenderer {
       style: pw.TextStyle(
         fontWeight: style.bold ? pw.FontWeight.bold : null,
         fontStyle: style.italic ? pw.FontStyle.italic : null,
-        decoration: style.strike
-            ? pw.TextDecoration.lineThrough
-            : style.link == null
+        decoration:
+            style.strike
+                ? pw.TextDecoration.lineThrough
+                : style.link == null
                 ? null
                 : pw.TextDecoration.underline,
         color: style.link == null ? null : PdfColors.blue700,
@@ -1109,21 +1094,23 @@ class _PdfRenderer {
         style: pw.TextStyle(fontStyle: pw.FontStyle.italic),
       );
     }
-    final width = 110.0 *
+    final width =
+        110.0 *
         image.presentation.widthPercent.clamp(20, 100).toDouble() /
         100.0;
     try {
-      final rendered = data.extension == 'svg'
-          ? pw.SvgImage(
-              svg: utf8.decode(data.bytes),
-              width: width,
-              fit: pw.BoxFit.contain,
-            )
-          : pw.Image(
-              pw.MemoryImage(data.bytes),
-              width: width,
-              fit: pw.BoxFit.contain,
-            );
+      final rendered =
+          data.extension == 'svg'
+              ? pw.SvgImage(
+                svg: utf8.decode(data.bytes),
+                width: width,
+                fit: pw.BoxFit.contain,
+              )
+              : pw.Image(
+                pw.MemoryImage(data.bytes),
+                width: width,
+                fit: pw.BoxFit.contain,
+              );
       return pw.WidgetSpan(child: rendered);
     } on Object {
       return pw.TextSpan(
@@ -1145,7 +1132,8 @@ class _PdfRenderer {
         ),
       );
     }
-    final width = 495.0 *
+    final width =
+        495.0 *
         image.presentation.widthPercent.clamp(20, 100).toDouble() /
         100.0;
     final alignment = switch (image.presentation.alignment) {
@@ -1172,7 +1160,9 @@ class _PdfRenderer {
           fit: pw.BoxFit.contain,
         );
       } on Object {
-        rendered = pw.Text('[Изображение не удалось декодировать: ${image.target}]');
+        rendered = pw.Text(
+          '[Изображение не удалось декодировать: ${image.target}]',
+        );
       }
     }
     final caption = image.presentation.caption.trim();
@@ -1210,9 +1200,10 @@ class _PdfRenderer {
         for (final row in block.rows)
           pw.TableRow(
             repeat: row.header,
-            decoration: row.header
-                ? pw.BoxDecoration(color: PdfColor.fromInt(0xffededed))
-                : null,
+            decoration:
+                row.header
+                    ? pw.BoxDecoration(color: PdfColor.fromInt(0xffededed))
+                    : null,
             children: <pw.Widget>[
               for (final cell in row.cells)
                 pw.Padding(
@@ -1220,11 +1211,11 @@ class _PdfRenderer {
                   child: _paragraph(
                     row.header
                         ? <_Inline>[
-                            for (final inline in cell)
-                              inline.copyWith(
-                                style: inline.style.copyWith(bold: true),
-                              ),
-                          ]
+                          for (final inline in cell)
+                            inline.copyWith(
+                              style: inline.style.copyWith(bold: true),
+                            ),
+                        ]
                         : cell,
                     bottom: 0,
                   ),
@@ -1382,8 +1373,7 @@ class _Inline {
   factory _Inline.text(
     String text, {
     _InlineStyle style = const _InlineStyle(),
-  }) =>
-      _Inline._(text: text, style: style, image: null);
+  }) => _Inline._(text: text, style: style, image: null);
 
   factory _Inline.image(_MarkdownImage image) =>
       _Inline._(text: '', style: const _InlineStyle(), image: image);
@@ -1394,11 +1384,8 @@ class _Inline {
 
   String get plainText => image == null ? text : image!.alt;
 
-  _Inline copyWith({_InlineStyle? style}) => _Inline._(
-        text: text,
-        style: style ?? this.style,
-        image: image,
-      );
+  _Inline copyWith({_InlineStyle? style}) =>
+      _Inline._(text: text, style: style ?? this.style, image: image);
 }
 
 class _InlineStyle {
@@ -1422,14 +1409,13 @@ class _InlineStyle {
     bool? strike,
     bool? code,
     String? link,
-  }) =>
-      _InlineStyle(
-        bold: bold ?? this.bold,
-        italic: italic ?? this.italic,
-        strike: strike ?? this.strike,
-        code: code ?? this.code,
-        link: link ?? this.link,
-      );
+  }) => _InlineStyle(
+    bold: bold ?? this.bold,
+    italic: italic ?? this.italic,
+    strike: strike ?? this.strike,
+    code: code ?? this.code,
+    link: link ?? this.link,
+  );
 }
 
 class _MarkdownImage {
@@ -1466,9 +1452,19 @@ class _PixelSize {
 }
 
 String? _imageExtension(String fileName, Uint8List bytes) {
-  final extension = path.extension(fileName).toLowerCase().replaceFirst('.', '');
-  if (const <String>{'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'}
-      .contains(extension)) {
+  final extension = path
+      .extension(fileName)
+      .toLowerCase()
+      .replaceFirst('.', '');
+  if (const <String>{
+    'png',
+    'jpg',
+    'jpeg',
+    'gif',
+    'webp',
+    'svg',
+    'bmp',
+  }.contains(extension)) {
     return extension == 'jpeg' ? 'jpg' : extension;
   }
   if (bytes.length >= 8 &&
@@ -1490,8 +1486,10 @@ String? _imageExtension(String fileName, Uint8List bytes) {
       bytes[2] == 0x46) {
     return 'gif';
   }
-  final prefix = utf8.decode(bytes.take(math.min(bytes.length, 256)).toList(),
-      allowMalformed: true);
+  final prefix = utf8.decode(
+    bytes.take(math.min(bytes.length, 256)).toList(),
+    allowMalformed: true,
+  );
   if (prefix.contains('<svg')) {
     return 'svg';
   }
@@ -1499,14 +1497,14 @@ String? _imageExtension(String fileName, Uint8List bytes) {
 }
 
 String _imageMimeType(String extension) => switch (extension) {
-      'png' => 'image/png',
-      'jpg' => 'image/jpeg',
-      'gif' => 'image/gif',
-      'webp' => 'image/webp',
-      'svg' => 'image/svg+xml',
-      'bmp' => 'image/bmp',
-      _ => 'application/octet-stream',
-    };
+  'png' => 'image/png',
+  'jpg' => 'image/jpeg',
+  'gif' => 'image/gif',
+  'webp' => 'image/webp',
+  'svg' => 'image/svg+xml',
+  'bmp' => 'image/bmp',
+  _ => 'application/octet-stream',
+};
 
 _PixelSize? _pixelSize(Uint8List bytes, String extension) {
   try {
@@ -1578,9 +1576,8 @@ String _xml(String value) => value
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
 
-String _xmlAttribute(String value) => _xml(value)
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;');
+String _xmlAttribute(String value) =>
+    _xml(value).replaceAll('"', '&quot;').replaceAll("'", '&apos;');
 
 extension _FirstOrNullExtension<T> on Iterable<T> {
   T? get firstOrNull {

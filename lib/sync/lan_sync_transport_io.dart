@@ -253,16 +253,15 @@ class LanSyncHostSession {
       local: attachmentManifest,
       remote: payload.attachmentManifest,
     );
-    _attachmentWorkTotal = _planWorkCount(requesterAttachmentPlan) +
+    _attachmentWorkTotal =
+        _planWorkCount(requesterAttachmentPlan) +
         _planWorkCount(responderAttachmentPlan);
     _attachmentWorkCompleted = 0;
-    _attachmentBytesTotal = _planByteCount(requesterAttachmentPlan) +
+    _attachmentBytesTotal =
+        _planByteCount(requesterAttachmentPlan) +
         _planByteCount(responderAttachmentPlan);
     _attachmentBytesTransferred = 0;
-    _emitHostProgress(
-      stage: LanSyncProgressStage.exchangingJournal,
-      round: 1,
-    );
+    _emitHostProgress(stage: LanSyncProgressStage.exchangingJournal, round: 1);
     final unsigned = LanSyncExchangeResponse(
       sessionId: sessionId,
       roundId: payload.roundId,
@@ -321,10 +320,7 @@ class LanSyncHostSession {
     var changed = false;
     switch (command.kind) {
       case LanAttachmentCommandKind.download:
-        _requireManifestEntry(
-          await _buildAttachmentManifest(),
-          command.entry,
-        );
+        _requireManifestEntry(await _buildAttachmentManifest(), command.entry);
         responseBytes = await _readAttachment(command.entry);
         if (responseBytes == null) {
           throw StateError('attachment_not_found');
@@ -423,8 +419,7 @@ class LanSyncHostSession {
       kind: command.kind,
       entry: command.entry,
       changed: changed,
-      dataBase64:
-          responseBytes == null ? null : base64Encode(responseBytes),
+      dataBase64: responseBytes == null ? null : base64Encode(responseBytes),
       signature: '',
     );
     final signature = await crypto.sign(
@@ -722,9 +717,11 @@ class LanSyncClient {
         }
         attachmentPlanFromPeer = expectedPlanFromPeer;
         attachmentPlanByPeer = expectedPlanByPeer;
-        final attachmentWorkTotal = _planWorkCount(expectedPlanFromPeer) +
+        final attachmentWorkTotal =
+            _planWorkCount(expectedPlanFromPeer) +
             _planWorkCount(expectedPlanByPeer);
-        final attachmentBytesTotal = _planByteCount(expectedPlanFromPeer) +
+        final attachmentBytesTotal =
+            _planByteCount(expectedPlanFromPeer) +
             _planByteCount(expectedPlanByPeer);
         var attachmentWorkCompleted = 0;
         var attachmentBytesTransferred = 0;
@@ -751,17 +748,18 @@ class LanSyncClient {
             ),
           );
           final response = await runLanSyncOperationWithRetry(
-            operation: (_) => _sendAttachmentCommand(
-              client: client,
-              offer: offer,
-              local: local,
-              trustedHost: trustedHost,
-              crypto: crypto,
-              kind: LanAttachmentCommandKind.download,
-              entry: entry,
-              transferId: transferId,
-              cancellationToken: cancellationToken,
-            ),
+            operation:
+                (_) => _sendAttachmentCommand(
+                  client: client,
+                  offer: offer,
+                  local: local,
+                  trustedHost: trustedHost,
+                  crypto: crypto,
+                  kind: LanAttachmentCommandKind.download,
+                  entry: entry,
+                  transferId: transferId,
+                  cancellationToken: cancellationToken,
+                ),
             shouldRetry: _isRetryableTransferError,
             cancellationToken: cancellationToken,
             onRetry: (nextAttempt, _) {
@@ -860,18 +858,19 @@ class LanSyncClient {
           }
           _validateTransferredBytes(entry, bytes);
           await runLanSyncOperationWithRetry(
-            operation: (_) => _sendAttachmentCommand(
-              client: client,
-              offer: offer,
-              local: local,
-              trustedHost: trustedHost,
-              crypto: crypto,
-              kind: LanAttachmentCommandKind.upload,
-              entry: entry,
-              dataBase64: base64Encode(bytes),
-              transferId: transferId,
-              cancellationToken: cancellationToken,
-            ),
+            operation:
+                (_) => _sendAttachmentCommand(
+                  client: client,
+                  offer: offer,
+                  local: local,
+                  trustedHost: trustedHost,
+                  crypto: crypto,
+                  kind: LanAttachmentCommandKind.upload,
+                  entry: entry,
+                  dataBase64: base64Encode(bytes),
+                  transferId: transferId,
+                  cancellationToken: cancellationToken,
+                ),
             shouldRetry: _isRetryableTransferError,
             cancellationToken: cancellationToken,
             onRetry: (nextAttempt, _) {
@@ -919,17 +918,18 @@ class LanSyncClient {
             ),
           );
           await runLanSyncOperationWithRetry(
-            operation: (_) => _sendAttachmentCommand(
-              client: client,
-              offer: offer,
-              local: local,
-              trustedHost: trustedHost,
-              crypto: crypto,
-              kind: LanAttachmentCommandKind.record,
-              entry: entry,
-              transferId: transferId,
-              cancellationToken: cancellationToken,
-            ),
+            operation:
+                (_) => _sendAttachmentCommand(
+                  client: client,
+                  offer: offer,
+                  local: local,
+                  trustedHost: trustedHost,
+                  crypto: crypto,
+                  kind: LanAttachmentCommandKind.record,
+                  entry: entry,
+                  transferId: transferId,
+                  cancellationToken: cancellationToken,
+                ),
             shouldRetry: _isRetryableTransferError,
             cancellationToken: cancellationToken,
             onRetry: (nextAttempt, _) {
@@ -963,17 +963,18 @@ class LanSyncClient {
             ),
           );
           await runLanSyncOperationWithRetry(
-            operation: (_) => _sendAttachmentCommand(
-              client: client,
-              offer: offer,
-              local: local,
-              trustedHost: trustedHost,
-              crypto: crypto,
-              kind: LanAttachmentCommandKind.tombstone,
-              entry: entry,
-              transferId: transferId,
-              cancellationToken: cancellationToken,
-            ),
+            operation:
+                (_) => _sendAttachmentCommand(
+                  client: client,
+                  offer: offer,
+                  local: local,
+                  trustedHost: trustedHost,
+                  crypto: crypto,
+                  kind: LanAttachmentCommandKind.tombstone,
+                  entry: entry,
+                  transferId: transferId,
+                  cancellationToken: cancellationToken,
+                ),
             shouldRetry: _isRetryableTransferError,
             cancellationToken: cancellationToken,
             onRetry: (nextAttempt, _) {
@@ -1300,9 +1301,7 @@ bool _manifestContainsExactEntry(
   AttachmentSyncManifest manifest,
   AttachmentSyncEntry expected,
 ) {
-  return manifest.entries.any(
-    (entry) => _sameAttachmentEntry(entry, expected),
-  );
+  return manifest.entries.any((entry) => _sameAttachmentEntry(entry, expected));
 }
 
 bool _isRetryableTransferError(Object error) {
@@ -1324,10 +1323,7 @@ bool _isRetryableTransferError(Object error) {
   return retryableFragments.any(message.contains);
 }
 
-bool _sameAttachmentEntry(
-  AttachmentSyncEntry left,
-  AttachmentSyncEntry right,
-) {
+bool _sameAttachmentEntry(AttachmentSyncEntry left, AttachmentSyncEntry right) {
   return left.relativePath == right.relativePath &&
       left.sha256 == right.sha256 &&
       left.byteLength == right.byteLength &&
@@ -1335,10 +1331,7 @@ bool _sameAttachmentEntry(
           right.deletedAt?.toUtc().millisecondsSinceEpoch;
 }
 
-void _validateTransferredBytes(
-  AttachmentSyncEntry entry,
-  Uint8List bytes,
-) {
+void _validateTransferredBytes(AttachmentSyncEntry entry, Uint8List bytes) {
   if (entry.isDeleted ||
       bytes.length != entry.byteLength ||
       bytes.length > maxAttachmentSyncEntryBytes) {

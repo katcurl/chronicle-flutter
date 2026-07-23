@@ -221,12 +221,7 @@ class LanSyncExchangeResponse {
   }
 }
 
-enum LanAttachmentCommandKind {
-  download,
-  upload,
-  record,
-  tombstone,
-}
+enum LanAttachmentCommandKind { download, upload, record, tombstone }
 
 class LanAttachmentCommand {
   const LanAttachmentCommand({
@@ -405,7 +400,6 @@ class LanSyncAck {
   );
 }
 
-
 enum LanSyncProgressStage {
   preparing,
   exchangingJournal,
@@ -498,8 +492,7 @@ class LanSyncReport {
   final int attachmentTombstonesApplied;
 
   int get attachmentConflictCount =>
-      attachmentPlanFromPeer.conflictCount +
-      attachmentPlanByPeer.conflictCount;
+      attachmentPlanFromPeer.conflictCount + attachmentPlanByPeer.conflictCount;
 
   bool get changedData =>
       appliedCount > 0 ||
@@ -550,9 +543,7 @@ AttachmentSyncManifest _readAttachmentManifest(Object? value) {
     return const AttachmentSyncManifest.empty();
   }
   return AttachmentSyncManifest.fromJson(
-    value.map(
-      (key, item) => MapEntry<String, dynamic>(key.toString(), item),
-    ),
+    value.map((key, item) => MapEntry<String, dynamic>(key.toString(), item)),
   );
 }
 
@@ -561,8 +552,6 @@ AttachmentSyncPlan _readAttachmentPlan(Object? value) {
     return const AttachmentSyncPlan.empty();
   }
   return AttachmentSyncPlan.fromJson(
-    value.map(
-      (key, item) => MapEntry<String, dynamic>(key.toString(), item),
-    ),
+    value.map((key, item) => MapEntry<String, dynamic>(key.toString(), item)),
   );
 }

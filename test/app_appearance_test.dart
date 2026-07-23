@@ -86,36 +86,35 @@ void main() {
     expect(partiallyUnknown.backgroundPalette, ChroniclePalette.graphite);
     expect(partiallyUnknown.panelPalette, ChroniclePalette.green);
     expect(partiallyUnknown.surfaceStyle, ChronicleSurfaceStyle.matte);
-    expect(
-      partiallyUnknown.brightnessMode,
-      ChronicleBrightnessMode.system,
-    );
+    expect(partiallyUnknown.brightnessMode, ChronicleBrightnessMode.system);
     expect(
       AppAppearanceStore.encode(corrupt),
       AppAppearanceStore.encode(AppAppearancePreferences.defaults()),
     );
   });
 
+  test(
+    'background validation detects GIF content and rejects unknown bytes',
+    () {
+      final gif = AppBackgroundSelection.validate(
+        bytes: Uint8List.fromList(<int>[
+          ...'GIF89a'.codeUnits,
+          0x01,
+          0x00,
+          0x01,
+          0x00,
+        ]),
+        originalName: 'wallpaper.bin',
+      );
 
-  test('background validation detects GIF content and rejects unknown bytes', () {
-    final gif = AppBackgroundSelection.validate(
-      bytes: Uint8List.fromList(<int>[
-        ...'GIF89a'.codeUnits,
-        0x01,
-        0x00,
-        0x01,
-        0x00,
-      ]),
-      originalName: 'wallpaper.bin',
-    );
-
-    expect(gif.extension, 'gif');
-    expect(
-      () => AppBackgroundSelection.validate(
-        bytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
-        originalName: 'wallpaper.txt',
-      ),
-      throwsFormatException,
-    );
-  });
+      expect(gif.extension, 'gif');
+      expect(
+        () => AppBackgroundSelection.validate(
+          bytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+          originalName: 'wallpaper.txt',
+        ),
+        throwsFormatException,
+      );
+    },
+  );
 }

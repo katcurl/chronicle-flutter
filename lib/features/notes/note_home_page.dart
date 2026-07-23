@@ -79,10 +79,7 @@ class NoteHomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildSection(
-    NoteHomeSection section,
-    List<Note> notes,
-  ) {
+  Widget _buildSection(NoteHomeSection section, List<Note> notes) {
     return switch (section) {
       NoteHomeSection.continueWork => _noteSection(
         section: section,
@@ -112,12 +109,15 @@ class NoteHomePage extends StatelessWidget {
       result.add(note);
     }
 
-    add(store.activeNoteId == null ? null : store.noteById(store.activeNoteId!));
+    add(
+      store.activeNoteId == null ? null : store.noteById(store.activeNoteId!),
+    );
 
-    final activeTaskNoteIds = store.data.tasks
-        .where((task) => task.status != 'done' && task.noteId != null)
-        .map((task) => task.noteId!)
-        .toSet();
+    final activeTaskNoteIds =
+        store.data.tasks
+            .where((task) => task.status != 'done' && task.noteId != null)
+            .map((task) => task.noteId!)
+            .toSet();
     for (final note in notes) {
       if (activeTaskNoteIds.contains(note.id)) add(note);
       if (result.length >= preferences.itemLimit) break;
@@ -138,26 +138,28 @@ class NoteHomePage extends StatelessWidget {
     return _HomeSection(
       title: section.label,
       icon: _sectionIcon(section),
-      child: items.isEmpty
-          ? _EmptySection(text: emptyText)
-          : SizedBox(
-              height: preferences.compactCards ? 136 : 168,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (_, index) => SizedBox(
-                  width: preferences.compactCards ? 230 : 276,
-                  child: _HomeNoteCard(
-                    store: store,
-                    note: items[index],
-                    appearanceController: appearanceController,
-                    compact: preferences.compactCards,
-                    onTap: () => onOpenNote(items[index]),
-                  ),
+      child:
+          items.isEmpty
+              ? _EmptySection(text: emptyText)
+              : SizedBox(
+                height: preferences.compactCards ? 136 : 168,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder:
+                      (_, index) => SizedBox(
+                        width: preferences.compactCards ? 230 : 276,
+                        child: _HomeNoteCard(
+                          store: store,
+                          note: items[index],
+                          appearanceController: appearanceController,
+                          compact: preferences.compactCards,
+                          onTap: () => onOpenNote(items[index]),
+                        ),
+                      ),
                 ),
               ),
-            ),
     );
   }
 
@@ -169,24 +171,25 @@ class NoteHomePage extends StatelessWidget {
         onPressed: onOpenLibrary,
         child: const Text('Все заметки'),
       ),
-      child: notes.isEmpty
-          ? const _EmptySection(text: 'Недавних заметок пока нет.')
-          : Card(
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  for (var index = 0; index < notes.length; index++) ...[
-                    _RecentNoteTile(
-                      store: store,
-                      note: notes[index],
-                      onTap: () => onOpenNote(notes[index]),
-                    ),
-                    if (index != notes.length - 1)
-                      const Divider(height: 1, indent: 58),
+      child:
+          notes.isEmpty
+              ? const _EmptySection(text: 'Недавних заметок пока нет.')
+              : Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    for (var index = 0; index < notes.length; index++) ...[
+                      _RecentNoteTile(
+                        store: store,
+                        note: notes[index],
+                        onTap: () => onOpenNote(notes[index]),
+                      ),
+                      if (index != notes.length - 1)
+                        const Divider(height: 1, indent: 58),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
     );
   }
 
@@ -197,86 +200,96 @@ class NoteHomePage extends StatelessWidget {
     return _HomeSection(
       title: NoteHomeSection.projects.label,
       icon: _sectionIcon(NoteHomeSection.projects),
-      child: projects.isEmpty
-          ? const _EmptySection(text: 'Активных проектов пока нет.')
-          : SizedBox(
-              height: preferences.compactCards ? 122 : 148,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: projects.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (context, index) {
-                  final project = projects[index];
-                  final projectNotes = store.data.notes
-                      .where((note) => note.projectId == project.id)
-                      .toList();
-                  projectNotes.sort(
-                    (left, right) => right.updatedAt.compareTo(left.updatedAt),
-                  );
-                  return SizedBox(
-                    width: preferences.compactCards ? 210 : 250,
-                    child: ProjectAppearanceScope(
-                      projectId: project.id,
-                      controller: appearanceController,
-                      globalAppearance: globalAppearance,
-                      child: Builder(
-                        builder: (projectContext) => ProjectSurface(
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                            onTap: () => onOpenProject(project.id),
-                            child: Padding(
-                              padding: EdgeInsets.all(
-                                preferences.compactCards ? 14 : 18,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      ProjectAvatar(
-                                        project: project,
-                                        controller: appearanceController,
-                                        size: 34,
-                                        borderRadius: 10,
-                                        emojiFontSize: 22,
+      child:
+          projects.isEmpty
+              ? const _EmptySection(text: 'Активных проектов пока нет.')
+              : SizedBox(
+                height: preferences.compactCards ? 122 : 148,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: projects.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    final project = projects[index];
+                    final projectNotes =
+                        store.data.notes
+                            .where((note) => note.projectId == project.id)
+                            .toList();
+                    projectNotes.sort(
+                      (left, right) =>
+                          right.updatedAt.compareTo(left.updatedAt),
+                    );
+                    return SizedBox(
+                      width: preferences.compactCards ? 210 : 250,
+                      child: ProjectAppearanceScope(
+                        projectId: project.id,
+                        controller: appearanceController,
+                        globalAppearance: globalAppearance,
+                        child: Builder(
+                          builder:
+                              (projectContext) => ProjectSurface(
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () => onOpenProject(project.id),
+                                    child: Padding(
+                                      padding: EdgeInsets.all(
+                                        preferences.compactCards ? 14 : 18,
                                       ),
-                                      const Spacer(),
-                                      Text('${projectNotes.length} заметок'),
-                                    ],
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    project.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(projectContext)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w800),
-                                  ),
-                                  if (!preferences.compactCards &&
-                                      projectNotes.isNotEmpty)
-                                    Text(
-                                      projectNotes.first.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(
-                                        projectContext,
-                                      ).textTheme.bodySmall,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              ProjectAvatar(
+                                                project: project,
+                                                controller:
+                                                    appearanceController,
+                                                size: 34,
+                                                borderRadius: 10,
+                                                emojiFontSize: 22,
+                                              ),
+                                              const Spacer(),
+                                              Text(
+                                                '${projectNotes.length} заметок',
+                                              ),
+                                            ],
+                                          ),
+                                          const Spacer(),
+                                          Text(
+                                            project.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(
+                                              projectContext,
+                                            ).textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                          if (!preferences.compactCards &&
+                                              projectNotes.isNotEmpty)
+                                            Text(
+                                              projectNotes.first.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style:
+                                                  Theme.of(
+                                                    projectContext,
+                                                  ).textTheme.bodySmall,
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                ],
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
     );
   }
 
@@ -287,31 +300,32 @@ class NoteHomePage extends StatelessWidget {
       if (folder.isEmpty) continue;
       counts.update(folder, (value) => value + 1, ifAbsent: () => 1);
     }
-    final folders = counts.entries.toList()
-      ..sort((left, right) {
-        final count = right.value.compareTo(left.value);
-        return count != 0 ? count : left.key.compareTo(right.key);
-      });
+    final folders =
+        counts.entries.toList()..sort((left, right) {
+          final count = right.value.compareTo(left.value);
+          return count != 0 ? count : left.key.compareTo(right.key);
+        });
     final visible = folders.take(preferences.itemLimit).toList(growable: false);
     return _HomeSection(
       title: NoteHomeSection.folders.label,
       icon: _sectionIcon(NoteHomeSection.folders),
-      child: visible.isEmpty
-          ? const _EmptySection(
-              text: 'Папки появятся после заполнения пути у заметки.',
-            )
-          : Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final folder in visible)
-                  ActionChip(
-                    avatar: const Icon(Icons.folder_outlined, size: 18),
-                    label: Text('${folder.key} · ${folder.value}'),
-                    onPressed: () => onOpenFolder(folder.key),
-                  ),
-              ],
-            ),
+      child:
+          visible.isEmpty
+              ? const _EmptySection(
+                text: 'Папки появятся после заполнения пути у заметки.',
+              )
+              : Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final folder in visible)
+                    ActionChip(
+                      avatar: const Icon(Icons.folder_outlined, size: 18),
+                      label: Text('${folder.key} · ${folder.value}'),
+                      onPressed: () => onOpenFolder(folder.key),
+                    ),
+                ],
+              ),
     );
   }
 
@@ -322,71 +336,73 @@ class NoteHomePage extends StatelessWidget {
     return _HomeSection(
       title: NoteHomeSection.templates.label,
       icon: _sectionIcon(NoteHomeSection.templates),
-      child: templates.isEmpty
-          ? const _EmptySection(text: 'Шаблоны пока недоступны.')
-          : SizedBox(
-              height: preferences.compactCards ? 112 : 136,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: templates.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (context, index) {
-                  final template = templates[index];
-                  return SizedBox(
-                    width: preferences.compactCards ? 210 : 244,
-                    child: Card(
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => onCreateFromTemplate(template),
-                        child: Padding(
-                          padding: EdgeInsets.all(
-                            preferences.compactCards ? 14 : 18,
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                template.icon,
-                                style: const TextStyle(fontSize: 28),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      template.title,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                    ),
-                                    if (!preferences.compactCards)
+      child:
+          templates.isEmpty
+              ? const _EmptySection(text: 'Шаблоны пока недоступны.')
+              : SizedBox(
+                height: preferences.compactCards ? 112 : 136,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: templates.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    final template = templates[index];
+                    return SizedBox(
+                      width: preferences.compactCards ? 210 : 244,
+                      child: Card(
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => onCreateFromTemplate(template),
+                          child: Padding(
+                            padding: EdgeInsets.all(
+                              preferences.compactCards ? 14 : 18,
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  template.icon,
+                                  style: const TextStyle(fontSize: 28),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
                                       Text(
-                                        template.isCustom
-                                            ? 'Пользовательский шаблон'
-                                            : 'Создать заметку',
+                                        template.title,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
                                         style: Theme.of(
                                           context,
-                                        ).textTheme.bodySmall,
+                                        ).textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                       ),
-                                  ],
+                                      if (!preferences.compactCards)
+                                        Text(
+                                          template.isCustom
+                                              ? 'Пользовательский шаблон'
+                                              : 'Создать заметку',
+                                          style:
+                                              Theme.of(
+                                                context,
+                                              ).textTheme.bodySmall,
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const Icon(Icons.add_rounded),
-                            ],
+                                const Icon(Icons.add_rounded),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
     );
   }
 }
@@ -551,8 +567,7 @@ class _HomeNoteCard extends StatelessWidget {
                       style: Theme.of(context).textTheme.labelMedium,
                     ),
                   ),
-                  if (note.pinned)
-                    const Icon(Icons.push_pin_rounded, size: 16),
+                  if (note.pinned) const Icon(Icons.push_pin_rounded, size: 16),
                 ],
               ),
               const SizedBox(height: 10),
@@ -655,9 +670,10 @@ String _plainSnippet(String source) {
     RegExp(r'\[([^\]]+)\]\([^)]*\)'),
     (match) => match.group(1) ?? '',
   );
-  value = value
-      .replaceAll(RegExp(r'[#>*_`~|\[\]{}]'), ' ')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
+  value =
+      value
+          .replaceAll(RegExp(r'[#>*_`~|\[\]{}]'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
   return value.isEmpty ? 'Пустая заметка' : value;
 }

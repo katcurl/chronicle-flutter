@@ -17,10 +17,8 @@ import 'note_document.dart';
 import 'note_image_syntax.dart';
 import 'scientific_reference_syntax.dart';
 
-typedef VaultAttachmentBytesLoader = Future<Uint8List?> Function(
-  String rootPath,
-  String markdownPath,
-);
+typedef VaultAttachmentBytesLoader =
+    Future<Uint8List?> Function(String rootPath, String markdownPath);
 
 typedef NoteImageEditCallback = void Function(NoteImageReference reference);
 typedef NoteImageResizeCallback =
@@ -28,8 +26,7 @@ typedef NoteImageResizeCallback =
       NoteImageReference reference,
       NoteImagePresentation presentation,
     );
-typedef NoteColumnsEditCallback =
-    void Function(NoteColumnsReference reference);
+typedef NoteColumnsEditCallback = void Function(NoteColumnsReference reference);
 typedef NoteColumnsResizeCallback =
     void Function(NoteColumnsReference reference, List<int> widths);
 
@@ -100,12 +97,7 @@ class NoteMarkdownView extends StatelessWidget {
     final chunks = _splitDocument(source, baseOffset: baseOffset);
     return [
       for (final chunk in chunks)
-        _buildContentChunk(
-          context,
-          chunk,
-          bibliography,
-          scientificIndex,
-        ),
+        _buildContentChunk(context, chunk, bibliography, scientificIndex),
     ];
   }
 
@@ -131,11 +123,7 @@ class NoteMarkdownView extends StatelessWidget {
       _DocumentChunkKind.markdown =>
         chunk.value.trim().isEmpty
             ? const SizedBox.shrink()
-            : _buildMarkdownBody(
-              chunk.value,
-              bibliography,
-              scientificIndex,
-            ),
+            : _buildMarkdownBody(chunk.value, bibliography, scientificIndex),
     };
   }
 
@@ -226,19 +214,11 @@ class NoteMarkdownView extends StatelessWidget {
           reference.raw.isEmpty || onResizeImage == null
               ? null
               : (presentation) => onResizeImage!(reference, presentation),
-      child: _loadImage(
-        reference.target,
-        reference.alt,
-        expand: true,
-      ),
+      child: _loadImage(reference.target, reference.alt, expand: true),
     );
   }
 
-  Widget _loadImage(
-    String target,
-    String alt, {
-    bool expand = false,
-  }) {
+  Widget _loadImage(String target, String alt, {bool expand = false}) {
     final uri = Uri.tryParse(target);
     if (uri == null) {
       return _ImageFallback(label: alt.isEmpty ? target : alt);
@@ -447,10 +427,9 @@ class _ManagedNoteColumnsState extends State<_ManagedNoteColumns> {
     if (current == null) {
       return;
     }
-    final normalized = NoteColumnsSyntax.normalizeWidths(
-      [for (final width in current) width.round()],
-      current.length,
-    );
+    final normalized = NoteColumnsSyntax.normalizeWidths([
+      for (final width in current) width.round(),
+    ], current.length);
     setState(() => dragWidths = null);
     widget.onResize?.call(normalized);
   }
@@ -586,7 +565,8 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
                   ? constraints.maxWidth
                   : MediaQuery.sizeOf(context).width;
           final displayedWidth =
-              availableWidth * (effectivePercent.clamp(
+              availableWidth *
+              (effectivePercent.clamp(
                     NoteImageSyntax.minWidthPercent,
                     NoteImageSyntax.maxWidthPercent,
                   ) /
@@ -645,10 +625,9 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
                                                 CheckedPopupMenuItem<int>(
                                                   value: width,
                                                   checked:
-                                                      NoteImageSyntax
-                                                          .normalizeWidthPercent(
-                                                            effectivePercent,
-                                                          ) ==
+                                                      NoteImageSyntax.normalizeWidthPercent(
+                                                        effectivePercent,
+                                                      ) ==
                                                       width,
                                                   child: Text(
                                                     width ==
@@ -818,14 +797,18 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
                         _captionText(presentation),
                         textAlign: textAlign,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: widget.duplicateFigureId
-                              ? Theme.of(context).colorScheme.error
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          color:
+                              widget.duplicateFigureId
+                                  ? Theme.of(context).colorScheme.error
+                                  : Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                           fontStyle: FontStyle.italic,
-                          fontWeight: widget.scientificObject != null ||
-                                  widget.duplicateFigureId
-                              ? FontWeight.w700
-                              : null,
+                          fontWeight:
+                              widget.scientificObject != null ||
+                                      widget.duplicateFigureId
+                                  ? FontWeight.w700
+                                  : null,
                         ),
                       ),
                     ],
@@ -838,8 +821,6 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
       ),
     );
   }
-
-
 
   String _captionText(NoteImagePresentation presentation) {
     final caption = presentation.caption.trim();
@@ -859,10 +840,8 @@ class _ManagedNoteImageState extends State<_ManagedNoteImage> {
       pendingWidthPercent ?? widget.reference.presentation.widthPercent,
     );
     final next = switch (action) {
-      _decreaseImageWidthAction =>
-        current - NoteImageSyntax.widthStepPercent,
-      _increaseImageWidthAction =>
-        current + NoteImageSyntax.widthStepPercent,
+      _decreaseImageWidthAction => current - NoteImageSyntax.widthStepPercent,
+      _increaseImageWidthAction => current + NoteImageSyntax.widthStepPercent,
       _ => action,
     };
     final normalized = NoteImageSyntax.normalizeWidthPercent(next);
@@ -1015,8 +994,7 @@ class _VaultAttachmentImage extends StatefulWidget {
   final Listenable? refreshListenable;
 
   @override
-  State<_VaultAttachmentImage> createState() =>
-      _VaultAttachmentImageState();
+  State<_VaultAttachmentImage> createState() => _VaultAttachmentImageState();
 }
 
 class _VaultAttachmentImageState extends State<_VaultAttachmentImage> {
@@ -1103,8 +1081,7 @@ class _VaultAttachmentImageState extends State<_VaultAttachmentImage> {
       key: ValueKey('vault-image:${widget.markdownPath}'),
       width: widget.expand ? double.infinity : null,
       fit: BoxFit.contain,
-      errorBuilder:
-          (_, __, ___) => _ImageFallback(label: widget.fallbackLabel),
+      errorBuilder: (_, __, ___) => _ImageFallback(label: widget.fallbackLabel),
     );
   }
 }
@@ -1187,10 +1164,7 @@ class _DocumentToken {
   final NoteColumnsReference? columns;
 }
 
-List<_DocumentChunk> _splitDocument(
-  String source, {
-  required int baseOffset,
-}) {
+List<_DocumentChunk> _splitDocument(String source, {required int baseOffset}) {
   final tokens = <_DocumentToken>[];
   final mathPattern = RegExp(r'(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$)');
 
@@ -1288,16 +1262,13 @@ bool _isStandaloneImage(String source, NoteImageReference image) {
 
 bool _isInsideMarkdownCode(String source, int offset) {
   final before = source.substring(0, offset);
-  final fenceCount = RegExp(
-    r'^[ \t]*(?:```|~~~)',
-    multiLine: true,
-  ).allMatches(before).length;
+  final fenceCount =
+      RegExp(r'^[ \t]*(?:```|~~~)', multiLine: true).allMatches(before).length;
   if (fenceCount.isOdd) {
     return true;
   }
 
-  final lineStart =
-      source.lastIndexOf('\n', offset == 0 ? 0 : offset - 1) + 1;
+  final lineStart = source.lastIndexOf('\n', offset == 0 ? 0 : offset - 1) + 1;
   final linePrefix = source.substring(lineStart, offset);
   var backticks = 0;
   for (var index = 0; index < linePrefix.length; index += 1) {

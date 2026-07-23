@@ -6,11 +6,10 @@ void main() {
   test('default editor profiles cover scientific, focus and compact use', () {
     final preferences = NoteEditorPreferences.defaults();
 
-    expect(preferences.profiles.map((profile) => profile.id), containsAll(<String>[
-      'scientific',
-      'focus',
-      'compact',
-    ]));
+    expect(
+      preferences.profiles.map((profile) => profile.id),
+      containsAll(<String>['scientific', 'focus', 'compact']),
+    );
     expect(preferences.activeProfile.id, 'scientific');
     expect(preferences.activeProfile.showToolbar, isTrue);
   });

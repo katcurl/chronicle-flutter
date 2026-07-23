@@ -6,18 +6,21 @@ import 'package:chronicle/features/projects/project_appearance_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('project appearance inherits the complete global appearance by default', () {
-    final global = AppAppearancePreferences.preset(
-      ChroniclePalette.orange,
-      surfaceStyle: ChronicleSurfaceStyle.glossy,
-      brightnessMode: ChronicleBrightnessMode.dark,
-    );
+  test(
+    'project appearance inherits the complete global appearance by default',
+    () {
+      final global = AppAppearancePreferences.preset(
+        ChroniclePalette.orange,
+        surfaceStyle: ChronicleSurfaceStyle.glossy,
+        brightnessMode: ChronicleBrightnessMode.dark,
+      );
 
-    final project = ProjectAppearancePreferences.defaults();
+      final project = ProjectAppearancePreferences.defaults();
 
-    expect(project.inheritsGlobal, isTrue);
-    expect(project.effectiveAppearance(global), global);
-  });
+      expect(project.inheritsGlobal, isTrue);
+      expect(project.effectiveAppearance(global), global);
+    },
+  );
 
   test('custom project colors keep the global brightness mode', () {
     final global = AppAppearancePreferences.preset(
@@ -98,7 +101,6 @@ void main() {
       throwsFormatException,
     );
   });
-
 
   test('project background validation detects PNG by content', () {
     final selection = ProjectBackgroundSelection.validate(

@@ -107,32 +107,30 @@ void main() {
   });
 
   test('visual composer adds a third placeholder without losing content', () {
-    final contents = NoteColumnsSyntax.normalizeContents(
-      const ['Рисунок', 'Интерпретация'],
-      3,
-    );
+    final contents = NoteColumnsSyntax.normalizeContents(const [
+      'Рисунок',
+      'Интерпретация',
+    ], 3);
 
     expect(contents, ['Рисунок', 'Интерпретация', 'Новая колонка']);
   });
 
   test('visual composer merges the last body when reducing to two columns', () {
-    final contents = NoteColumnsSyntax.normalizeContents(
-      const ['Слева', 'В центре', 'Справа'],
-      2,
-    );
+    final contents = NoteColumnsSyntax.normalizeContents(const [
+      'Слева',
+      'В центре',
+      'Справа',
+    ], 2);
 
     expect(contents, ['Слева', 'В центре\n\nСправа']);
   });
 
   test('visual composer preserves Markdown while changing column count', () {
-    final contents = NoteColumnsSyntax.normalizeContents(
-      const [
-        '![Orf9b](../../Attachments/orf9b.png)',
-        '## Результат\n\n\$R_g = 1.8\\,\\mathrm{nm}\$',
-        '- [x] Проверено',
-      ],
-      2,
-    );
+    final contents = NoteColumnsSyntax.normalizeContents(const [
+      '![Orf9b](../../Attachments/orf9b.png)',
+      '## Результат\n\n\$R_g = 1.8\\,\\mathrm{nm}\$',
+      '- [x] Проверено',
+    ], 2);
     final markdown = NoteColumnsSyntax.build(
       widths: const [40, 60],
       contents: contents,
@@ -155,29 +153,33 @@ void main() {
   });
 
   test('a column can be duplicated only while a third slot is available', () {
-    expect(
-      NoteColumnsSyntax.duplicateContent(const ['Рисунок', 'Текст'], 0),
-      ['Рисунок', 'Рисунок', 'Текст'],
-    );
-    expect(
-      NoteColumnsSyntax.duplicateContent(const ['A', 'B', 'C'], 1),
-      ['A', 'B', 'C'],
-    );
+    expect(NoteColumnsSyntax.duplicateContent(const ['Рисунок', 'Текст'], 0), [
+      'Рисунок',
+      'Рисунок',
+      'Текст',
+    ]);
+    expect(NoteColumnsSyntax.duplicateContent(const ['A', 'B', 'C'], 1), [
+      'A',
+      'B',
+      'C',
+    ]);
   });
 
   test('safe column removal preserves Markdown reading order', () {
     expect(
-      NoteColumnsSyntax.removeContentSafely(
-        const ['Рисунок', 'Подпись', 'Интерпретация'],
-        0,
-      ),
+      NoteColumnsSyntax.removeContentSafely(const [
+        'Рисунок',
+        'Подпись',
+        'Интерпретация',
+      ], 0),
       ['Рисунок\n\nПодпись', 'Интерпретация'],
     );
     expect(
-      NoteColumnsSyntax.removeContentSafely(
-        const ['Рисунок', 'Подпись', 'Интерпретация'],
-        2,
-      ),
+      NoteColumnsSyntax.removeContentSafely(const [
+        'Рисунок',
+        'Подпись',
+        'Интерпретация',
+      ], 2),
       ['Рисунок', 'Подпись\n\nИнтерпретация'],
     );
   });

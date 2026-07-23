@@ -28,11 +28,12 @@ ThemeData buildChronicleTheme(
   final panelMid = Color.lerp(panel, accent, isLight ? 0.045 : 0.08)!;
   final panelHigh = Color.lerp(panel, accent, isLight ? 0.09 : 0.14)!;
   final panelHighest = Color.lerp(panel, accent, isLight ? 0.15 : 0.22)!;
-  final outline = Color.lerp(
-    generated.outlineVariant,
-    appearance.panelPalette.seed,
-    isLight ? 0.12 : 0.2,
-  )!;
+  final outline =
+      Color.lerp(
+        generated.outlineVariant,
+        appearance.panelPalette.seed,
+        isLight ? 0.12 : 0.2,
+      )!;
   final colors = generated.copyWith(
     primary: accent,
     surface: panel,
@@ -62,7 +63,8 @@ ThemeData buildChronicleTheme(
   return ThemeData(
     useMaterial3: true,
     colorScheme: colors,
-    scaffoldBackgroundColor: backgroundAvailable ? Colors.transparent : background,
+    scaffoldBackgroundColor:
+        backgroundAvailable ? Colors.transparent : background,
     visualDensity: VisualDensity.standard,
     iconTheme: IconThemeData(color: iconAccent),
     primaryIconTheme: IconThemeData(color: iconAccent),
@@ -97,9 +99,10 @@ ThemeData buildChronicleTheme(
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(26),
-        side: style == ChronicleSurfaceStyle.matte
-            ? BorderSide.none
-            : BorderSide(color: colors.outlineVariant),
+        side:
+            style == ChronicleSurfaceStyle.matte
+                ? BorderSide.none
+                : BorderSide(color: colors.outlineVariant),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
@@ -243,15 +246,14 @@ class ChronicleAppearanceTheme
       iconAccent: Color.lerp(iconAccent, other.iconAccent, t)!,
       outlineColor: Color.lerp(outlineColor, other.outlineColor, t)!,
       backgroundColor: Color.lerp(backgroundColor, other.backgroundColor, t)!,
-      wallpaperOpacity: lerpDouble(wallpaperOpacity, other.wallpaperOpacity, t)!,
-      wallpaperOverlay: lerpDouble(wallpaperOverlay, other.wallpaperOverlay, t)!,
+      wallpaperOpacity:
+          lerpDouble(wallpaperOpacity, other.wallpaperOpacity, t)!,
+      wallpaperOverlay:
+          lerpDouble(wallpaperOverlay, other.wallpaperOverlay, t)!,
       panelOpacity: lerpDouble(panelOpacity, other.panelOpacity, t)!,
       panelBlurSigma: lerpDouble(panelBlurSigma, other.panelBlurSigma, t)!,
-      sparkleIntensity: lerpDouble(
-        sparkleIntensity,
-        other.sparkleIntensity,
-        t,
-      )!,
+      sparkleIntensity:
+          lerpDouble(sparkleIntensity, other.sparkleIntensity, t)!,
     );
   }
 
@@ -272,10 +274,7 @@ class ChronicleAppearanceTheme
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: <Color>[
-              Color.lerp(highlight, panel, 0.22)!,
-              panel,
-            ],
+            colors: <Color>[Color.lerp(highlight, panel, 0.22)!, panel],
           ),
           border: Border.all(
             color: panelHighlight.withValues(alpha: 0.62 * panelOpacity),
@@ -332,9 +331,7 @@ class ChroniclePanelSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appearance = Theme.of(
-      context,
-    ).extension<ChronicleAppearanceTheme>();
+    final appearance = Theme.of(context).extension<ChronicleAppearanceTheme>();
     if (appearance == null) return child;
     final radius = borderRadius ?? BorderRadius.zero;
     Widget content = Stack(
@@ -394,9 +391,7 @@ class ChronicleBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appearance = Theme.of(
-      context,
-    ).extension<ChronicleAppearanceTheme>();
+    final appearance = Theme.of(context).extension<ChronicleAppearanceTheme>();
     if (appearance == null || backgroundImage == null) return child;
     return Stack(
       fit: StackFit.expand,
@@ -407,9 +402,7 @@ class ChronicleBackdrop extends StatelessWidget {
           image: backgroundImage!,
           fit: BoxFit.cover,
           alignment: Alignment.center,
-          opacity: AlwaysStoppedAnimation<double>(
-            appearance.wallpaperOpacity,
-          ),
+          opacity: AlwaysStoppedAnimation<double>(appearance.wallpaperOpacity),
           filterQuality: FilterQuality.medium,
           gaplessPlayback: true,
           errorBuilder: (_, __, ___) => const SizedBox.expand(),
@@ -459,21 +452,21 @@ class _ChronicleGlitterPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final dotPaint = Paint()
-      ..color = sparkleColor.withValues(
-        alpha: ((emphasized ? 0.52 : 0.34) * intensity)
-            .clamp(0, 1)
-            .toDouble(),
-      )
-      ..style = PaintingStyle.fill;
-    final accentPaint = Paint()
-      ..color = accentColor.withValues(
-        alpha: ((emphasized ? 0.42 : 0.26) * intensity)
-            .clamp(0, 1)
-            .toDouble(),
-      )
-      ..strokeWidth = emphasized ? 1.2 : 0.9
-      ..strokeCap = StrokeCap.round;
+    final dotPaint =
+        Paint()
+          ..color = sparkleColor.withValues(
+            alpha:
+                ((emphasized ? 0.52 : 0.34) * intensity).clamp(0, 1).toDouble(),
+          )
+          ..style = PaintingStyle.fill;
+    final accentPaint =
+        Paint()
+          ..color = accentColor.withValues(
+            alpha:
+                ((emphasized ? 0.42 : 0.26) * intensity).clamp(0, 1).toDouble(),
+          )
+          ..strokeWidth = emphasized ? 1.2 : 0.9
+          ..strokeCap = StrokeCap.round;
 
     for (var index = 0; index < _points.length; index++) {
       final normalized = _points[index];
@@ -481,12 +474,10 @@ class _ChronicleGlitterPainter extends CustomPainter {
         normalized.dx * size.width,
         normalized.dy * size.height,
       );
-      final radius = (index % 3 == 0 ? 1.45 : 0.8) *
-          (0.72 + intensity * 0.28);
+      final radius = (index % 3 == 0 ? 1.45 : 0.8) * (0.72 + intensity * 0.28);
       canvas.drawCircle(center, radius, dotPaint);
       if (index % 4 == 0) {
-        final arm = (emphasized ? 4.0 : 3.0) *
-            (0.72 + intensity * 0.28);
+        final arm = (emphasized ? 4.0 : 3.0) * (0.72 + intensity * 0.28);
         canvas.drawLine(
           center.translate(-arm, 0),
           center.translate(arm, 0),

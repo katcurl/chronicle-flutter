@@ -95,10 +95,10 @@ class NoteDocument {
 
   static int wordCount(String markdown) {
     final withoutSyntax = _replaceImagesWithReadableText(
-      ScientificReferenceSyntax.stripMarkersForWordCount(
-        NoteColumnsSyntax.stripMarkers(markdown),
-      ),
-    )
+          ScientificReferenceSyntax.stripMarkersForWordCount(
+            NoteColumnsSyntax.stripMarkers(markdown),
+          ),
+        )
         .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
         .replaceAll(RegExp(r'\$\$[\s\S]*?\$\$'), ' ')
         .replaceAll(RegExp(r'\\\[[\s\S]*?\\\]'), ' ')

@@ -93,7 +93,9 @@ class NoteExportComposer {
     for (final reference in _attachmentReferences(rawContent)) {
       final exportedPath = assetNames[reference.sourcePath];
       if (exportedPath != null) {
-        archiveTargetMap[reference.rawTarget] = _encodeRelativePath(exportedPath);
+        archiveTargetMap[reference.rawTarget] = _encodeRelativePath(
+          exportedPath,
+        );
       }
     }
     final archiveContent = _replaceTargets(rawContent, archiveTargetMap);
@@ -107,27 +109,28 @@ class NoteExportComposer {
       projectTitle: projectTitle,
       content: archiveContent,
     );
-    final archive = StoredZipArchiveBuilder()
-      ..addText('$baseName.md', portableMarkdown)
-      ..addText('$baseName.html', html)
-      ..addText(
-        'manifest.json',
-        const JsonEncoder.withIndent('  ').convert(<String, Object?>{
-          'format': 'chronicle-note-export',
-          'version': 1,
-          'generatedAt': DateTime.now().toUtc().toIso8601String(),
-          'note': <String, Object?>{
-            'id': note.id,
-            'title': note.title,
-            'projectId': note.projectId,
-            'projectTitle': projectTitle,
-            'updatedAt': note.updatedAt.toUtc().toIso8601String(),
-          },
-          'files': <String>['$baseName.md', '$baseName.html'],
-          'attachments': (assetNames.values.toList()..sort()),
-          'missingAttachments': assetSet.missing,
-        }),
-      );
+    final archive =
+        StoredZipArchiveBuilder()
+          ..addText('$baseName.md', portableMarkdown)
+          ..addText('$baseName.html', html)
+          ..addText(
+            'manifest.json',
+            const JsonEncoder.withIndent('  ').convert(<String, Object?>{
+              'format': 'chronicle-note-export',
+              'version': 1,
+              'generatedAt': DateTime.now().toUtc().toIso8601String(),
+              'note': <String, Object?>{
+                'id': note.id,
+                'title': note.title,
+                'projectId': note.projectId,
+                'projectTitle': projectTitle,
+                'updatedAt': note.updatedAt.toUtc().toIso8601String(),
+              },
+              'files': <String>['$baseName.md', '$baseName.html'],
+              'attachments': (assetNames.values.toList()..sort()),
+              'missingAttachments': assetSet.missing,
+            }),
+          );
     for (final asset in assetSet.assets) {
       final exportPath = assetNames[asset.sourcePath];
       if (exportPath != null) {
@@ -154,13 +157,14 @@ class NoteExportComposer {
     final baseName = safeFileStem(project.title, fallback: 'project');
     final orderedNotes = List<Note>.from(notes)
       ..sort((left, right) => left.title.compareTo(right.title));
-    final orderedTasks = List<WorkTask>.from(tasks)
-      ..sort((left, right) {
-        final order = left.sortOrder.compareTo(right.sortOrder);
-        return order != 0 ? order : left.title.compareTo(right.title);
-      });
+    final orderedTasks = List<WorkTask>.from(tasks)..sort((left, right) {
+      final order = left.sortOrder.compareTo(right.sortOrder);
+      return order != 0 ? order : left.title.compareTo(right.title);
+    });
     final noteFileNames = _noteFileNames(orderedNotes);
-    final noteById = <String, Note>{for (final note in orderedNotes) note.id: note};
+    final noteById = <String, Note>{
+      for (final note in orderedNotes) note.id: note,
+    };
     final noteByTitle = <String, Note>{
       for (final note in orderedNotes) note.title.trim().toLowerCase(): note,
     };
@@ -263,25 +267,18 @@ class NoteExportComposer {
         }
       }
       final replacedContent = _replaceTargets(content, replacements);
-      final linked = _convertWikiLinks(
-        replacedContent,
-        (target) {
-          final destination = resolveArchive(target);
-          return destination == null ? null : _encodeRelativePath(destination);
-        },
-      );
-      final htmlLinked = _convertWikiLinks(
-        replacedContent,
-        (target) {
-          final destination = resolveArchive(target);
-          if (destination == null) {
-            return null;
-          }
-          final htmlName =
-              '${path.basenameWithoutExtension(destination)}.html';
-          return _encodeRelativePath(htmlName);
-        },
-      );
+      final linked = _convertWikiLinks(replacedContent, (target) {
+        final destination = resolveArchive(target);
+        return destination == null ? null : _encodeRelativePath(destination);
+      });
+      final htmlLinked = _convertWikiLinks(replacedContent, (target) {
+        final destination = resolveArchive(target);
+        if (destination == null) {
+          return null;
+        }
+        final htmlName = '${path.basenameWithoutExtension(destination)}.html';
+        return _encodeRelativePath(htmlName);
+      });
       archive.addText(
         'notes/${noteFileNames[note.id]}',
         _renderPortableNoteMarkdown(
@@ -292,11 +289,7 @@ class NoteExportComposer {
       );
       archive.addText(
         'notes/${path.basenameWithoutExtension(noteFileNames[note.id]!)}.html',
-        _renderNoteHtml(
-          note,
-          projectTitle: project.title,
-          content: htmlLinked,
-        ),
+        _renderNoteHtml(note, projectTitle: project.title, content: htmlLinked),
       );
     }
     for (final asset in assetSet.assets) {
@@ -373,9 +366,7 @@ class NoteExportComposer {
 
   void _validateArchiveSize(int byteLength) {
     if (byteLength > maxPortableArchiveBytes) {
-      throw const FormatException(
-        'Размер переносимого ZIP больше 240 МБ.',
-      );
+      throw const FormatException('Размер переносимого ZIP больше 240 МБ.');
     }
   }
 
@@ -519,9 +510,10 @@ class NoteExportComposer {
     List<WorkTask> tasks, {
     required String? Function(NoteWikiTarget target) wikiResolver,
   }) {
-    final buffer = StringBuffer()
-      ..writeln('# ${project.emoji} ${project.title}')
-      ..writeln();
+    final buffer =
+        StringBuffer()
+          ..writeln('# ${project.emoji} ${project.title}')
+          ..writeln();
     if (project.description.trim().isNotEmpty) {
       buffer
         ..writeln(project.description.trim())
@@ -568,9 +560,10 @@ class NoteExportComposer {
     List<WorkTask> tasks,
     Map<String, String> noteFileNames,
   ) {
-    final buffer = StringBuffer()
-      ..writeln('# ${project.emoji} ${project.title}')
-      ..writeln();
+    final buffer =
+        StringBuffer()
+          ..writeln('# ${project.emoji} ${project.title}')
+          ..writeln();
     if (project.description.trim().isNotEmpty) {
       buffer
         ..writeln(project.description.trim())
@@ -667,13 +660,14 @@ class NoteExportComposer {
     required Map<String, String> metadata,
     required String body,
   }) {
-    final details = metadata.entries
-        .map(
-          (entry) =>
-              '<dt>${_htmlText(entry.key)}</dt>'
-              '<dd>${_htmlText(entry.value)}</dd>',
-        )
-        .join();
+    final details =
+        metadata.entries
+            .map(
+              (entry) =>
+                  '<dt>${_htmlText(entry.key)}</dt>'
+                  '<dd>${_htmlText(entry.value)}</dd>',
+            )
+            .join();
     return '''<!doctype html>
 <html lang="ru">
 <head>
@@ -720,15 +714,16 @@ $body
     for (final image in images) {
       final alignment = image.presentation.alignment.name;
       final caption = image.presentation.caption.trim();
-      final rendered = StringBuffer()
-        ..write(
-          '<figure class="align-$alignment" '
-          'style="width:${image.presentation.widthPercent}%">',
-        )
-        ..write(
-          '<img src="${_htmlAttribute(image.target)}" '
-          'alt="${_htmlAttribute(image.alt)}">',
-        );
+      final rendered =
+          StringBuffer()
+            ..write(
+              '<figure class="align-$alignment" '
+              'style="width:${image.presentation.widthPercent}%">',
+            )
+            ..write(
+              '<img src="${_htmlAttribute(image.target)}" '
+              'alt="${_htmlAttribute(image.alt)}">',
+            );
       if (caption.isNotEmpty) {
         rendered.write('<figcaption>${_htmlText(caption)}</figcaption>');
       }
@@ -937,20 +932,21 @@ class StoredZipArchiveBuilder {
       if (entry.bytes.length > 0xffffffff || offset > 0xffffffff) {
         throw StateError('ZIP32 не поддерживает файл такого размера.');
       }
-      final local = BytesBuilder(copy: false)
-        ..add(_uint32(0x04034b50))
-        ..add(_uint16(20))
-        ..add(_uint16(0x0800))
-        ..add(_uint16(0))
-        ..add(_uint16(0))
-        ..add(_uint16(33))
-        ..add(_uint32(checksum))
-        ..add(_uint32(entry.bytes.length))
-        ..add(_uint32(entry.bytes.length))
-        ..add(_uint16(nameBytes.length))
-        ..add(_uint16(0))
-        ..add(nameBytes)
-        ..add(entry.bytes);
+      final local =
+          BytesBuilder(copy: false)
+            ..add(_uint32(0x04034b50))
+            ..add(_uint16(20))
+            ..add(_uint16(0x0800))
+            ..add(_uint16(0))
+            ..add(_uint16(0))
+            ..add(_uint16(33))
+            ..add(_uint32(checksum))
+            ..add(_uint32(entry.bytes.length))
+            ..add(_uint32(entry.bytes.length))
+            ..add(_uint16(nameBytes.length))
+            ..add(_uint16(0))
+            ..add(nameBytes)
+            ..add(entry.bytes);
       final localBytes = local.takeBytes();
       output.add(localBytes);
 
@@ -1079,7 +1075,10 @@ class StoredZipArchiveBuilder {
 }
 
 class _AttachmentReference {
-  const _AttachmentReference({required this.rawTarget, required this.sourcePath});
+  const _AttachmentReference({
+    required this.rawTarget,
+    required this.sourcePath,
+  });
 
   final String rawTarget;
   final String sourcePath;

@@ -161,47 +161,47 @@ class DashboardScreen extends StatelessWidget {
                 SizedBox(
                   height: 126,
                   child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: store.activeProjects.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
-                  itemBuilder: (_, index) {
-                    final project = store.activeProjects[index];
-                    final seconds = store.data.entries
-                        .where((entry) => entry.projectId == project.id)
-                        .fold<int>(
-                          0,
-                          (sum, entry) => sum + entry.durationSeconds,
-                        );
-                    return SizedBox(
-                      width: 210,
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                project.emoji,
-                                style: const TextStyle(fontSize: 26),
-                              ),
-                              const Spacer(),
-                              Text(
-                                project.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
+                    scrollDirection: Axis.horizontal,
+                    itemCount: store.activeProjects.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    itemBuilder: (_, index) {
+                      final project = store.activeProjects[index];
+                      final seconds = store.data.entries
+                          .where((entry) => entry.projectId == project.id)
+                          .fold<int>(
+                            0,
+                            (sum, entry) => sum + entry.durationSeconds,
+                          );
+                      return SizedBox(
+                        width: 210,
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  project.emoji,
+                                  style: const TextStyle(fontSize: 26),
                                 ),
-                              ),
-                              Text(
-                                formatDuration(seconds),
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
+                                const Spacer(),
+                                Text(
+                                  project.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  formatDuration(seconds),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    );
+                      );
                     },
                   ),
                 ),
@@ -232,9 +232,9 @@ class _EmptyWorkspaceCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'Пустое пространство',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(

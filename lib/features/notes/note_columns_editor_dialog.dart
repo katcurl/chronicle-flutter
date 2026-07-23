@@ -63,10 +63,7 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
       columnCount,
     );
     _replaceContentControllers(
-      NoteColumnsSyntax.normalizeContents(
-        widget.initialContents,
-        columnCount,
-      ),
+      NoteColumnsSyntax.normalizeContents(widget.initialContents, columnCount),
     );
   }
 
@@ -85,9 +82,7 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
 
     return AlertDialog(
       title: Text(
-        widget.editingExisting
-            ? 'Редактор колонок'
-            : 'Создать блок колонок',
+        widget.editingExisting ? 'Редактор колонок' : 'Создать блок колонок',
       ),
       content: SizedBox(
         width: dialogWidth,
@@ -389,7 +384,8 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
               IconButton(
                 tooltip: 'Переместить левее',
                 visualDensity: VisualDensity.compact,
-                onPressed: index > 0 ? () => _moveColumn(index, index - 1) : null,
+                onPressed:
+                    index > 0 ? () => _moveColumn(index, index - 1) : null,
                 icon: const Icon(Icons.arrow_back_rounded, size: 19),
               ),
               IconButton(
@@ -447,9 +443,9 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
                 setState(() => selectedColumn = index);
               }
             },
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontFamily: 'monospace',
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
             decoration: InputDecoration(
               hintText:
                   index == 0
@@ -498,9 +494,8 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
     );
     final removed = <TextEditingController>[];
     setState(() {
-      final shared = contentControllers.length < next
-          ? contentControllers.length
-          : next;
+      final shared =
+          contentControllers.length < next ? contentControllers.length : next;
       for (var index = 0; index < shared; index += 1) {
         contentControllers[index].text = normalized[index];
       }
@@ -527,8 +522,7 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
     contentControllers
       ..clear()
       ..addAll([
-        for (final content in contents)
-          TextEditingController(text: content),
+        for (final content in contents) TextEditingController(text: content),
       ]);
   }
 
@@ -629,9 +623,11 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
     final removedController = contentControllers[index];
     setState(() {
       contentControllers.removeAt(index);
-      for (var contentIndex = 0;
-          contentIndex < contentControllers.length;
-          contentIndex += 1) {
+      for (
+        var contentIndex = 0;
+        contentIndex < contentControllers.length;
+        contentIndex += 1
+      ) {
         contentControllers[contentIndex].text = nextContents[contentIndex];
       }
       widths.removeAt(index);
@@ -725,10 +721,11 @@ class _NoteColumnsEditorDialogState extends State<NoteColumnsEditorDialog> {
                     ? remaining ~/ 2
                     : (middle / currentTail * remaining).round();
             setState(() {
-              widths = NoteColumnsSyntax.normalizeWidths(
-                [nextLeft, nextMiddle, remaining - nextMiddle],
-                3,
-              );
+              widths = NoteColumnsSyntax.normalizeWidths([
+                nextLeft,
+                nextMiddle,
+                remaining - nextMiddle,
+              ], 3);
             });
           },
         ),

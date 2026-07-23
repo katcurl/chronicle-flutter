@@ -4,10 +4,7 @@ import 'note_data_import.dart';
 import 'note_table_syntax.dart';
 
 class NoteDataImportDialog extends StatefulWidget {
-  const NoteDataImportDialog({
-    super.key,
-    required this.files,
-  });
+  const NoteDataImportDialog({super.key, required this.files});
 
   final List<NoteDataImportFile> files;
 
@@ -36,15 +33,17 @@ class _NoteDataImportDialogState extends State<NoteDataImportDialog> {
   @override
   void initState() {
     super.initState();
-    tablePreview = widget.files.length == 1 && widget.files.single.isTabular
-        ? NoteDataImport.parseTableFile(widget.files.single)
-        : null;
+    tablePreview =
+        widget.files.length == 1 && widget.files.single.isTabular
+            ? NoteDataImport.parseTableFile(widget.files.single)
+            : null;
     titleController = TextEditingController(
       text: NoteDataImport.defaultTitle(widget.files),
     );
-    mode = canImportAsTable
-        ? NoteDataImportMode.tableWithSource
-        : NoteDataImportMode.attachmentBundle;
+    mode =
+        canImportAsTable
+            ? NoteDataImportMode.tableWithSource
+            : NoteDataImportMode.attachmentBundle;
   }
 
   @override
@@ -207,9 +206,7 @@ class _TablePreview extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
-        ),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,

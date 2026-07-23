@@ -30,21 +30,21 @@ Future<List<String>> localLanIpv4Addresses() async {
 }
 
 List<String> orderLanIpv4Candidates(Iterable<LanIpv4Candidate> candidates) {
-  final sorted = candidates.toList()
-    ..sort((left, right) {
-      final interfaceRank = _interfaceRank(
-        left.interfaceName,
-      ).compareTo(_interfaceRank(right.interfaceName));
-      if (interfaceRank != 0) {
-        return interfaceRank;
-      }
-      final addressRank = _addressRank(
-        left.address,
-      ).compareTo(_addressRank(right.address));
-      return addressRank != 0
-          ? addressRank
-          : left.address.compareTo(right.address);
-    });
+  final sorted =
+      candidates.toList()..sort((left, right) {
+        final interfaceRank = _interfaceRank(
+          left.interfaceName,
+        ).compareTo(_interfaceRank(right.interfaceName));
+        if (interfaceRank != 0) {
+          return interfaceRank;
+        }
+        final addressRank = _addressRank(
+          left.address,
+        ).compareTo(_addressRank(right.address));
+        return addressRank != 0
+            ? addressRank
+            : left.address.compareTo(right.address);
+      });
   return sorted.map((candidate) => candidate.address).toSet().toList();
 }
 

@@ -43,19 +43,16 @@ Future<Uint8List?> readClipboardPngImage() async {
     return null;
   }
 
-  final process = await Process.start(
-    'powershell.exe',
-    const <String>[
-      '-NoLogo',
-      '-NoProfile',
-      '-NonInteractive',
-      '-Sta',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      _windowsClipboardScript,
-    ],
-  );
+  final process = await Process.start('powershell.exe', const <String>[
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-Sta',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    _windowsClipboardScript,
+  ]);
 
   final outputFuture = process.stdout.fold<List<int>>(
     <int>[],

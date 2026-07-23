@@ -226,8 +226,12 @@ class _SyncScanScreenState extends State<SyncScanScreen> {
                     runSpacing: 10,
                     alignment: WrapAlignment.center,
                     children: [
-                      Chip(label: Text('Записей отправлено: ${value.sentCount}')),
-                      Chip(label: Text('Записей получено: ${value.receivedCount}')),
+                      Chip(
+                        label: Text('Записей отправлено: ${value.sentCount}'),
+                      ),
+                      Chip(
+                        label: Text('Записей получено: ${value.receivedCount}'),
+                      ),
                       Chip(label: Text('Применено: ${value.appliedCount}')),
                       Chip(
                         label: Text(
@@ -504,7 +508,8 @@ String _progressDetails(LanSyncProgress progress) {
 String _friendlyError(Object error) {
   final raw = error.toString().replaceFirst('Bad state: ', '').trim();
   final lower = raw.toLowerCase();
-  if (error is LanSyncCancelledException || lower.contains('синхронизация отменена')) {
+  if (error is LanSyncCancelledException ||
+      lower.contains('синхронизация отменена')) {
     return 'Синхронизация отменена. Уже переданные файлы сохранены; при повторе Chronicle продолжит с оставшихся.';
   }
   if (lower.contains('socketexception') ||

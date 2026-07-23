@@ -88,10 +88,8 @@ class _LaboratoryTemplateDialogState extends State<LaboratoryTemplateDialog> {
   Widget build(BuildContext context) {
     final template = _selectedTemplate;
     final mediaSize = MediaQuery.sizeOf(context);
-    final dialogWidth =
-        (mediaSize.width - 48).clamp(360.0, 940.0).toDouble();
-    final dialogHeight =
-        (mediaSize.height - 48).clamp(360.0, 680.0).toDouble();
+    final dialogWidth = (mediaSize.width - 48).clamp(360.0, 940.0).toDouble();
+    final dialogHeight = (mediaSize.height - 48).clamp(360.0, 680.0).toDouble();
 
     return Dialog(
       insetPadding: const EdgeInsets.all(24),
@@ -253,8 +251,7 @@ class _LaboratoryTemplateDialogState extends State<LaboratoryTemplateDialog> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) {
-          final replacing =
-              _placement == LaboratoryTemplatePlacement.replace;
+          final replacing = _placement == LaboratoryTemplatePlacement.replace;
           return AlertDialog(
             title: Text(
               replacing
@@ -354,8 +351,7 @@ class _TemplateList extends StatelessWidget {
         final template = templates[index];
         return ListTile(
           selected: template.id == selectedTemplateId,
-          selectedTileColor:
-              Theme.of(context).colorScheme.secondaryContainer,
+          selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -401,9 +397,8 @@ class _TemplatePreview extends StatelessWidget {
                     children: [
                       Text(
                         template.title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       Text(
                         'Предварительный просмотр Markdown',

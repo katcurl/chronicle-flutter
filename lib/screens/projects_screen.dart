@@ -150,13 +150,12 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder:
-            (_) =>
-                ProjectDetailScreen(
-                  store: widget.store,
-                  projectId: project.id,
-                  appearanceController: widget.appearanceController,
-                  globalAppearance: widget.globalAppearance,
-                ),
+            (_) => ProjectDetailScreen(
+              store: widget.store,
+              projectId: project.id,
+              appearanceController: widget.appearanceController,
+              globalAppearance: widget.globalAppearance,
+            ),
       ),
     );
     if (mounted) setState(() {});
@@ -198,103 +197,108 @@ class _ProjectCard extends StatelessWidget {
       controller: appearanceController,
       globalAppearance: globalAppearance,
       child: Builder(
-        builder: (projectContext) => ProjectSurface(
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onOpen,
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      ProjectAvatar(
-                        project: project,
-                        controller: appearanceController,
-                        size: 48,
-                        borderRadius: 15,
-                        backgroundColor: color.withValues(alpha: 0.22),
-                        emojiFontSize: 26,
-                      ),
-                      const Spacer(),
-                      PopupMenuButton<String>(
-                        onSelected: (value) {
-                          if (value == 'edit') onEdit();
-                          if (value == 'archive') onArchive();
-                        },
-                        itemBuilder: (_) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Text('Редактировать'),
-                          ),
-                          PopupMenuItem(
-                            value: 'archive',
-                            child: Text(
-                              project.archived
-                                  ? 'Вернуть из архива'
-                                  : 'Архивировать',
+        builder:
+            (projectContext) => ProjectSurface(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onOpen,
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            ProjectAvatar(
+                              project: project,
+                              controller: appearanceController,
+                              size: 48,
+                              borderRadius: 15,
+                              backgroundColor: color.withValues(alpha: 0.22),
+                              emojiFontSize: 26,
                             ),
+                            const Spacer(),
+                            PopupMenuButton<String>(
+                              onSelected: (value) {
+                                if (value == 'edit') onEdit();
+                                if (value == 'archive') onArchive();
+                              },
+                              itemBuilder:
+                                  (_) => [
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Text('Редактировать'),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'archive',
+                                      child: Text(
+                                        project.archived
+                                            ? 'Вернуть из архива'
+                                            : 'Архивировать',
+                                      ),
+                                    ),
+                                  ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          project.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(projectContext).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        if (project.researchGoal.isNotEmpty ||
+                            project.description.isNotEmpty)
+                          Text(
+                            project.researchGoal.isNotEmpty
+                                ? project.researchGoal
+                                : project.description,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(projectContext).textTheme.bodySmall,
+                          ),
+                        const Spacer(),
+                        LinearProgressIndicator(
+                          value: progress,
+                          borderRadius: BorderRadius.circular(99),
+                          color: color,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Text('$done / ${tasks.length} задач'),
+                            const Spacer(),
+                            Text(formatDuration(seconds)),
+                          ],
+                        ),
+                        if (project.dueAt != null) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.event_rounded,
+                                size: 17,
+                                color:
+                                    isOverdue(project.dueAt)
+                                        ? Theme.of(
+                                          projectContext,
+                                        ).colorScheme.error
+                                        : null,
+                              ),
+                              const SizedBox(width: 6),
+                              Text('До ${shortDate(project.dueAt)}'),
+                            ],
                           ),
                         ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    project.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(projectContext).textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  if (project.researchGoal.isNotEmpty ||
-                      project.description.isNotEmpty)
-                    Text(
-                      project.researchGoal.isNotEmpty
-                          ? project.researchGoal
-                          : project.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(projectContext).textTheme.bodySmall,
-                    ),
-                  const Spacer(),
-                  LinearProgressIndicator(
-                    value: progress,
-                    borderRadius: BorderRadius.circular(99),
-                    color: color,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text('$done / ${tasks.length} задач'),
-                      const Spacer(),
-                      Text(formatDuration(seconds)),
-                    ],
-                  ),
-                  if (project.dueAt != null) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.event_rounded,
-                          size: 17,
-                          color: isOverdue(project.dueAt)
-                              ? Theme.of(projectContext).colorScheme.error
-                              : null,
-                        ),
-                        const SizedBox(width: 6),
-                        Text('До ${shortDate(project.dueAt)}'),
                       ],
                     ),
-                  ],
-                ],
+                  ),
+                ),
               ),
             ),
-          ),
-          ),
-        ),
       ),
     );
   }

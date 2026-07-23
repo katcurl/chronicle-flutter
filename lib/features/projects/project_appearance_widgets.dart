@@ -36,9 +36,8 @@ class ProjectAppearanceScope extends StatelessWidget {
             backgroundAvailable: backgroundFile != null,
           ),
           child: ChronicleBackdrop(
-            backgroundImage: backgroundFile == null
-                ? null
-                : FileImage(backgroundFile),
+            backgroundImage:
+                backgroundFile == null ? null : FileImage(backgroundFile),
             revision: preferences.backgroundRevision,
             child: child!,
           ),
@@ -48,7 +47,6 @@ class ProjectAppearanceScope extends StatelessWidget {
     );
   }
 }
-
 
 class ProjectSurface extends StatelessWidget {
   const ProjectSurface({
@@ -69,10 +67,7 @@ class ProjectSurface extends StatelessWidget {
     return ChroniclePanelSurface(
       emphasized: emphasized,
       borderRadius: BorderRadius.circular(borderRadius),
-      child: ColoredBox(
-        color: tint ?? Colors.transparent,
-        child: child,
-      ),
+      child: ColoredBox(color: tint ?? Colors.transparent, child: child),
     );
   }
 }
@@ -110,23 +105,25 @@ class ProjectAvatar extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: backgroundColor ??
+            color:
+                backgroundColor ??
                 Color(project.colorValue).withValues(alpha: 0.22),
             borderRadius: BorderRadius.circular(borderRadius),
           ),
-          child: file == null
-              ? fallback
-              : Image.file(
-                  file,
-                  key: ValueKey<String>(
-                    '${file.path}:${controller.preferencesFor(project.id).iconRevision}',
+          child:
+              file == null
+                  ? fallback
+                  : Image.file(
+                    file,
+                    key: ValueKey<String>(
+                      '${file.path}:${controller.preferencesFor(project.id).iconRevision}',
+                    ),
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    errorBuilder: (_, __, ___) => fallback,
                   ),
-                  width: size,
-                  height: size,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  errorBuilder: (_, __, ___) => fallback,
-                ),
         );
       },
     );

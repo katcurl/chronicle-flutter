@@ -43,10 +43,11 @@ class _NoteGraphScreenState extends State<NoteGraphScreen> {
   Future<void> _openResearchCanvas() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => ResearchCanvasScreen(
-          store: widget.store,
-          onOpenNote: widget.onOpenNote,
-        ),
+        builder:
+            (_) => ResearchCanvasScreen(
+              store: widget.store,
+              onOpenNote: widget.onOpenNote,
+            ),
       ),
     );
     if (mounted) {
@@ -64,12 +65,10 @@ class _NoteGraphScreenState extends State<NoteGraphScreen> {
   @override
   Widget build(BuildContext context) {
     final allNotes = widget.store.data.notes;
-    final projects = List<Project>.from(widget.store.data.projects)
-      ..sort(
-        (left, right) => left.title.toLowerCase().compareTo(
-          right.title.toLowerCase(),
-        ),
-      );
+    final projects = List<Project>.from(widget.store.data.projects)..sort(
+      (left, right) =>
+          left.title.toLowerCase().compareTo(right.title.toLowerCase()),
+    );
     final allNotesById = <String, Note>{
       for (final note in allNotes) note.id: note,
     };
@@ -84,24 +83,26 @@ class _NoteGraphScreenState extends State<NoteGraphScreen> {
             ? analysis.neighborhood(selectedNote.id, depth: focusDepth)
             : null;
 
-    final visibleNotes = allNotes.where((note) {
-      if (focusIds != null) {
-        return focusIds.contains(note.id);
-      }
-      if (projectFilter != null && note.projectId != projectFilter) {
-        return false;
-      }
-      if (noteTypeFilter != null && note.noteType != noteTypeFilter) {
-        return false;
-      }
-      if (tagFilter != null && !note.tags.contains(tagFilter)) {
-        return false;
-      }
-      if (connectedOnly && analysis.isolatedNoteIds.contains(note.id)) {
-        return false;
-      }
-      return true;
-    }).toList(growable: false);
+    final visibleNotes = allNotes
+        .where((note) {
+          if (focusIds != null) {
+            return focusIds.contains(note.id);
+          }
+          if (projectFilter != null && note.projectId != projectFilter) {
+            return false;
+          }
+          if (noteTypeFilter != null && note.noteType != noteTypeFilter) {
+            return false;
+          }
+          if (tagFilter != null && !note.tags.contains(tagFilter)) {
+            return false;
+          }
+          if (connectedOnly && analysis.isolatedNoteIds.contains(note.id)) {
+            return false;
+          }
+          return true;
+        })
+        .toList(growable: false);
 
     final visibleAnalysis = NoteGraphAnalysis.build(
       notes: visibleNotes,
@@ -123,10 +124,14 @@ class _NoteGraphScreenState extends State<NoteGraphScreen> {
     final visibleNotesById = <String, Note>{
       for (final note in visibleNotes) note.id: note,
     };
-    final noteTypes = allNotes.map((note) => note.noteType).toSet().toList()
-      ..sort((left, right) => noteTypeLabel(left).compareTo(noteTypeLabel(right)));
-    final tags = allNotes.expand((note) => note.tags).toSet().toList()
-      ..sort((left, right) => left.toLowerCase().compareTo(right.toLowerCase()));
+    final noteTypes =
+        allNotes.map((note) => note.noteType).toSet().toList()..sort(
+          (left, right) => noteTypeLabel(left).compareTo(noteTypeLabel(right)),
+        );
+    final tags =
+        allNotes.expand((note) => note.tags).toSet().toList()..sort(
+          (left, right) => left.toLowerCase().compareTo(right.toLowerCase()),
+        );
 
     return Scaffold(
       appBar: AppBar(
@@ -139,12 +144,13 @@ class _NoteGraphScreenState extends State<NoteGraphScreen> {
           ),
           IconButton(
             tooltip: 'Структура графа',
-            onPressed: () => _showInsights(
-              context,
-              analysis: analysis,
-              notesById: allNotesById,
-              projects: projects,
-            ),
+            onPressed:
+                () => _showInsights(
+                  context,
+                  analysis: analysis,
+                  notesById: allNotesById,
+                  projects: projects,
+                ),
             icon: const Icon(Icons.analytics_outlined),
           ),
           IconButton(
@@ -181,18 +187,13 @@ class _NoteGraphScreenState extends State<NoteGraphScreen> {
                 }
               }
             },
-            onProjectChanged: (value) => _changeFilters(
-              project: value,
-              updateProject: true,
-            ),
-            onNoteTypeChanged: (value) => _changeFilters(
-              noteType: value,
-              updateNoteType: true,
-            ),
-            onTagChanged: (value) => _changeFilters(
-              tag: value,
-              updateTag: true,
-            ),
+            onProjectChanged:
+                (value) => _changeFilters(project: value, updateProject: true),
+            onNoteTypeChanged:
+                (value) =>
+                    _changeFilters(noteType: value, updateNoteType: true),
+            onTagChanged:
+                (value) => _changeFilters(tag: value, updateTag: true),
             onConnectedOnlyChanged: (value) {
               setState(() {
                 connectedOnly = value;
@@ -218,151 +219,155 @@ class _NoteGraphScreenState extends State<NoteGraphScreen> {
           ),
           const Divider(height: 1),
           Expanded(
-            child: visibleNotes.isEmpty
-                ? const _EmptyGraph()
-                : Stack(
-                    children: [
-                      Positioned.fill(
-                        child: InteractiveViewer(
-                          transformationController: _transformationController,
-                          constrained: false,
-                          minScale: 0.35,
-                          maxScale: 2.4,
-                          boundaryMargin: const EdgeInsets.all(240),
-                          clipBehavior: Clip.none,
-                          child: SizedBox(
-                            width: layout.canvasSize.width,
-                            height: layout.canvasSize.height,
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                for (final cluster in layout.clusters)
-                                  _clusterPlate(
-                                    context,
-                                    cluster,
-                                    projects,
-                                  ),
-                                Positioned.fill(
-                                  child: IgnorePointer(
-                                    child: ValueListenableBuilder<String?>(
-                                      valueListenable: _hoveredNoteId,
-                                      builder: (context, hoveredNoteId, _) {
-                                        return CustomPaint(
-                                          painter: _NoteGraphEdgePainter(
-                                            layout: layout,
-                                            baseColor: Theme.of(context)
-                                                .colorScheme
-                                                .outlineVariant,
-                                            activeColor: Theme.of(context)
-                                                .colorScheme
-                                                .primary,
-                                            hoveredNoteId: hoveredNoteId,
-                                            selectedNoteId: selectedNoteId,
-                                            showDirections: showDirections,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                                for (final entry in layout.nodeBounds.entries)
-                                  Positioned.fromRect(
-                                    rect: entry.value,
-                                    child: _NoteGraphNode(
-                                      note: visibleNotesById[entry.key]!,
-                                      project: widget.store.projectById(
-                                        visibleNotesById[entry.key]!.projectId,
-                                      ),
-                                      degree: analysis.degrees[entry.key] ??
-                                          const NoteGraphDegree(
-                                            incoming: 0,
-                                            outgoing: 0,
-                                          ),
-                                      highlighted: normalizedQuery.isNotEmpty &&
-                                          matches.contains(entry.key),
-                                      selected: selectedNoteId == entry.key,
-                                      dimmed: selectedNoteId != null &&
-                                          selectedNoteId != entry.key &&
-                                          !(analysis.neighbors[selectedNoteId!] ??
-                                                  const <String>{})
-                                              .contains(entry.key),
-                                      onHoverChanged: (hovered) {
-                                        if (hovered) {
-                                          _hoveredNoteId.value = entry.key;
-                                        } else if (_hoveredNoteId.value ==
-                                            entry.key) {
-                                          _hoveredNoteId.value = null;
-                                        }
-                                      },
-                                      onSelect: () => setState(
-                                        () => selectedNoteId = entry.key,
-                                      ),
-                                      onOpen: () => _open(
-                                        visibleNotesById[entry.key]!,
+            child:
+                visibleNotes.isEmpty
+                    ? const _EmptyGraph()
+                    : Stack(
+                      children: [
+                        Positioned.fill(
+                          child: InteractiveViewer(
+                            transformationController: _transformationController,
+                            constrained: false,
+                            minScale: 0.35,
+                            maxScale: 2.4,
+                            boundaryMargin: const EdgeInsets.all(240),
+                            clipBehavior: Clip.none,
+                            child: SizedBox(
+                              width: layout.canvasSize.width,
+                              height: layout.canvasSize.height,
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  for (final cluster in layout.clusters)
+                                    _clusterPlate(context, cluster, projects),
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: ValueListenableBuilder<String?>(
+                                        valueListenable: _hoveredNoteId,
+                                        builder: (context, hoveredNoteId, _) {
+                                          return CustomPaint(
+                                            painter: _NoteGraphEdgePainter(
+                                              layout: layout,
+                                              baseColor:
+                                                  Theme.of(
+                                                    context,
+                                                  ).colorScheme.outlineVariant,
+                                              activeColor:
+                                                  Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                              hoveredNoteId: hoveredNoteId,
+                                              selectedNoteId: selectedNoteId,
+                                              showDirections: showDirections,
+                                            ),
+                                          );
+                                        },
                                       ),
                                     ),
                                   ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (normalizedQuery.isNotEmpty)
-                        Positioned(
-                          left: 16,
-                          bottom: 16,
-                          child: Card(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
-                              ),
-                              child: Text(
-                                matches.isEmpty
-                                    ? 'Совпадений нет'
-                                    : 'Подсвечено: ${matches.length}',
+                                  for (final entry in layout.nodeBounds.entries)
+                                    Positioned.fromRect(
+                                      rect: entry.value,
+                                      child: _NoteGraphNode(
+                                        note: visibleNotesById[entry.key]!,
+                                        project: widget.store.projectById(
+                                          visibleNotesById[entry.key]!
+                                              .projectId,
+                                        ),
+                                        degree:
+                                            analysis.degrees[entry.key] ??
+                                            const NoteGraphDegree(
+                                              incoming: 0,
+                                              outgoing: 0,
+                                            ),
+                                        highlighted:
+                                            normalizedQuery.isNotEmpty &&
+                                            matches.contains(entry.key),
+                                        selected: selectedNoteId == entry.key,
+                                        dimmed:
+                                            selectedNoteId != null &&
+                                            selectedNoteId != entry.key &&
+                                            !(analysis.neighbors[selectedNoteId!] ??
+                                                    const <String>{})
+                                                .contains(entry.key),
+                                        onHoverChanged: (hovered) {
+                                          if (hovered) {
+                                            _hoveredNoteId.value = entry.key;
+                                          } else if (_hoveredNoteId.value ==
+                                              entry.key) {
+                                            _hoveredNoteId.value = null;
+                                          }
+                                        },
+                                        onSelect:
+                                            () => setState(
+                                              () => selectedNoteId = entry.key,
+                                            ),
+                                        onOpen:
+                                            () => _open(
+                                              visibleNotesById[entry.key]!,
+                                            ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
                         ),
-                      if (selectedNote != null)
-                        Positioned(
-                          top: 16,
-                          right: 16,
-                          bottom: 16,
-                          width: 330,
-                          child: _GraphSelectionPanel(
-                            note: selectedNote,
-                            project: widget.store.projectById(
-                              selectedNote.projectId,
-                            ),
-                            degree: analysis.degrees[selectedNote.id] ??
-                                const NoteGraphDegree(
-                                  incoming: 0,
-                                  outgoing: 0,
+                        if (normalizedQuery.isNotEmpty)
+                          Positioned(
+                            left: 16,
+                            bottom: 16,
+                            child: Card(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
                                 ),
-                            neighbors: _neighborNotes(
-                              selectedNote.id,
-                              analysis,
-                              allNotesById,
-                            ),
-                            focusMode: focusMode,
-                            focusDepth: focusDepth,
-                            onClose: () => setState(
-                              () => selectedNoteId = null,
-                            ),
-                            onOpen: () => _open(selectedNote),
-                            onFocus: (depth) => _focusOn(
-                              selectedNote.id,
-                              depth: depth,
-                            ),
-                            onSelectNeighbor: (note) => setState(
-                              () => selectedNoteId = note.id,
+                                child: Text(
+                                  matches.isEmpty
+                                      ? 'Совпадений нет'
+                                      : 'Подсвечено: ${matches.length}',
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
+                        if (selectedNote != null)
+                          Positioned(
+                            top: 16,
+                            right: 16,
+                            bottom: 16,
+                            width: 330,
+                            child: _GraphSelectionPanel(
+                              note: selectedNote,
+                              project: widget.store.projectById(
+                                selectedNote.projectId,
+                              ),
+                              degree:
+                                  analysis.degrees[selectedNote.id] ??
+                                  const NoteGraphDegree(
+                                    incoming: 0,
+                                    outgoing: 0,
+                                  ),
+                              neighbors: _neighborNotes(
+                                selectedNote.id,
+                                analysis,
+                                allNotesById,
+                              ),
+                              focusMode: focusMode,
+                              focusDepth: focusDepth,
+                              onClose:
+                                  () => setState(() => selectedNoteId = null),
+                              onOpen: () => _open(selectedNote),
+                              onFocus:
+                                  (depth) =>
+                                      _focusOn(selectedNote.id, depth: depth),
+                              onSelectNeighbor:
+                                  (note) =>
+                                      setState(() => selectedNoteId = note.id),
+                            ),
+                          ),
+                      ],
+                    ),
           ),
         ],
       ),
@@ -399,9 +404,9 @@ class _NoteGraphScreenState extends State<NoteGraphScreen> {
               '${project?.title ?? 'Без проекта'} · ${cluster.noteCount}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
           ),
         ),
@@ -508,108 +513,112 @@ class _NoteGraphScreenState extends State<NoteGraphScreen> {
       for (final id in analysis.isolatedNoteIds)
         if (notesById[id] != null) notesById[id]!,
     ]..sort(
-        (left, right) => left.title.toLowerCase().compareTo(
-          right.title.toLowerCase(),
-        ),
-      );
+      (left, right) =>
+          left.title.toLowerCase().compareTo(right.title.toLowerCase()),
+    );
 
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Структура карты знаний'),
-        content: SizedBox(
-          width: 620,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('Структура карты знаний'),
+            content: SizedBox(
+              width: 620,
+              child: ListView(
+                shrinkWrap: true,
                 children: [
-                  _GraphMetric(
-                    icon: Icons.account_tree_outlined,
-                    label: '${analysis.components.length} компонентов',
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _GraphMetric(
+                        icon: Icons.account_tree_outlined,
+                        label: '${analysis.components.length} компонентов',
+                      ),
+                      _GraphMetric(
+                        icon: Icons.hub_outlined,
+                        label: '${analysis.resolvedEdgeCount} связей',
+                      ),
+                      _GraphMetric(
+                        icon: Icons.radio_button_unchecked,
+                        label:
+                            '${analysis.isolatedNoteIds.length} изолированных',
+                      ),
+                      if (analysis.unresolvedLinkCount > 0)
+                        _GraphMetric(
+                          icon: Icons.link_off_rounded,
+                          label: '${analysis.unresolvedLinkCount} без цели',
+                        ),
+                    ],
                   ),
-                  _GraphMetric(
-                    icon: Icons.hub_outlined,
-                    label: '${analysis.resolvedEdgeCount} связей',
+                  const SizedBox(height: 18),
+                  Text(
+                    'Наиболее связанные',
+                    style: Theme.of(dialogContext).textTheme.titleMedium,
                   ),
-                  _GraphMetric(
-                    icon: Icons.radio_button_unchecked,
-                    label: '${analysis.isolatedNoteIds.length} изолированных',
-                  ),
-                  if (analysis.unresolvedLinkCount > 0)
-                    _GraphMetric(
-                      icon: Icons.link_off_rounded,
-                      label: '${analysis.unresolvedLinkCount} без цели',
-                    ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Text('Наиболее связанные',
-                  style: Theme.of(dialogContext).textTheme.titleMedium),
-              const SizedBox(height: 6),
-              if (hubs.isEmpty)
-                const Text('В графе пока нет связей.')
-              else
-                for (final note in hubs)
-                  ListTile(
-                    dense: true,
-                    leading: Text(
-                      projectById[note.projectId]?.emoji ?? '📄',
-                      style: const TextStyle(fontSize: 20),
-                    ),
-                    title: Text(note.title),
-                    subtitle: Text(
-                      '${noteTypeLabel(note.noteType)} · '
-                      '${analysis.degrees[note.id]?.total ?? 0} связей',
-                    ),
-                    onTap: () {
-                      Navigator.of(dialogContext).pop();
-                      setState(() => selectedNoteId = note.id);
-                    },
-                  ),
-              const SizedBox(height: 12),
-              ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                title: Text('Изолированные заметки · ${isolated.length}'),
-                children: [
-                  if (isolated.isEmpty)
-                    const ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text('Все заметки участвуют в связях.'),
-                    )
+                  const SizedBox(height: 6),
+                  if (hubs.isEmpty)
+                    const Text('В графе пока нет связей.')
                   else
-                    for (final note in isolated.take(30))
+                    for (final note in hubs)
                       ListTile(
                         dense: true,
-                        contentPadding: EdgeInsets.zero,
+                        leading: Text(
+                          projectById[note.projectId]?.emoji ?? '📄',
+                          style: const TextStyle(fontSize: 20),
+                        ),
                         title: Text(note.title),
                         subtitle: Text(
-                          projectById[note.projectId]?.title ?? 'Без проекта',
+                          '${noteTypeLabel(note.noteType)} · '
+                          '${analysis.degrees[note.id]?.total ?? 0} связей',
                         ),
                         onTap: () {
                           Navigator.of(dialogContext).pop();
                           setState(() => selectedNoteId = note.id);
                         },
                       ),
-                  if (isolated.length > 30)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text('Ещё ${isolated.length - 30} заметок'),
-                    ),
+                  const SizedBox(height: 12),
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    title: Text('Изолированные заметки · ${isolated.length}'),
+                    children: [
+                      if (isolated.isEmpty)
+                        const ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text('Все заметки участвуют в связях.'),
+                        )
+                      else
+                        for (final note in isolated.take(30))
+                          ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(note.title),
+                            subtitle: Text(
+                              projectById[note.projectId]?.title ??
+                                  'Без проекта',
+                            ),
+                            onTap: () {
+                              Navigator.of(dialogContext).pop();
+                              setState(() => selectedNoteId = note.id);
+                            },
+                          ),
+                      if (isolated.length > 30)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text('Ещё ${isolated.length - 30} заметок'),
+                        ),
+                    ],
+                  ),
                 ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Закрыть'),
               ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Закрыть'),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -677,9 +686,8 @@ class _GraphControls extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final controlWidth = constraints.maxWidth < 320
-              ? constraints.maxWidth
-              : 270.0;
+          final controlWidth =
+              constraints.maxWidth < 320 ? constraints.maxWidth : 270.0;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -914,15 +922,17 @@ class _NoteGraphNodeState extends State<_NoteGraphNode> {
           message: 'Щелчок — выбрать · двойной щелчок — открыть',
           child: Material(
             elevation: emphasized ? 5 : 1,
-            color: emphasized
-                ? colorScheme.primaryContainer
-                : colorScheme.surfaceContainerHighest,
+            color:
+                emphasized
+                    ? colorScheme.primaryContainer
+                    : colorScheme.surfaceContainerHighest,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
               side: BorderSide(
-                color: emphasized
-                    ? colorScheme.primary
-                    : colorScheme.outlineVariant,
+                color:
+                    emphasized
+                        ? colorScheme.primary
+                        : colorScheme.outlineVariant,
                 width: emphasized ? 2 : 1,
               ),
             ),
@@ -931,7 +941,10 @@ class _NoteGraphNodeState extends State<_NoteGraphNode> {
               onTap: widget.onSelect,
               onDoubleTap: widget.onOpen,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 13,
+                  vertical: 9,
+                ),
                 child: Row(
                   children: [
                     Text(
@@ -948,9 +961,8 @@ class _NoteGraphNodeState extends State<_NoteGraphNode> {
                             widget.note.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           if (widget.note.tags.isNotEmpty)
                             Text(
@@ -1031,8 +1043,10 @@ class _GraphSelectionPanel extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(18, 14, 8, 8),
             child: Row(
               children: [
-                Text(noteTypeIcon(note.noteType),
-                    style: const TextStyle(fontSize: 28)),
+                Text(
+                  noteTypeIcon(note.noteType),
+                  style: const TextStyle(fontSize: 28),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -1040,8 +1054,8 @@ class _GraphSelectionPanel extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -1113,18 +1127,22 @@ class _GraphSelectionPanel extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => onFocus(1),
-                    child: Text(focusMode && focusDepth == 1
-                        ? 'Фокус: 1 шаг'
-                        : 'Показать 1 шаг'),
+                    child: Text(
+                      focusMode && focusDepth == 1
+                          ? 'Фокус: 1 шаг'
+                          : 'Показать 1 шаг',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => onFocus(2),
-                    child: Text(focusMode && focusDepth == 2
-                        ? 'Фокус: 2 шага'
-                        : 'Показать 2 шага'),
+                    child: Text(
+                      focusMode && focusDepth == 2
+                          ? 'Фокус: 2 шага'
+                          : 'Показать 2 шага',
+                    ),
                   ),
                 ),
               ],
@@ -1140,34 +1158,35 @@ class _GraphSelectionPanel extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Expanded(
-            child: neighbors.isEmpty
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text(
-                        'У этой заметки пока нет связей.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-                    itemCount: neighbors.length,
-                    itemBuilder: (context, index) {
-                      final neighbor = neighbors[index];
-                      return ListTile(
-                        dense: true,
-                        leading: Text(noteTypeIcon(neighbor.noteType)),
-                        title: Text(
-                          neighbor.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+            child:
+                neighbors.isEmpty
+                    ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'У этой заметки пока нет связей.',
+                          textAlign: TextAlign.center,
                         ),
-                        subtitle: Text(noteTypeLabel(neighbor.noteType)),
-                        onTap: () => onSelectNeighbor(neighbor),
-                      );
-                    },
-                  ),
+                      ),
+                    )
+                    : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                      itemCount: neighbors.length,
+                      itemBuilder: (context, index) {
+                        final neighbor = neighbors[index];
+                        return ListTile(
+                          dense: true,
+                          leading: Text(noteTypeIcon(neighbor.noteType)),
+                          title: Text(
+                            neighbor.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(noteTypeLabel(neighbor.noteType)),
+                          onTap: () => onSelectNeighbor(neighbor),
+                        );
+                      },
+                    ),
           ),
         ],
       ),
@@ -1203,8 +1222,7 @@ class _DegreeTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('$value',
-                      style: Theme.of(context).textTheme.titleSmall),
+                  Text('$value', style: Theme.of(context).textTheme.titleSmall),
                   Text(label, style: Theme.of(context).textTheme.labelSmall),
                 ],
               ),
@@ -1280,14 +1298,16 @@ class _NoteGraphEdgePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final basePaint = Paint()
-      ..color = baseColor.withValues(alpha: 0.72)
-      ..strokeWidth = 1.4
-      ..style = PaintingStyle.stroke;
-    final activePaint = Paint()
-      ..color = activeColor.withValues(alpha: 0.94)
-      ..strokeWidth = 2.8
-      ..style = PaintingStyle.stroke;
+    final basePaint =
+        Paint()
+          ..color = baseColor.withValues(alpha: 0.72)
+          ..strokeWidth = 1.4
+          ..style = PaintingStyle.stroke;
+    final activePaint =
+        Paint()
+          ..color = activeColor.withValues(alpha: 0.94)
+          ..strokeWidth = 2.8
+          ..style = PaintingStyle.stroke;
 
     for (final edge in layout.edges) {
       final source = layout.nodeBounds[edge.sourceNoteId];
@@ -1295,8 +1315,8 @@ class _NoteGraphEdgePainter extends CustomPainter {
       if (source == null || target == null) {
         continue;
       }
-      final active = _isActive(edge, hoveredNoteId) ||
-          _isActive(edge, selectedNoteId);
+      final active =
+          _isActive(edge, hoveredNoteId) || _isActive(edge, selectedNoteId);
       final paint = active ? activePaint : basePaint;
       final start = _rectBoundaryPoint(source, target.center);
       final end = _rectBoundaryPoint(target, source.center);
@@ -1317,12 +1337,10 @@ class _NoteGraphEdgePainter extends CustomPainter {
     if (delta.distanceSquared == 0) {
       return rect.center;
     }
-    final xScale = delta.dx == 0
-        ? double.infinity
-        : rect.width / 2 / delta.dx.abs();
-    final yScale = delta.dy == 0
-        ? double.infinity
-        : rect.height / 2 / delta.dy.abs();
+    final xScale =
+        delta.dx == 0 ? double.infinity : rect.width / 2 / delta.dx.abs();
+    final yScale =
+        delta.dy == 0 ? double.infinity : rect.height / 2 / delta.dy.abs();
     final scale = math.min(xScale, yScale);
     return rect.center + delta * scale;
   }
@@ -1343,10 +1361,11 @@ class _NoteGraphEdgePainter extends CustomPainter {
       end.dx - arrowLength * math.cos(angle + arrowSpread),
       end.dy - arrowLength * math.sin(angle + arrowSpread),
     );
-    final path = Path()
-      ..moveTo(first.dx, first.dy)
-      ..lineTo(end.dx, end.dy)
-      ..lineTo(second.dx, second.dy);
+    final path =
+        Path()
+          ..moveTo(first.dx, first.dy)
+          ..lineTo(end.dx, end.dy)
+          ..lineTo(second.dx, second.dy);
     canvas.drawPath(path, paint);
   }
 

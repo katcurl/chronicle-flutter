@@ -29,12 +29,10 @@ class CustomNoteTemplateLibrary {
         categoriesByKey.putIfAbsent(category.toLowerCase(), () => category);
       }
     }
-    final sorted = categoriesByKey.values.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return <String>[
-      if (hasUncategorized) uncategorizedKey,
-      ...sorted,
-    ];
+    final sorted =
+        categoriesByKey.values.toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return <String>[if (hasUncategorized) uncategorizedKey, ...sorted];
   }
 
   static List<NoteTemplate> filter(
@@ -44,25 +42,29 @@ class CustomNoteTemplateLibrary {
   }) {
     final normalizedQuery = query.trim().toLowerCase();
     final normalizedCategory = category?.trim().toLowerCase();
-    final result = templates.where((template) {
-      if (normalizedCategory != null && normalizedCategory.isNotEmpty) {
-        if (normalizedCategory == uncategorizedKey) {
-          if (template.category.trim().isNotEmpty) return false;
-        } else if (template.category.trim().toLowerCase() != normalizedCategory) {
-          return false;
-        }
-      }
-      if (normalizedQuery.isEmpty) return true;
-      final haystack = <String>[
-        template.title,
-        template.category,
-        template.noteType,
-        ...template.defaultTags,
-        ...template.defaultProperties.keys,
-        ...template.defaultProperties.values,
-      ].join('\n').toLowerCase();
-      return haystack.contains(normalizedQuery);
-    }).toList(growable: false);
+    final result = templates
+        .where((template) {
+          if (normalizedCategory != null && normalizedCategory.isNotEmpty) {
+            if (normalizedCategory == uncategorizedKey) {
+              if (template.category.trim().isNotEmpty) return false;
+            } else if (template.category.trim().toLowerCase() !=
+                normalizedCategory) {
+              return false;
+            }
+          }
+          if (normalizedQuery.isEmpty) return true;
+          final haystack =
+              <String>[
+                template.title,
+                template.category,
+                template.noteType,
+                ...template.defaultTags,
+                ...template.defaultProperties.keys,
+                ...template.defaultProperties.values,
+              ].join('\n').toLowerCase();
+          return haystack.contains(normalizedQuery);
+        })
+        .toList(growable: false);
     result.sort((a, b) {
       final categoryCompare = categoryLabel(
         a,

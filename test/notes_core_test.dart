@@ -62,49 +62,60 @@ void main() {
   });
 
   // Duplicate titles must never be resolved to an arbitrary project.
-  test('wiki targets prefer the source project and support qualification', () async {
-    final projectA = Project(id: 'project-a', title: 'Research A', emoji: '🧪');
-    final projectB = Project(id: 'project-b', title: 'Research B', emoji: '🧬');
-    final targetA = Note(
-      id: 'target-a',
-      title: 'RMSD',
-      projectId: projectA.id,
-      body: '# RMSD A',
-    );
-    final targetB = Note(
-      id: 'target-b',
-      title: 'RMSD',
-      projectId: projectB.id,
-      body: '# RMSD B',
-    );
-    final source = Note(
-      id: 'source',
-      title: 'Journal',
-      projectId: projectA.id,
-      body: 'См. [[RMSD]] и [[Research B :: RMSD]].',
-    );
-    final repository = InMemoryAppRepository(
-      initialData: AppData(
-        projects: [projectA, projectB],
-        tasks: [],
-        notes: [targetA, targetB, source],
-        entries: [],
-      ),
-    );
-    await repository.markInitialized();
-    final store = AppStore(repository: repository);
-    await store.load();
-    await store.rebuildAllNoteLinks();
+  test(
+    'wiki targets prefer the source project and support qualification',
+    () async {
+      final projectA = Project(
+        id: 'project-a',
+        title: 'Research A',
+        emoji: '🧪',
+      );
+      final projectB = Project(
+        id: 'project-b',
+        title: 'Research B',
+        emoji: '🧬',
+      );
+      final targetA = Note(
+        id: 'target-a',
+        title: 'RMSD',
+        projectId: projectA.id,
+        body: '# RMSD A',
+      );
+      final targetB = Note(
+        id: 'target-b',
+        title: 'RMSD',
+        projectId: projectB.id,
+        body: '# RMSD B',
+      );
+      final source = Note(
+        id: 'source',
+        title: 'Journal',
+        projectId: projectA.id,
+        body: 'См. [[RMSD]] и [[Research B :: RMSD]].',
+      );
+      final repository = InMemoryAppRepository(
+        initialData: AppData(
+          projects: [projectA, projectB],
+          tasks: [],
+          notes: [targetA, targetB, source],
+          entries: [],
+        ),
+      );
+      await repository.markInitialized();
+      final store = AppStore(repository: repository);
+      await store.load();
+      await store.rebuildAllNoteLinks();
 
-    expect(store.resolveWikiTarget('RMSD', source: source)?.id, targetA.id);
-    expect(
-      store.resolveWikiTarget('Research B :: RMSD', source: source)?.id,
-      targetB.id,
-    );
-    expect(store.wikiTargetFor(targetB), 'id:target-b');
-    expect(store.backlinksFor(targetA), hasLength(1));
-    expect(store.backlinksFor(targetB), hasLength(1));
+      expect(store.resolveWikiTarget('RMSD', source: source)?.id, targetA.id);
+      expect(
+        store.resolveWikiTarget('Research B :: RMSD', source: source)?.id,
+        targetB.id,
+      );
+      expect(store.wikiTargetFor(targetB), 'id:target-b');
+      expect(store.backlinksFor(targetA), hasLength(1));
+      expect(store.backlinksFor(targetB), hasLength(1));
 
-    store.dispose();
-  });
+      store.dispose();
+    },
+  );
 }

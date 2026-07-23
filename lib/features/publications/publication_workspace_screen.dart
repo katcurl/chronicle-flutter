@@ -34,12 +34,13 @@ class PublicationWorkspaceScreen extends StatefulWidget {
   }) {
     return Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
-        builder: (_) => PublicationWorkspaceScreen(
-          store: store,
-          project: project,
-          publication: publication,
-          readOnly: readOnly,
-        ),
+        builder:
+            (_) => PublicationWorkspaceScreen(
+              store: store,
+              project: project,
+              publication: publication,
+              readOnly: readOnly,
+            ),
       ),
     );
   }
@@ -64,15 +65,16 @@ class _PublicationWorkspaceScreenState
     _titleController = TextEditingController(
       text: widget.publication?.title ?? '${widget.project.title} — отчёт',
     );
-    _workspace = widget.publication == null
-        ? PublicationWorkspaceTemplates.create(
-            PublicationKind.report,
-            idFactory: _uuid.v4,
-          )
-        : PublicationWorkspaceCodec.read(
-            widget.publication!,
-            idFactory: _uuid.v4,
-          );
+    _workspace =
+        widget.publication == null
+            ? PublicationWorkspaceTemplates.create(
+              PublicationKind.report,
+              idFactory: _uuid.v4,
+            )
+            : PublicationWorkspaceCodec.read(
+              widget.publication!,
+              idFactory: _uuid.v4,
+            );
   }
 
   @override
@@ -82,23 +84,24 @@ class _PublicationWorkspaceScreenState
   }
 
   List<Note> get _sourceNotes {
-    final notes = widget.store.data.notes
-        .where(
-          (note) =>
-              note.projectId == widget.project.id &&
-              !PublicationWorkspaceCodec.isPublication(note),
-        )
-        .toList()
-      ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
+    final notes =
+        widget.store.data.notes
+            .where(
+              (note) =>
+                  note.projectId == widget.project.id &&
+                  !PublicationWorkspaceCodec.isPublication(note),
+            )
+            .toList()
+          ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
     return notes;
   }
 
   PublicationAssembly get _assembly => assemblePublication(
-        title: _titleController.text,
-        workspace: _workspace,
-        notes: _sourceNotes,
-        sources: widget.store.data.citationSources,
-      );
+    title: _titleController.text,
+    workspace: _workspace,
+    notes: _sourceNotes,
+    sources: widget.store.data.citationSources,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -116,8 +119,8 @@ class _PublicationWorkspaceScreenState
           _publication == null
               ? 'Новый документ'
               : _titleController.text.trim().isEmpty
-                  ? 'Документ'
-                  : _titleController.text.trim(),
+              ? 'Документ'
+              : _titleController.text.trim(),
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
@@ -171,8 +174,8 @@ class _PublicationWorkspaceScreenState
                     child: Text(
                       'Структура документа',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   if (!widget.readOnly)
@@ -191,9 +194,11 @@ class _PublicationWorkspaceScreenState
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
-              for (var index = 0;
-                  index < _workspace.sections.length;
-                  index += 1) ...[
+              for (
+                var index = 0;
+                index < _workspace.sections.length;
+                index += 1
+              ) ...[
                 _PublicationSectionCard(
                   key: ValueKey<String>(_workspace.sections[index].id),
                   section: _workspace.sections[index],
@@ -203,18 +208,17 @@ class _PublicationWorkspaceScreenState
                   issueFragmentIds: issueFragmentIds,
                   readOnly: widget.readOnly,
                   onChanged: () => setState(() {}),
-                  onMoveUp: index == 0
-                      ? null
-                      : () => _moveSection(index, index - 1),
-                  onMoveDown: index == _workspace.sections.length - 1
-                      ? null
-                      : () => _moveSection(index, index + 1),
+                  onMoveUp:
+                      index == 0 ? null : () => _moveSection(index, index - 1),
+                  onMoveDown:
+                      index == _workspace.sections.length - 1
+                          ? null
+                          : () => _moveSection(index, index + 1),
                   onDelete: () => _deleteSection(index),
                   onAddFragment: () => _addFragment(index),
-                  onMoveFragment: (from, to) =>
-                      _moveFragment(index, from, to),
-                  onDeleteFragment: (fragmentIndex) =>
-                      _deleteFragment(index, fragmentIndex),
+                  onMoveFragment: (from, to) => _moveFragment(index, from, to),
+                  onDeleteFragment:
+                      (fragmentIndex) => _deleteFragment(index, fragmentIndex),
                 ),
                 const SizedBox(height: 12),
               ],
@@ -284,23 +288,24 @@ class _PublicationWorkspaceScreenState
     final section = _workspace.sections[index];
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Удалить раздел?'),
-        content: Text(
-          '«${section.title}» и его привязки будут удалены из документа. '
-          'Исходные заметки не изменятся.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Отмена'),
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('Удалить раздел?'),
+            content: Text(
+              '«${section.title}» и его привязки будут удалены из документа. '
+              'Исходные заметки не изменятся.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Удалить'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
     );
     if (confirmed != true || !mounted) return;
     setState(() => _workspace.sections.removeAt(index));
@@ -352,58 +357,58 @@ class _PublicationWorkspaceScreenState
     final assembly = _assembly;
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => Dialog(
-        child: SizedBox(
-          width: 920,
-          height: 720,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 8, 10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Предпросмотр собранного документа',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+      builder:
+          (dialogContext) => Dialog(
+            child: SizedBox(
+              width: 920,
+              height: 720,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 8, 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Предпросмотр собранного документа',
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Закрыть',
+                          onPressed: () => Navigator.pop(dialogContext),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  if (assembly.issues.isNotEmpty)
+                    MaterialBanner(
+                      content: Text(
+                        'Не удалось собрать живых фрагментов: '
+                        '${assembly.issues.length}. Они отмечены в рабочем пространстве.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          child: const Text('Проверить'),
+                        ),
+                      ],
+                    ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(28, 24, 28, 48),
+                      child: SelectionArea(
+                        child: MarkdownBody(data: assembly.markdown),
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Закрыть',
-                      onPressed: () => Navigator.pop(dialogContext),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              if (assembly.issues.isNotEmpty)
-                MaterialBanner(
-                  content: Text(
-                    'Не удалось собрать живых фрагментов: '
-                    '${assembly.issues.length}. Они отмечены в рабочем пространстве.',
                   ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      child: const Text('Проверить'),
-                    ),
-                  ],
-                ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(28, 24, 28, 48),
-                  child: SelectionArea(
-                    child: MarkdownBody(data: assembly.markdown),
-                  ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 
@@ -435,27 +440,24 @@ class _PublicationWorkspaceScreenState
     final messenger = ScaffoldMessenger.of(context);
     try {
       final payload = switch (format) {
-        ChronicleExportFormat.docx || ChronicleExportFormat.pdf =>
-          await PublicationDocumentExporter(
-            readAttachment: widget.store.readManagedAttachment,
-          ).export(
-            format: format,
-            title: title,
-            markdown: assembly.markdown,
-          ),
+        ChronicleExportFormat.docx ||
+        ChronicleExportFormat.pdf => await PublicationDocumentExporter(
+          readAttachment: widget.store.readManagedAttachment,
+        ).export(format: format, title: title, markdown: assembly.markdown),
         _ => await NoteExportComposer(
-            readAttachment: widget.store.readManagedAttachment,
-          ).exportNote(
-            note: temporary,
-            projectTitle: widget.project.title,
-            format: format,
-          ),
+          readAttachment: widget.store.readManagedAttachment,
+        ).exportNote(
+          note: temporary,
+          projectTitle: widget.project.title,
+          format: format,
+        ),
       };
       final savedPath = await const NoteExportFileService().save(payload);
       if (savedPath == null || !mounted) return;
-      final issueSuffix = assembly.issues.isEmpty
-          ? ''
-          : '; пропущено живых фрагментов: ${assembly.issues.length}';
+      final issueSuffix =
+          assembly.issues.isEmpty
+              ? ''
+              : '; пропущено живых фрагментов: ${assembly.issues.length}';
       messenger.showSnackBar(
         SnackBar(
           content: Text(
@@ -520,9 +522,9 @@ class _PublicationWorkspaceScreenState
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -561,9 +563,9 @@ class _DocumentIdentityCard extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'Формат результата',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             SingleChildScrollView(
@@ -578,9 +580,10 @@ class _DocumentIdentityCard extends StatelessWidget {
                     ),
                 ],
                 selected: <PublicationKind>{workspace.kind},
-                onSelectionChanged: readOnly
-                    ? null
-                    : (selection) => onKindChanged(selection.first),
+                onSelectionChanged:
+                    readOnly
+                        ? null
+                        : (selection) => onKindChanged(selection.first),
               ),
             ),
             const SizedBox(height: 10),
@@ -690,8 +693,8 @@ class _AssemblyIssuesCard extends StatelessWidget {
                 Text(
                   'Проверка живых связей',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),
@@ -732,45 +735,53 @@ class _AssemblySettingsCard extends StatelessWidget {
         children: [
           SwitchListTile(
             value: workspace.numberFigures,
-            onChanged: readOnly
-                ? null
-                : (value) {
-                    workspace.numberFigures = value;
-                    onChanged();
-                  },
+            onChanged:
+                readOnly
+                    ? null
+                    : (value) {
+                      workspace.numberFigures = value;
+                      onChanged();
+                    },
             title: const Text('Автоматическая нумерация рисунков'),
           ),
           SwitchListTile(
             value: workspace.numberTables,
-            onChanged: readOnly
-                ? null
-                : (value) {
-                    workspace.numberTables = value;
-                    onChanged();
-                  },
+            onChanged:
+                readOnly
+                    ? null
+                    : (value) {
+                      workspace.numberTables = value;
+                      onChanged();
+                    },
             title: const Text('Автоматическая нумерация таблиц'),
           ),
           SwitchListTile(
             value: workspace.includeAbbreviations,
-            onChanged: readOnly
-                ? null
-                : (value) {
-                    workspace.includeAbbreviations = value;
-                    onChanged();
-                  },
+            onChanged:
+                readOnly
+                    ? null
+                    : (value) {
+                      workspace.includeAbbreviations = value;
+                      onChanged();
+                    },
             title: const Text('Добавлять распознанный список сокращений'),
-            subtitle: const Text('Формат распознавания: полное название (ABC).'),
+            subtitle: const Text(
+              'Формат распознавания: полное название (ABC).',
+            ),
           ),
           SwitchListTile(
             value: workspace.includeBibliography,
-            onChanged: readOnly
-                ? null
-                : (value) {
-                    workspace.includeBibliography = value;
-                    onChanged();
-                  },
+            onChanged:
+                readOnly
+                    ? null
+                    : (value) {
+                      workspace.includeBibliography = value;
+                      onChanged();
+                    },
             title: const Text('Добавлять библиографию по цитатам'),
-            subtitle: const Text('Используются существующие ссылки вида [@key].'),
+            subtitle: const Text(
+              'Используются существующие ссылки вида [@key].',
+            ),
           ),
         ],
       ),
@@ -826,28 +837,29 @@ class _PublicationSectionCard extends StatelessWidget {
           '${section.fragments.length} живых фрагментов'
           '${section.text.trim().isEmpty ? '' : ' · есть собственный текст'}',
         ),
-        trailing: readOnly
-            ? null
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: 'Выше',
-                    onPressed: onMoveUp,
-                    icon: const Icon(Icons.arrow_upward_rounded),
-                  ),
-                  IconButton(
-                    tooltip: 'Ниже',
-                    onPressed: onMoveDown,
-                    icon: const Icon(Icons.arrow_downward_rounded),
-                  ),
-                  IconButton(
-                    tooltip: 'Удалить раздел',
-                    onPressed: sectionCount == 1 ? null : onDelete,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                  ),
-                ],
-              ),
+        trailing:
+            readOnly
+                ? null
+                : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Выше',
+                      onPressed: onMoveUp,
+                      icon: const Icon(Icons.arrow_upward_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'Ниже',
+                      onPressed: onMoveDown,
+                      icon: const Icon(Icons.arrow_downward_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'Удалить раздел',
+                      onPressed: sectionCount == 1 ? null : onDelete,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
+                  ],
+                ),
         children: [
           const Divider(height: 1),
           Padding(
@@ -893,8 +905,8 @@ class _PublicationSectionCard extends StatelessWidget {
                       child: Text(
                         'Живые фрагменты',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                     if (!readOnly)
@@ -915,21 +927,26 @@ class _PublicationSectionCard extends StatelessWidget {
                     ),
                   )
                 else
-                  for (var index = 0;
-                      index < section.fragments.length;
-                      index += 1)
+                  for (
+                    var index = 0;
+                    index < section.fragments.length;
+                    index += 1
+                  )
                     _FragmentTile(
                       fragment: section.fragments[index],
                       source: notesById[section.fragments[index].noteId],
-                      hasIssue:
-                          issueFragmentIds.contains(section.fragments[index].id),
+                      hasIssue: issueFragmentIds.contains(
+                        section.fragments[index].id,
+                      ),
                       readOnly: readOnly,
-                      onMoveUp: index == 0
-                          ? null
-                          : () => onMoveFragment(index, index - 1),
-                      onMoveDown: index == section.fragments.length - 1
-                          ? null
-                          : () => onMoveFragment(index, index + 1),
+                      onMoveUp:
+                          index == 0
+                              ? null
+                              : () => onMoveFragment(index, index - 1),
+                      onMoveDown:
+                          index == section.fragments.length - 1
+                              ? null
+                              : () => onMoveFragment(index, index + 1),
                       onDelete: () => onDeleteFragment(index),
                     ),
               ],
@@ -963,17 +980,19 @@ class _FragmentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final content = source == null
-        ? null
-        : publicationFragmentContent(source!, fragment.heading);
+    final content =
+        source == null
+            ? null
+            : publicationFragmentContent(source!, fragment.heading);
     final excerpt = content == null ? '' : _plainExcerpt(content);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: hasIssue
-              ? colorScheme.errorContainer
-              : colorScheme.surfaceContainerLow,
+          color:
+              hasIssue
+                  ? colorScheme.errorContainer
+                  : colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(12),
         ),
         child: ListTile(
@@ -999,28 +1018,32 @@ class _FragmentTile extends StatelessWidget {
                 ),
             ],
           ),
-          trailing: readOnly
-              ? null
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: 'Выше',
-                      onPressed: onMoveUp,
-                      icon: const Icon(Icons.arrow_upward_rounded, size: 20),
-                    ),
-                    IconButton(
-                      tooltip: 'Ниже',
-                      onPressed: onMoveDown,
-                      icon: const Icon(Icons.arrow_downward_rounded, size: 20),
-                    ),
-                    IconButton(
-                      tooltip: 'Убрать привязку',
-                      onPressed: onDelete,
-                      icon: const Icon(Icons.close_rounded, size: 20),
-                    ),
-                  ],
-                ),
+          trailing:
+              readOnly
+                  ? null
+                  : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Выше',
+                        onPressed: onMoveUp,
+                        icon: const Icon(Icons.arrow_upward_rounded, size: 20),
+                      ),
+                      IconButton(
+                        tooltip: 'Ниже',
+                        onPressed: onMoveDown,
+                        icon: const Icon(
+                          Icons.arrow_downward_rounded,
+                          size: 20,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Убрать привязку',
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                      ),
+                    ],
+                  ),
         ),
       ),
     );
@@ -1090,9 +1113,10 @@ class _PublicationFragmentPickerSheetState
         height: MediaQuery.sizeOf(context).height * 0.78,
         child: Padding(
           padding: EdgeInsets.fromLTRB(18, 0, 18, bottom + 18),
-          child: _selectedNote == null
-              ? _buildNoteList(context)
-              : _buildHeadingList(context, _selectedNote!),
+          child:
+              _selectedNote == null
+                  ? _buildNoteList(context)
+                  : _buildHeadingList(context, _selectedNote!),
         ),
       ),
     );
@@ -1100,20 +1124,21 @@ class _PublicationFragmentPickerSheetState
 
   Widget _buildNoteList(BuildContext context) {
     final query = _searchController.text.trim().toLowerCase();
-    final filtered = widget.notes.where((note) {
-      if (query.isEmpty) return true;
-      return note.title.toLowerCase().contains(query) ||
-          note.tags.any((tag) => tag.toLowerCase().contains(query));
-    }).toList();
+    final filtered =
+        widget.notes.where((note) {
+          if (query.isEmpty) return true;
+          return note.title.toLowerCase().contains(query) ||
+              note.tags.any((tag) => tag.toLowerCase().contains(query));
+        }).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Подключить живой фрагмент',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 6),
         Text(
@@ -1133,24 +1158,25 @@ class _PublicationFragmentPickerSheetState
         ),
         const SizedBox(height: 10),
         Expanded(
-          child: filtered.isEmpty
-              ? const Center(child: Text('Подходящих заметок нет.'))
-              : ListView.builder(
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final note = filtered[index];
-                    final headings = publicationHeadings(note);
-                    return ListTile(
-                      leading: const Icon(Icons.description_outlined),
-                      title: Text(note.title),
-                      subtitle: Text(
-                        '${note.noteType} · ${headings.length} заголовков',
-                      ),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () => setState(() => _selectedNote = note),
-                    );
-                  },
-                ),
+          child:
+              filtered.isEmpty
+                  ? const Center(child: Text('Подходящих заметок нет.'))
+                  : ListView.builder(
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final note = filtered[index];
+                      final headings = publicationHeadings(note);
+                      return ListTile(
+                        leading: const Icon(Icons.description_outlined),
+                        title: Text(note.title),
+                        subtitle: Text(
+                          '${note.noteType} · ${headings.length} заголовков',
+                        ),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () => setState(() => _selectedNote = note),
+                      );
+                    },
+                  ),
         ),
       ],
     );
@@ -1178,8 +1204,8 @@ class _PublicationFragmentPickerSheetState
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const Text('Какую часть подключить?'),
                 ],
@@ -1195,10 +1221,11 @@ class _PublicationFragmentPickerSheetState
                 leading: const Icon(Icons.notes_rounded),
                 title: const Text('Вся заметка'),
                 subtitle: const Text('Текст будет собираться целиком.'),
-                onTap: () => Navigator.pop(
-                  context,
-                  PublicationSourceSelection(note: note, heading: ''),
-                ),
+                onTap:
+                    () => Navigator.pop(
+                      context,
+                      PublicationSourceSelection(note: note, heading: ''),
+                    ),
               ),
               if (headings.isEmpty)
                 Padding(
@@ -1221,13 +1248,14 @@ class _PublicationFragmentPickerSheetState
                     ),
                     title: Text(heading.title),
                     subtitle: Text('Заголовок уровня ${heading.level}'),
-                    onTap: () => Navigator.pop(
-                      context,
-                      PublicationSourceSelection(
-                        note: note,
-                        heading: heading.title,
-                      ),
-                    ),
+                    onTap:
+                        () => Navigator.pop(
+                          context,
+                          PublicationSourceSelection(
+                            note: note,
+                            heading: heading.title,
+                          ),
+                        ),
                   ),
               ],
             ],

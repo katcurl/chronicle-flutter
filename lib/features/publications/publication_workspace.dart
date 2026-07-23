@@ -84,17 +84,16 @@ class PublicationSection {
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
       text: json['text']?.toString() ?? '',
-      fragments: rawFragments is List
-          ? <PublicationFragment>[
-              for (final item in rawFragments)
-                if (item is Map)
-                  PublicationFragment.fromJson(
-                    item.map(
-                      (key, value) => MapEntry(key.toString(), value),
+      fragments:
+          rawFragments is List
+              ? <PublicationFragment>[
+                for (final item in rawFragments)
+                  if (item is Map)
+                    PublicationFragment.fromJson(
+                      item.map((key, value) => MapEntry(key.toString(), value)),
                     ),
-                  ),
-            ]
-          : const <PublicationFragment>[],
+              ]
+              : const <PublicationFragment>[],
     );
   }
 }
@@ -138,17 +137,16 @@ class PublicationWorkspace {
       orElse: () => PublicationKind.report,
     );
     final rawSections = json['sections'];
-    final sections = rawSections is List
-        ? <PublicationSection>[
-            for (final item in rawSections)
-              if (item is Map)
-                PublicationSection.fromJson(
-                  item.map(
-                    (key, value) => MapEntry(key.toString(), value),
+    final sections =
+        rawSections is List
+            ? <PublicationSection>[
+              for (final item in rawSections)
+                if (item is Map)
+                  PublicationSection.fromJson(
+                    item.map((key, value) => MapEntry(key.toString(), value)),
                   ),
-                ),
-          ]
-        : <PublicationSection>[];
+            ]
+            : <PublicationSection>[];
     final normalizedSections = <PublicationSection>[
       for (final section in sections)
         PublicationSection(
@@ -167,10 +165,13 @@ class PublicationWorkspace {
     ];
     return PublicationWorkspace(
       kind: kind,
-      sections: normalizedSections.isEmpty
-          ? PublicationWorkspaceTemplates.create(kind, idFactory: idFactory)
-              .sections
-          : normalizedSections,
+      sections:
+          normalizedSections.isEmpty
+              ? PublicationWorkspaceTemplates.create(
+                kind,
+                idFactory: idFactory,
+              ).sections
+              : normalizedSections,
       numberFigures: _readBool(json['numberFigures'], fallback: true),
       numberTables: _readBool(json['numberTables'], fallback: true),
       includeAbbreviations: _readBool(
@@ -293,9 +294,7 @@ class PublicationWorkspaceCodec {
         final decoded = jsonDecode(raw);
         if (decoded is Map) {
           return PublicationWorkspace.fromJson(
-            decoded.map(
-              (key, value) => MapEntry(key.toString(), value),
-            ),
+            decoded.map((key, value) => MapEntry(key.toString(), value)),
             idFactory: idFactory,
           );
         }
@@ -317,9 +316,10 @@ class PublicationWorkspaceCodec {
     Iterable<Note> sourceNotes,
   ) {
     note.noteType = 'publication';
-    note.folderPath = note.folderPath.trim().isEmpty
-        ? 'Публикации и отчёты'
-        : note.folderPath;
+    note.folderPath =
+        note.folderPath.trim().isEmpty
+            ? 'Публикации и отчёты'
+            : note.folderPath;
     note.properties = <String, String>{
       ...note.properties,
       workspaceProperty: jsonEncode(workspace.toJson()),
@@ -338,16 +338,16 @@ class PublicationWorkspaceCodec {
     final notesById = <String, Note>{
       for (final note in sourceNotes) note.id: note,
     };
-    final buffer = StringBuffer()
-      ..writeln(
-        '> Этот документ собирается из живых фрагментов заметок. '
-        'Chronicle не копирует исходный текст и не переписывает его автоматически.',
-      )
-      ..writeln();
+    final buffer =
+        StringBuffer()
+          ..writeln(
+            '> Этот документ собирается из живых фрагментов заметок. '
+            'Chronicle не копирует исходный текст и не переписывает его автоматически.',
+          )
+          ..writeln();
     for (final section in workspace.sections) {
-      final sectionTitle = section.title.trim().isEmpty
-          ? 'Раздел'
-          : section.title.trim();
+      final sectionTitle =
+          section.title.trim().isEmpty ? 'Раздел' : section.title.trim();
       buffer
         ..writeln('## $sectionTitle')
         ..writeln();
@@ -360,9 +360,10 @@ class PublicationWorkspaceCodec {
         final source = notesById[fragment.noteId];
         final label = source?.title ?? 'Потерянная заметка';
         final safeLabel = label.replaceAll('|', '¦').replaceAll(']', '');
-        final detail = fragment.heading.trim().isEmpty
-            ? 'вся заметка'
-            : 'раздел «${fragment.heading.trim()}»';
+        final detail =
+            fragment.heading.trim().isEmpty
+                ? 'вся заметка'
+                : 'раздел «${fragment.heading.trim()}»';
         buffer.writeln(
           '- [[id:${fragment.noteId}|$safeLabel]] — живой фрагмент: $detail',
         );
@@ -411,15 +412,15 @@ PublicationAssembly assemblePublication({
   final issues = <PublicationAssemblyIssue>[];
   final abbreviationSourceBodies = <String>[];
   final abbreviationSourceNoteIds = <String>{};
-  final buffer = StringBuffer()
-    ..writeln('# ${title.trim().isEmpty ? 'Без названия' : title.trim()}')
-    ..writeln();
+  final buffer =
+      StringBuffer()
+        ..writeln('# ${title.trim().isEmpty ? 'Без названия' : title.trim()}')
+        ..writeln();
   var liveFragmentCount = 0;
 
   for (final section in workspace.sections) {
-    final sectionTitle = section.title.trim().isEmpty
-        ? 'Раздел'
-        : section.title.trim();
+    final sectionTitle =
+        section.title.trim().isEmpty ? 'Раздел' : section.title.trim();
     buffer
       ..writeln('## $sectionTitle')
       ..writeln();
@@ -482,10 +483,7 @@ PublicationAssembly assemblePublication({
     enabled: workspace.numberFigures,
   );
   markdown = figureResult.markdown;
-  final tableResult = _numberTables(
-    markdown,
-    enabled: workspace.numberTables,
-  );
+  final tableResult = _numberTables(markdown, enabled: workspace.numberTables);
   markdown = tableResult.markdown;
 
   final abbreviationCorpus = <String>[
@@ -494,11 +492,12 @@ PublicationAssembly assemblePublication({
   ].join('\n\n');
   final abbreviations = _extractAbbreviations(abbreviationCorpus);
   if (workspace.includeAbbreviations && abbreviations.isNotEmpty) {
-    final abbreviationBuffer = StringBuffer()
-      ..writeln()
-      ..writeln()
-      ..writeln('## Список сокращений')
-      ..writeln();
+    final abbreviationBuffer =
+        StringBuffer()
+          ..writeln()
+          ..writeln()
+          ..writeln('## Список сокращений')
+          ..writeln();
     for (final entry in abbreviations.entries) {
       abbreviationBuffer.writeln('- **${entry.key}** — ${entry.value}');
     }
@@ -528,7 +527,9 @@ PublicationAssembly assemblePublication({
 }
 
 String? _extractFragment(Note note, String heading) {
-  final content = NoteDocument.parse(note.body).content.replaceAll('\r\n', '\n');
+  final content = NoteDocument.parse(
+    note.body,
+  ).content.replaceAll('\r\n', '\n');
   final wanted = heading.trim();
   if (wanted.isEmpty) return content;
 
@@ -568,12 +569,11 @@ String _stripLeadingTitle(String markdown, String noteTitle) {
     firstContent += 1;
   }
   if (firstContent >= lines.length) return markdown;
-  final match = RegExp(r'^\s*#\s+(.+?)\s*#*\s*$').firstMatch(
-    lines[firstContent],
-  );
+  final match = RegExp(
+    r'^\s*#\s+(.+?)\s*#*\s*$',
+  ).firstMatch(lines[firstContent]);
   if (match == null ||
-      match.group(1)!.trim().toLowerCase() !=
-          noteTitle.trim().toLowerCase()) {
+      match.group(1)!.trim().toLowerCase() != noteTitle.trim().toLowerCase()) {
     return markdown;
   }
   lines.removeAt(firstContent);
@@ -596,18 +596,19 @@ _NumberingResult _numberFigures(String markdown, {required bool enabled}) {
   for (var index = references.length - 1; index >= 0; index -= 1) {
     final reference = references[index];
     final number = index + 1;
-    final rawCaption = reference.presentation.caption.trim().isNotEmpty
-        ? reference.presentation.caption.trim()
-        : reference.alt.trim();
-    final caption = rawCaption.isEmpty
-        ? 'Рисунок $number'
-        : 'Рисунок $number. $rawCaption';
+    final rawCaption =
+        reference.presentation.caption.trim().isNotEmpty
+            ? reference.presentation.caption.trim()
+            : reference.alt.trim();
+    final caption =
+        rawCaption.isEmpty ? 'Рисунок $number' : 'Рисунок $number. $rawCaption';
     final replacement = reference.toMarkdown(
       presentation: reference.presentation.copyWith(
         caption: caption,
-        figureId: reference.presentation.figureId.trim().isEmpty
-            ? 'figure-$number'
-            : reference.presentation.figureId,
+        figureId:
+            reference.presentation.figureId.trim().isEmpty
+                ? 'figure-$number'
+                : reference.presentation.figureId,
       ),
     );
     result = result.replaceRange(reference.start, reference.end, replacement);
@@ -631,7 +632,8 @@ _NumberingResult _numberTables(String markdown, {required bool enabled}) {
       output.add(line);
       continue;
     }
-    final isHeader = !fenced &&
+    final isHeader =
+        !fenced &&
         index + 1 < lines.length &&
         line.contains('|') &&
         separator.hasMatch(lines[index + 1]);
@@ -653,26 +655,21 @@ _NumberingResult _numberTables(String markdown, {required bool enabled}) {
 
 Map<String, String> _extractAbbreviations(String markdown) {
   final result = <String, String>{};
-  final abbreviationPattern = RegExp(
-    r'\(([A-ZА-ЯЁ][A-ZА-ЯЁ0-9-]{1,11})\)',
-  );
+  final abbreviationPattern = RegExp(r'\(([A-ZА-ЯЁ][A-ZА-ЯЁ0-9-]{1,11})\)');
 
   for (final match in abbreviationPattern.allMatches(markdown)) {
     final abbreviation = match.group(1)!.trim();
-    final newlineIndex = match.start == 0
-        ? -1
-        : markdown.lastIndexOf('\n', match.start - 1);
+    final newlineIndex =
+        match.start == 0 ? -1 : markdown.lastIndexOf('\n', match.start - 1);
     final rawPrefix = markdown.substring(newlineIndex + 1, match.start);
-    final expansion = _abbreviationExpansionFromPrefix(
-      rawPrefix,
-      abbreviation,
-    );
+    final expansion = _abbreviationExpansionFromPrefix(rawPrefix, abbreviation);
     if (expansion == null) continue;
     result.putIfAbsent(abbreviation, () => expansion);
   }
 
-  final ordered = result.entries.toList()
-    ..sort((left, right) => left.key.compareTo(right.key));
+  final ordered =
+      result.entries.toList()
+        ..sort((left, right) => left.key.compareTo(right.key));
   return <String, String>{for (final entry in ordered) entry.key: entry.value};
 }
 
@@ -682,10 +679,7 @@ String? _abbreviationExpansionFromPrefix(
 ) {
   var prefix = rawPrefix
       .trimRight()
-      .replaceFirst(
-        RegExp(r'^\s{0,3}(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)'),
-        '',
-      )
+      .replaceFirst(RegExp(r'^\s{0,3}(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)'), '')
       .replaceAll(RegExp(r'[*_`~]'), '');
   if (prefix.isEmpty) return null;
 
@@ -701,17 +695,16 @@ String? _abbreviationExpansionFromPrefix(
   ];
   if (words.isEmpty) return null;
 
-  final normalizedAbbreviation = abbreviation
-      .replaceAll('-', '')
-      .toUpperCase();
+  final normalizedAbbreviation = abbreviation.replaceAll('-', '').toUpperCase();
   final maximumWords = words.length < 12 ? words.length : 12;
   for (var count = 1; count <= maximumWords; count += 1) {
     final candidate = words.sublist(words.length - count);
-    final initials = candidate
-        .map(_abbreviationInitial)
-        .where((value) => value.isNotEmpty)
-        .join()
-        .toUpperCase();
+    final initials =
+        candidate
+            .map(_abbreviationInitial)
+            .where((value) => value.isNotEmpty)
+            .join()
+            .toUpperCase();
     if (initials == normalizedAbbreviation) {
       final expansion = candidate.join(' ');
       if (expansion.length >= 4 && expansion.length <= 90) return expansion;

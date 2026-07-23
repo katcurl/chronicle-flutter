@@ -3,28 +3,20 @@ import 'package:chronicle/models/app_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  Note note(String id) => Note(
-        id: id,
-        title: id.toUpperCase(),
-        projectId: 'project',
-        body: '',
-      );
+  Note note(String id) =>
+      Note(id: id, title: id.toUpperCase(), projectId: 'project', body: '');
 
   NoteLink link(String source, String target) => NoteLink(
-        id: '$source-$target',
-        sourceNoteId: source,
-        targetTitle: target.toUpperCase(),
-        targetNoteId: target,
-      );
+    id: '$source-$target',
+    sourceNoteId: source,
+    targetTitle: target.toUpperCase(),
+    targetNoteId: target,
+  );
 
   test('analysis counts directed degrees and undirected neighbors', () {
     final analysis = NoteGraphAnalysis.build(
       notes: [note('a'), note('b'), note('c')],
-      links: [
-        link('a', 'b'),
-        link('a', 'c'),
-        link('b', 'c'),
-      ],
+      links: [link('a', 'b'), link('a', 'c'), link('b', 'c')],
     );
 
     expect(analysis.resolvedEdgeCount, 3);
@@ -58,11 +50,7 @@ void main() {
   test('components include isolated notes and are ordered by size', () {
     final analysis = NoteGraphAnalysis.build(
       notes: [note('a'), note('b'), note('c'), note('d'), note('e')],
-      links: [
-        link('a', 'b'),
-        link('b', 'c'),
-        link('d', 'e'),
-      ],
+      links: [link('a', 'b'), link('b', 'c'), link('d', 'e')],
     );
 
     expect(analysis.components, hasLength(2));
@@ -73,11 +61,7 @@ void main() {
   test('neighborhood is bounded by the requested number of steps', () {
     final analysis = NoteGraphAnalysis.build(
       notes: [note('a'), note('b'), note('c'), note('d')],
-      links: [
-        link('a', 'b'),
-        link('b', 'c'),
-        link('c', 'd'),
-      ],
+      links: [link('a', 'b'), link('b', 'c'), link('c', 'd')],
     );
 
     expect(analysis.neighborhood('a', depth: 0), {'a'});
@@ -88,11 +72,7 @@ void main() {
   test('shortest path follows links in either direction', () {
     final analysis = NoteGraphAnalysis.build(
       notes: [note('a'), note('b'), note('c'), note('d')],
-      links: [
-        link('a', 'b'),
-        link('c', 'b'),
-        link('c', 'd'),
-      ],
+      links: [link('a', 'b'), link('c', 'b'), link('c', 'd')],
     );
 
     expect(analysis.shortestPath('a', 'd'), ['a', 'b', 'c', 'd']);
@@ -103,11 +83,7 @@ void main() {
     final analysis = NoteGraphAnalysis.build(
       notes: [note('a'), note('b')],
       links: [
-        NoteLink(
-          id: 'missing',
-          sourceNoteId: 'a',
-          targetTitle: 'Missing',
-        ),
+        NoteLink(id: 'missing', sourceNoteId: 'a', targetTitle: 'Missing'),
       ],
     );
 

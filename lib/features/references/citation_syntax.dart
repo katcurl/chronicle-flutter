@@ -69,8 +69,7 @@ class CitationSyntax {
     Iterable<CitationSource> sources,
   ) {
     final byKey = <String, CitationSource>{
-      for (final source in sources)
-        source.normalizedCitationKey: source,
+      for (final source in sources) source.normalizedCitationKey: source,
     };
     final result = <CitationSource>[];
     for (final key in extractKeys(markdown)) {
@@ -85,13 +84,11 @@ class CitationSyntax {
     Iterable<CitationSource> sources, {
     Iterable<CitationSource>? bibliography,
   }) {
-    if (!markdown.contains('[@') &&
-        !markdown.contains(bibliographyMarker)) {
+    if (!markdown.contains('[@') && !markdown.contains(bibliographyMarker)) {
       return markdown;
     }
     final byKey = <String, CitationSource>{
-      for (final source in sources)
-        source.normalizedCitationKey: source,
+      for (final source in sources) source.normalizedCitationKey: source,
     };
     final bibliographyItems =
         bibliography?.toList(growable: false) ?? const <CitationSource>[];
@@ -141,7 +138,8 @@ class CitationSyntax {
 
   static String _shortAuthor(List<String> authors) {
     if (authors.isEmpty) return '';
-    final surnames = authors.map(_surname).where((value) => value.isNotEmpty).toList();
+    final surnames =
+        authors.map(_surname).where((value) => value.isNotEmpty).toList();
     if (surnames.isEmpty) return '';
     if (surnames.length == 1) return surnames.first;
     if (surnames.length == 2) return '${surnames[0]} и ${surnames[1]}';
@@ -187,11 +185,10 @@ class CitationSyntax {
     return lines.join('\n');
   }
 
-  static String _escapeMarkdown(String value) =>
-      value
-          .replaceAll('\\', r'\\')
-          .replaceAll('*', r'\*')
-          .replaceAll('_', r'\_')
-          .replaceAll('[', r'\[')
-          .replaceAll(']', r'\]');
+  static String _escapeMarkdown(String value) => value
+      .replaceAll('\\', r'\\')
+      .replaceAll('*', r'\*')
+      .replaceAll('_', r'\_')
+      .replaceAll('[', r'\[')
+      .replaceAll(']', r'\]');
 }

@@ -41,9 +41,7 @@ void main() {
   });
 
   test('LAN sync progress is indeterminate without known totals', () {
-    const progress = LanSyncProgress(
-      stage: LanSyncProgressStage.preparing,
-    );
+    const progress = LanSyncProgress(stage: LanSyncProgressStage.preparing);
 
     expect(progress.fraction, isNull);
   });

@@ -36,9 +36,7 @@ void main() {
       final canvas = Offset.zero & first.canvasSize;
       expect(canvas.contains(bounds[left].topLeft), isTrue);
       expect(
-        canvas.contains(
-          bounds[left].bottomRight - const Offset(0.01, 0.01),
-        ),
+        canvas.contains(bounds[left].bottomRight - const Offset(0.01, 0.01)),
         isTrue,
       );
       for (var right = left + 1; right < bounds.length; right += 1) {
@@ -47,59 +45,62 @@ void main() {
     }
   });
 
-  test('knowledge graph resolves links and reports hidden and missing targets', () {
-    final source = Note(
-      id: 'source',
-      title: 'Source',
-      projectId: 'project-a',
-      body: '',
-    );
-    final visibleTarget = Note(
-      id: 'visible-target',
-      title: 'Visible target',
-      projectId: 'project-a',
-      body: '',
-    );
-    final hiddenTarget = Note(
-      id: 'hidden-target',
-      title: 'Hidden target',
-      projectId: 'project-b',
-      body: '',
-    );
-    final allNotes = [source, visibleTarget, hiddenTarget];
-    final links = [
-      NoteLink(
-        id: 'link-visible',
-        sourceNoteId: source.id,
-        targetTitle: visibleTarget.title,
-        targetNoteId: visibleTarget.id,
-      ),
-      NoteLink(
-        id: 'link-hidden',
-        sourceNoteId: source.id,
-        targetTitle: hiddenTarget.title,
-        targetNoteId: hiddenTarget.id,
-      ),
-      NoteLink(
-        id: 'link-missing',
-        sourceNoteId: source.id,
-        targetTitle: 'Missing',
-      ),
-    ];
+  test(
+    'knowledge graph resolves links and reports hidden and missing targets',
+    () {
+      final source = Note(
+        id: 'source',
+        title: 'Source',
+        projectId: 'project-a',
+        body: '',
+      );
+      final visibleTarget = Note(
+        id: 'visible-target',
+        title: 'Visible target',
+        projectId: 'project-a',
+        body: '',
+      );
+      final hiddenTarget = Note(
+        id: 'hidden-target',
+        title: 'Hidden target',
+        projectId: 'project-b',
+        body: '',
+      );
+      final allNotes = [source, visibleTarget, hiddenTarget];
+      final links = [
+        NoteLink(
+          id: 'link-visible',
+          sourceNoteId: source.id,
+          targetTitle: visibleTarget.title,
+          targetNoteId: visibleTarget.id,
+        ),
+        NoteLink(
+          id: 'link-hidden',
+          sourceNoteId: source.id,
+          targetTitle: hiddenTarget.title,
+          targetNoteId: hiddenTarget.id,
+        ),
+        NoteLink(
+          id: 'link-missing',
+          sourceNoteId: source.id,
+          targetTitle: 'Missing',
+        ),
+      ];
 
-    final layout = NoteGraphLayoutEngine.build(
-      allNotes: allNotes,
-      visibleNotes: [source, visibleTarget],
-      links: links,
-      projectOrder: const ['project-a', 'project-b'],
-    );
+      final layout = NoteGraphLayoutEngine.build(
+        allNotes: allNotes,
+        visibleNotes: [source, visibleTarget],
+        links: links,
+        projectOrder: const ['project-a', 'project-b'],
+      );
 
-    expect(layout.edges, hasLength(1));
-    expect(layout.edges.single.sourceNoteId, source.id);
-    expect(layout.edges.single.targetNoteId, visibleTarget.id);
-    expect(layout.hiddenLinkCount, 1);
-    expect(layout.unresolvedLinkCount, 1);
-  });
+      expect(layout.edges, hasLength(1));
+      expect(layout.edges.single.sourceNoteId, source.id);
+      expect(layout.edges.single.targetNoteId, visibleTarget.id);
+      expect(layout.hiddenLinkCount, 1);
+      expect(layout.unresolvedLinkCount, 1);
+    },
+  );
 
   test('self-links and duplicate edges are not drawn twice', () {
     final source = Note(

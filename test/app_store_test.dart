@@ -46,79 +46,83 @@ void main() {
     expect(secondStore.data.citationSources.single.citationKey, 'Jaffe2005');
   });
 
-  test('custom note templates can be created, updated and deleted in memory', () async {
-    final repository = InMemoryAppRepository();
-    final store = AppStore(repository: repository);
-    await store.load();
+  test(
+    'custom note templates can be created, updated and deleted in memory',
+    () async {
+      final repository = InMemoryAppRepository();
+      final store = AppStore(repository: repository);
+      await store.load();
 
-    final created = await store.createCustomNoteTemplate(
-      title: 'Мой протокол',
-      icon: '🧪',
-      noteType: 'experiment',
-      content: '# Мой протокол\n\n## Ход работы',
-      category: 'Лаборатория',
-      defaultTags: const <String>['лаборатория', 'лаборатория'],
-    );
+      final created = await store.createCustomNoteTemplate(
+        title: 'Мой протокол',
+        icon: '🧪',
+        noteType: 'experiment',
+        content: '# Мой протокол\n\n## Ход работы',
+        category: 'Лаборатория',
+        defaultTags: const <String>['лаборатория', 'лаборатория'],
+      );
 
-    expect(created.isCustom, isTrue);
-    expect(store.customNoteTemplates, hasLength(1));
-    expect(created.defaultTags, <String>['лаборатория']);
-    expect(created.category, 'Лаборатория');
-    expect(store.availableNoteTemplates, contains(created));
+      expect(created.isCustom, isTrue);
+      expect(store.customNoteTemplates, hasLength(1));
+      expect(created.defaultTags, <String>['лаборатория']);
+      expect(created.category, 'Лаборатория');
+      expect(store.availableNoteTemplates, contains(created));
 
-    final updated = await store.updateCustomNoteTemplate(
-      id: created.id,
-      title: 'Обновлённый протокол',
-      icon: '⚗️',
-      noteType: 'experiment',
-      content: '# Обновлённый протокол',
-      category: 'Протоколы',
-    );
+      final updated = await store.updateCustomNoteTemplate(
+        id: created.id,
+        title: 'Обновлённый протокол',
+        icon: '⚗️',
+        noteType: 'experiment',
+        content: '# Обновлённый протокол',
+        category: 'Протоколы',
+      );
 
-    expect(store.customNoteTemplates.single.title, updated.title);
-    expect(store.customNoteTemplates.single.category, 'Протоколы');
-    await store.deleteCustomNoteTemplate(created.id);
-    expect(store.customNoteTemplates, isEmpty);
-  });
+      expect(store.customNoteTemplates.single.title, updated.title);
+      expect(store.customNoteTemplates.single.category, 'Протоколы');
+      await store.deleteCustomNoteTemplate(created.id);
+      expect(store.customNoteTemplates, isEmpty);
+    },
+  );
 
+  test(
+    'custom templates can be duplicated and imported without exact copies',
+    () async {
+      final repository = InMemoryAppRepository();
+      final store = AppStore(repository: repository);
+      await store.load();
 
-  test('custom templates can be duplicated and imported without exact copies', () async {
-    final repository = InMemoryAppRepository();
-    final store = AppStore(repository: repository);
-    await store.load();
+      final original = await store.createCustomNoteTemplate(
+        title: 'HSQC experiment',
+        icon: '🧲',
+        category: 'ЯМР',
+        noteType: 'nmr_experiment',
+        content: '# HSQC\n',
+        defaultTags: const <String>['ЯМР'],
+      );
+      final duplicate = await store.duplicateCustomNoteTemplate(original.id);
 
-    final original = await store.createCustomNoteTemplate(
-      title: 'HSQC experiment',
-      icon: '🧲',
-      category: 'ЯМР',
-      noteType: 'nmr_experiment',
-      content: '# HSQC\n',
-      defaultTags: const <String>['ЯМР'],
-    );
-    final duplicate = await store.duplicateCustomNoteTemplate(original.id);
+      expect(duplicate.title, startsWith('Копия'));
+      expect(duplicate.category, original.category);
+      expect(store.customNoteTemplates, hasLength(2));
 
-    expect(duplicate.title, startsWith('Копия'));
-    expect(duplicate.category, original.category);
-    expect(store.customNoteTemplates, hasLength(2));
+      final imported = await store.importCustomNoteTemplates(<NoteTemplate>[
+        original,
+        const NoteTemplate(
+          id: 'custom_external',
+          title: 'Buffer preparation',
+          icon: '🧴',
+          category: 'Растворы',
+          noteType: 'solution',
+          content: '# Buffer\n',
+          isCustom: true,
+        ),
+      ]);
 
-    final imported = await store.importCustomNoteTemplates(<NoteTemplate>[
-      original,
-      const NoteTemplate(
-        id: 'custom_external',
-        title: 'Buffer preparation',
-        icon: '🧴',
-        category: 'Растворы',
-        noteType: 'solution',
-        content: '# Buffer\n',
-        isCustom: true,
-      ),
-    ]);
-
-    expect(imported, hasLength(1));
-    expect(imported.single.title, 'Buffer preparation');
-    expect(store.customNoteTemplates, hasLength(3));
-  });
-
+      expect(imported, hasLength(1));
+      expect(imported.single.title, 'Buffer preparation');
+      expect(store.customNoteTemplates, hasLength(3));
+    },
+  );
 
   test('ordinary note updates do not refresh Vault attachment images', () async {
     final repository = InMemoryAppRepository();
@@ -132,9 +136,7 @@ void main() {
     });
 
     if (store.data.projects.isEmpty) {
-      store.addProject(
-        Project(id: 'project-1', title: 'Project', emoji: '📁'),
-      );
+      store.addProject(Project(id: 'project-1', title: 'Project', emoji: '📁'));
     }
     final note = Note(
       id: 'resize-note',

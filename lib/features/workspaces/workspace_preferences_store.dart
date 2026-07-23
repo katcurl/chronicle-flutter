@@ -32,8 +32,7 @@ class WorkspacePreferencesStore {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return WorkspacePreferences.defaults();
       return WorkspacePreferences.fromJson(<String, Object?>{
-        for (final entry in decoded.entries)
-          entry.key.toString(): entry.value,
+        for (final entry in decoded.entries) entry.key.toString(): entry.value,
       });
     } on Object {
       return WorkspacePreferences.defaults();

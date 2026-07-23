@@ -77,8 +77,7 @@ class VaultStatus {
       missingFileCount: missingFileCount ?? this.missingFileCount,
       attachmentCount: attachmentCount ?? this.attachmentCount,
       formatVersion: formatVersion ?? this.formatVersion,
-      minimumReaderVersion:
-          minimumReaderVersion ?? this.minimumReaderVersion,
+      minimumReaderVersion: minimumReaderVersion ?? this.minimumReaderVersion,
       readOnly: readOnly ?? this.readOnly,
     );
   }

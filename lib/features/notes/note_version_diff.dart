@@ -62,11 +62,7 @@ class NoteVersionDiff {
     );
 
     for (var oldIndex = oldLines.length - 1; oldIndex >= 0; oldIndex -= 1) {
-      for (
-        var newIndex = newLines.length - 1;
-        newIndex >= 0;
-        newIndex -= 1
-      ) {
+      for (var newIndex = newLines.length - 1; newIndex >= 0; newIndex -= 1) {
         if (oldLines[oldIndex] == newLines[newIndex]) {
           matrix[oldIndex][newIndex] = matrix[oldIndex + 1][newIndex + 1] + 1;
         } else {
@@ -106,8 +102,7 @@ class NoteVersionDiff {
       final shouldRemove =
           oldIndex < oldLines.length &&
           (newIndex >= newLines.length ||
-              matrix[oldIndex + 1][newIndex] >=
-                  matrix[oldIndex][newIndex + 1]);
+              matrix[oldIndex + 1][newIndex] >= matrix[oldIndex][newIndex + 1]);
       if (shouldRemove) {
         lines.add(
           NoteVersionDiffLine(

@@ -28,7 +28,8 @@ const projectResearchTemplates = <ProjectResearchTemplate>[
     title: 'Свободное исследование',
     emoji: '🔬',
     description: 'Гибкая структура для вопроса, материалов и результатов.',
-    researchGoal: 'Сформулировать, что именно должно стать понятнее или доказано.',
+    researchGoal:
+        'Сформулировать, что именно должно стать понятнее или доказано.',
     researchQuestions: <String>[
       'Какой главный вопрос проекта?',
       'Какие наблюдения могут изменить текущую гипотезу?',
@@ -60,7 +61,8 @@ const projectResearchTemplates = <ProjectResearchTemplate>[
     id: 'experimental-study',
     title: 'Экспериментальное исследование',
     emoji: '🧪',
-    description: 'Для серии экспериментов без навязанного лабораторного workflow.',
+    description:
+        'Для серии экспериментов без навязанного лабораторного workflow.',
     researchGoal: 'Проверить гипотезу серией связанных наблюдений и контролей.',
     researchQuestions: <String>[
       'Какой результат поддержит гипотезу?',
@@ -94,10 +96,8 @@ List<String> projectResearchLines(String raw) {
   final result = <String>[];
   final seen = <String>{};
   for (final line in raw.split('\n')) {
-    final normalized = line
-        .trim()
-        .replaceFirst(RegExp(r'^[-*•]\s*'), '')
-        .trim();
+    final normalized =
+        line.trim().replaceFirst(RegExp(r'^[-*•]\s*'), '').trim();
     if (normalized.isEmpty) continue;
     if (seen.add(normalized.toLowerCase())) result.add(normalized);
   }
@@ -125,12 +125,16 @@ List<String> projectAttachmentPaths(Iterable<Note> notes) {
       final marker = target.indexOf('Attachments/');
       if (marker < 0) continue;
       final normalized = target.substring(marker).split(RegExp(r'[?#]')).first;
-      if (normalized.split('/').any((segment) => segment.isEmpty || segment == '..')) {
+      if (normalized
+          .split('/')
+          .any((segment) => segment.isEmpty || segment == '..')) {
         continue;
       }
       if (seen.add(normalized.toLowerCase())) result.add(normalized);
     }
   }
-  result.sort((left, right) => left.toLowerCase().compareTo(right.toLowerCase()));
+  result.sort(
+    (left, right) => left.toLowerCase().compareTo(right.toLowerCase()),
+  );
   return result;
 }

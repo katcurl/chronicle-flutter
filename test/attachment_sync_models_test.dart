@@ -42,7 +42,10 @@ void main() {
   test('attachment manifest survives JSON round-trip', () {
     final manifest = AttachmentSyncManifest(
       generatedAt: DateTime.utc(2026, 7, 17, 14),
-      entries: <AttachmentSyncEntry>[active(), deleted(path: 'Attachments/old--aaaaaaaa.pdf')],
+      entries: <AttachmentSyncEntry>[
+        active(),
+        deleted(path: 'Attachments/old--aaaaaaaa.pdf'),
+      ],
     );
 
     final restored = AttachmentSyncManifest.fromJson(
@@ -55,7 +58,6 @@ void main() {
     expect(restored.tombstoneCount, 1);
     expect(restored.entries.first.relativePath, startsWith('Attachments/'));
   });
-
 
   test('manifest rejects duplicate managed paths', () {
     final entry = active();

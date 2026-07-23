@@ -31,8 +31,7 @@ class NoteBlockReorderDialog extends StatefulWidget {
   }
 
   @override
-  State<NoteBlockReorderDialog> createState() =>
-      _NoteBlockReorderDialogState();
+  State<NoteBlockReorderDialog> createState() => _NoteBlockReorderDialogState();
 }
 
 class _NoteBlockReorderDialogState extends State<NoteBlockReorderDialog> {
@@ -64,10 +63,8 @@ class _NoteBlockReorderDialogState extends State<NoteBlockReorderDialog> {
   @override
   Widget build(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
-    final dialogWidth =
-        (screen.width - 96).clamp(260.0, 680.0).toDouble();
-    final dialogHeight =
-        (screen.height - 240).clamp(280.0, 620.0).toDouble();
+    final dialogWidth = (screen.width - 96).clamp(260.0, 680.0).toDouble();
+    final dialogHeight = (screen.height - 240).clamp(280.0, 620.0).toDouble();
 
     return AlertDialog(
       title: const Row(
@@ -147,10 +144,9 @@ class _NoteBlockReorderDialogState extends State<NoteBlockReorderDialog> {
         FilledButton(
           onPressed:
               _changed
-                  ? () => Navigator.pop(
-                    context,
-                    [for (final entry in _entries) entry.originalIndex],
-                  )
+                  ? () => Navigator.pop(context, [
+                    for (final entry in _entries) entry.originalIndex,
+                  ])
                   : null,
           child: const Text('Готово'),
         ),

@@ -167,12 +167,14 @@ class WorkspaceProfile {
       name: name.isEmpty ? 'Рабочее пространство' : name,
       emoji: emoji.isEmpty ? '◫' : emoji,
       startSection: section ?? AppSection.notes,
-      showContextPanel: json['showContextPanel'] is bool
-          ? json['showContextPanel'] as bool
-          : true,
-      extendedNavigation: json['extendedNavigation'] is bool
-          ? json['extendedNavigation'] as bool
-          : true,
+      showContextPanel:
+          json['showContextPanel'] is bool
+              ? json['showContextPanel'] as bool
+              : true,
+      extendedNavigation:
+          json['extendedNavigation'] is bool
+              ? json['extendedNavigation'] as bool
+              : true,
       panelOrder: List<WorkspacePanel>.unmodifiable(order),
       visiblePanels: Set<WorkspacePanel>.unmodifiable(visible),
     );
@@ -265,9 +267,10 @@ class WorkspacePreferences {
     if (safeProfiles.isEmpty) {
       return WorkspacePreferences.defaults();
     }
-    final safeActive = ids.contains(activeWorkspaceId)
-        ? activeWorkspaceId
-        : safeProfiles.first.id;
+    final safeActive =
+        ids.contains(activeWorkspaceId)
+            ? activeWorkspaceId
+            : safeProfiles.first.id;
     return WorkspacePreferences(
       activeWorkspaceId: safeActive,
       profiles: List<WorkspaceProfile>.unmodifiable(safeProfiles),
@@ -286,8 +289,7 @@ class WorkspacePreferences {
       for (final raw in rawProfiles) {
         if (raw is! Map) continue;
         final normalized = <String, Object?>{
-          for (final entry in raw.entries)
-            entry.key.toString(): entry.value,
+          for (final entry in raw.entries) entry.key.toString(): entry.value,
         };
         final profile = WorkspaceProfile.fromJson(normalized);
         if (profile != null) profiles.add(profile);

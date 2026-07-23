@@ -34,8 +34,7 @@ class ResearchCanvasStore {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return ResearchCanvasPreferences.defaults();
       return ResearchCanvasPreferences.fromJson(<String, Object?>{
-        for (final entry in decoded.entries)
-          entry.key.toString(): entry.value,
+        for (final entry in decoded.entries) entry.key.toString(): entry.value,
       });
     } on Object {
       return ResearchCanvasPreferences.defaults();

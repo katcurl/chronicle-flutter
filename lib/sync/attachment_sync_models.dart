@@ -4,8 +4,7 @@ const attachmentSyncManifestVersion = 1;
 const maxAttachmentSyncManifestEntries = 10000;
 const maxAttachmentSyncEntryBytes = 100 * 1024 * 1024;
 
-typedef BuildAttachmentSyncManifest =
-    Future<AttachmentSyncManifest> Function();
+typedef BuildAttachmentSyncManifest = Future<AttachmentSyncManifest> Function();
 
 typedef ReadAttachmentForSync =
     Future<Uint8List?> Function(AttachmentSyncEntry entry);
@@ -20,14 +19,9 @@ typedef ApplyAttachmentTombstoneFromSync =
     Future<AttachmentSyncApplyResult> Function(AttachmentSyncEntry entry);
 
 class AttachmentSyncApplyResult {
-  const AttachmentSyncApplyResult({
-    required this.changed,
-    this.byteLength = 0,
-  });
+  const AttachmentSyncApplyResult({required this.changed, this.byteLength = 0});
 
-  const AttachmentSyncApplyResult.unchanged()
-    : changed = false,
-      byteLength = 0;
+  const AttachmentSyncApplyResult.unchanged() : changed = false, byteLength = 0;
 
   final bool changed;
   final int byteLength;
@@ -91,8 +85,7 @@ class AttachmentSyncEntry {
       relativePath: relativePath,
       originalName: json['originalName']?.toString() ?? '',
       sha256: sha256,
-      mimeType:
-          json['mimeType']?.toString() ?? 'application/octet-stream',
+      mimeType: json['mimeType']?.toString() ?? 'application/octet-stream',
       byteLength: byteLength,
       createdAt:
           DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toUtc() ??
@@ -208,8 +201,9 @@ class AttachmentSyncPlan {
   Map<String, dynamic> toJson() => <String, dynamic>{
     'files': files.map((entry) => entry.toJson()).toList(growable: false),
     'records': records.map((entry) => entry.toJson()).toList(growable: false),
-    'tombstones':
-        tombstones.map((entry) => entry.toJson()).toList(growable: false),
+    'tombstones': tombstones
+        .map((entry) => entry.toJson())
+        .toList(growable: false),
     'conflictingPaths': conflictingPaths,
   };
 

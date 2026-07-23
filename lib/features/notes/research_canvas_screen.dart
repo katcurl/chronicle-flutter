@@ -30,7 +30,6 @@ class ResearchCanvasScreen extends StatefulWidget {
   State<ResearchCanvasScreen> createState() => _ResearchCanvasScreenState();
 }
 
-
 enum _CanvasBoardAction { create, edit, duplicate, delete }
 
 class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
@@ -39,8 +38,7 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
 
   final TransformationController _transformationController =
       TransformationController();
-  ResearchCanvasPreferences _preferences =
-      ResearchCanvasPreferences.defaults();
+  ResearchCanvasPreferences _preferences = ResearchCanvasPreferences.defaults();
   bool _loading = true;
   Object? _loadError;
   String? _selectedItemId;
@@ -86,9 +84,7 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (_loadError != null) {
       return Scaffold(
@@ -129,9 +125,8 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
     final projectsById = <String, Project>{
       for (final project in widget.store.data.projects) project.id: project,
     };
-    final selected = _selectedItemId == null
-        ? null
-        : _canvas.itemById(_selectedItemId!);
+    final selected =
+        _selectedItemId == null ? null : _canvas.itemById(_selectedItemId!);
 
     return Scaffold(
       appBar: AppBar(
@@ -154,9 +149,7 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
                 onChanged: (value) {
                   if (value == null || value == _canvas.id) return;
                   setState(() {
-                    _preferences = _preferences.copyWith(
-                      activeCanvasId: value,
-                    );
+                    _preferences = _preferences.copyWith(activeCanvasId: value);
                     _selectedItemId = null;
                     _connectionSourceItemId = null;
                   });
@@ -184,9 +177,10 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
             icon: const Icon(Icons.crop_free_rounded),
           ),
           IconButton(
-            tooltip: _connectionSourceItemId == null
-                ? 'Связать две карточки'
-                : 'Выбери вторую карточку или отмени связь',
+            tooltip:
+                _connectionSourceItemId == null
+                    ? 'Связать две карточки'
+                    : 'Выбери вторую карточку или отмени связь',
             onPressed: () {
               setState(() {
                 _connectionSourceItemId =
@@ -207,36 +201,37 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
           PopupMenuButton<_CanvasBoardAction>(
             tooltip: 'Управление картами',
             onSelected: _handleBoardAction,
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: _CanvasBoardAction.create,
-                child: ListTile(
-                  leading: Icon(Icons.add_rounded),
-                  title: Text('Новая карта'),
-                ),
-              ),
-              PopupMenuItem(
-                value: _CanvasBoardAction.edit,
-                child: ListTile(
-                  leading: Icon(Icons.edit_outlined),
-                  title: Text('Настроить текущую'),
-                ),
-              ),
-              PopupMenuItem(
-                value: _CanvasBoardAction.duplicate,
-                child: ListTile(
-                  leading: Icon(Icons.copy_all_outlined),
-                  title: Text('Дублировать'),
-                ),
-              ),
-              PopupMenuItem(
-                value: _CanvasBoardAction.delete,
-                child: ListTile(
-                  leading: Icon(Icons.delete_outline_rounded),
-                  title: Text('Удалить текущую'),
-                ),
-              ),
-            ],
+            itemBuilder:
+                (context) => const [
+                  PopupMenuItem(
+                    value: _CanvasBoardAction.create,
+                    child: ListTile(
+                      leading: Icon(Icons.add_rounded),
+                      title: Text('Новая карта'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _CanvasBoardAction.edit,
+                    child: ListTile(
+                      leading: Icon(Icons.edit_outlined),
+                      title: Text('Настроить текущую'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _CanvasBoardAction.duplicate,
+                    child: ListTile(
+                      leading: Icon(Icons.copy_all_outlined),
+                      title: Text('Дублировать'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _CanvasBoardAction.delete,
+                    child: ListTile(
+                      leading: Icon(Icons.delete_outline_rounded),
+                      title: Text('Удалить текущую'),
+                    ),
+                  ),
+                ],
             icon: const Icon(Icons.dashboard_customize_outlined),
           ),
           IconButton(
@@ -248,7 +243,8 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final showInspector = selected != null && constraints.maxWidth >= 1120;
+          final showInspector =
+              selected != null && constraints.maxWidth >= 1120;
           return Row(
             children: [
               Expanded(
@@ -257,10 +253,11 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
                     _CanvasStatusBar(
                       canvas: _canvas,
                       connecting: _connectionSourceItemId != null,
-                      connectionSource: _connectionSourceItemId == null ||
-                              _connectionSourceItemId!.isEmpty
-                          ? null
-                          : _canvas.itemById(_connectionSourceItemId!),
+                      connectionSource:
+                          _connectionSourceItemId == null ||
+                                  _connectionSourceItemId!.isEmpty
+                              ? null
+                              : _canvas.itemById(_connectionSourceItemId!),
                     ),
                     const Divider(height: 1),
                     Expanded(
@@ -278,12 +275,15 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
                   width: 330,
                   child: _CanvasInspector(
                     item: selected,
-                    note: selected.type == ResearchCanvasItemType.note
-                        ? notesById[selected.noteId]
-                        : null,
-                    project: selected.type == ResearchCanvasItemType.note
-                        ? projectsById[notesById[selected.noteId]?.projectId]
-                        : null,
+                    note:
+                        selected.type == ResearchCanvasItemType.note
+                            ? notesById[selected.noteId]
+                            : null,
+                    project:
+                        selected.type == ResearchCanvasItemType.note
+                            ? projectsById[notesById[selected.noteId]
+                                ?.projectId]
+                            : null,
                     connections: _canvas.connections
                         .where(
                           (connection) =>
@@ -298,8 +298,8 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
                     onEdit: () => _editItem(selected),
                     onDuplicate: () => _duplicateItem(selected),
                     onDelete: () => _deleteItem(selected),
-                    onResize: (width, height) =>
-                        _resizeItem(selected, width, height),
+                    onResize:
+                        (width, height) => _resizeItem(selected, width, height),
                     onDeleteConnection: _deleteConnection,
                     onStartConnection: () {
                       setState(() {
@@ -341,14 +341,12 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
             clipBehavior: Clip.none,
             children: [
               const Positioned.fill(
-                child: IgnorePointer(child: CustomPaint(painter: _GridPainter())),
+                child: IgnorePointer(
+                  child: CustomPaint(painter: _GridPainter()),
+                ),
               ),
               for (final item in groups)
-                _positionedItem(
-                  item: item,
-                  note: null,
-                  project: null,
-                ),
+                _positionedItem(item: item, note: null, project: null),
               Positioned.fill(
                 child: IgnorePointer(
                   child: CustomPaint(
@@ -366,9 +364,10 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
                 _positionedItem(
                   item: item,
                   note: item.noteId == null ? null : notesById[item.noteId],
-                  project: item.noteId == null
-                      ? null
-                      : projectsById[notesById[item.noteId]?.projectId],
+                  project:
+                      item.noteId == null
+                          ? null
+                          : projectsById[notesById[item.noteId]?.projectId],
                 ),
             ],
           ),
@@ -436,10 +435,7 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
     _replaceItem(moved, saveImmediately: false);
   }
 
-  void _replaceItem(
-    ResearchCanvasItem item, {
-    bool saveImmediately = true,
-  }) {
+  void _replaceItem(ResearchCanvasItem item, {bool saveImmediately = true}) {
     final nextCanvas = _canvas.copyWith(
       items: <ResearchCanvasItem>[
         for (final current in _canvas.items)
@@ -539,7 +535,8 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
 
   Future<void> _editItem(ResearchCanvasItem item) async {
     if (item.type == ResearchCanvasItemType.note) {
-      final note = item.noteId == null ? null : widget.store.noteById(item.noteId!);
+      final note =
+          item.noteId == null ? null : widget.store.noteById(item.noteId!);
       if (note != null) await _openItemNote(item);
       return;
     }
@@ -569,9 +566,10 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
   void _duplicateItem(ResearchCanvasItem item) {
     final duplicate = item.copyWith(
       id: _uuid.v4(),
-      title: item.type == ResearchCanvasItemType.note
-          ? item.title
-          : 'Копия — ${item.title}',
+      title:
+          item.type == ResearchCanvasItemType.note
+              ? item.title
+              : 'Копия — ${item.title}',
       x: item.x + 36,
       y: item.y + 36,
     );
@@ -586,24 +584,25 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
   Future<void> _deleteItem(ResearchCanvasItem item) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Убрать карточку с карты?'),
-        content: Text(
-          item.type == ResearchCanvasItemType.note
-              ? 'Сама заметка не будет удалена.'
-              : 'Карточка и её ручные связи будут удалены только с этой карты.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Убрать карточку с карты?'),
+            content: Text(
+              item.type == ResearchCanvasItemType.note
+                  ? 'Сама заметка не будет удалена.'
+                  : 'Карточка и её ручные связи будут удалены только с этой карты.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Убрать'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Убрать'),
-          ),
-        ],
-      ),
     );
     if (confirmed != true || !mounted) return;
     _replaceCanvas(
@@ -674,12 +673,7 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
       final item = nonGroups[index];
       final column = index % 5;
       final row = index ~/ 5;
-      arranged.add(
-        item.copyWith(
-          x: 140 + column * 340,
-          y: 140 + row * 240,
-        ),
-      );
+      arranged.add(item.copyWith(x: 140 + column * 340, y: 140 + row * 240));
     }
     _replaceCanvas(_canvas.copyWith(items: arranged));
     _resetView();
@@ -710,7 +704,9 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
 
   Future<void> _createBoard() async {
     if (_preferences.canvases.length >= ResearchCanvas.maxCanvases) {
-      _showMessage('Можно хранить не больше ${ResearchCanvas.maxCanvases} карт.');
+      _showMessage(
+        'Можно хранить не больше ${ResearchCanvas.maxCanvases} карт.',
+      );
       return;
     }
     final draft = await ResearchCanvasBoardDialog.show(
@@ -755,7 +751,9 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
 
   void _duplicateBoard() {
     if (_preferences.canvases.length >= ResearchCanvas.maxCanvases) {
-      _showMessage('Можно хранить не больше ${ResearchCanvas.maxCanvases} карт.');
+      _showMessage(
+        'Можно хранить не больше ${ResearchCanvas.maxCanvases} карт.',
+      );
       return;
     }
     final duplicate = _canvas.duplicate(newId: _uuid.v4());
@@ -778,22 +776,23 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
     }
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Удалить карту «${_canvas.name}»?'),
-        content: const Text(
-          'Удалится только расположение карточек. Заметки, проекты и файлы останутся на месте.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
+      builder:
+          (context) => AlertDialog(
+            title: Text('Удалить карту «${_canvas.name}»?'),
+            content: const Text(
+              'Удалится только расположение карточек. Заметки, проекты и файлы останутся на месте.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Удалить'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
     );
     if (confirmed != true || !mounted) return;
     final next = _preferences.canvases
@@ -843,7 +842,9 @@ class _ResearchCanvasScreenState extends State<ResearchCanvasScreen> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -861,12 +862,14 @@ class _CanvasStatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final source = connectionSource;
-    final noteCount = canvas.items
-        .where((item) => item.type == ResearchCanvasItemType.note)
-        .length;
-    final textCount = canvas.items
-        .where((item) => item.type == ResearchCanvasItemType.text)
-        .length;
+    final noteCount =
+        canvas.items
+            .where((item) => item.type == ResearchCanvasItemType.note)
+            .length;
+    final textCount =
+        canvas.items
+            .where((item) => item.type == ResearchCanvasItemType.text)
+            .length;
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       child: Padding(
@@ -941,9 +944,10 @@ class _ResearchCanvasCard extends StatelessWidget {
             color: color.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: selected || connectionSource
-                  ? color
-                  : color.withValues(alpha: 0.55),
+              color:
+                  selected || connectionSource
+                      ? color
+                      : color.withValues(alpha: 0.55),
               width: selected || connectionSource ? 3 : 2,
             ),
           ),
@@ -959,10 +963,12 @@ class _ResearchCanvasCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         item.title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: color,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleMedium?.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     _CardMenu(onEdit: onEdit, onDelete: onDelete),
@@ -970,11 +976,7 @@ class _ResearchCanvasCard extends StatelessWidget {
                 ),
                 if (item.body.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    item.body,
-                    maxLines: 5,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  Text(item.body, maxLines: 5, overflow: TextOverflow.ellipsis),
                 ],
               ],
             ),
@@ -986,18 +988,20 @@ class _ResearchCanvasCard extends StatelessWidget {
     final missingNote =
         item.type == ResearchCanvasItemType.note && currentNote == null;
     final title = currentNote?.title ?? item.title;
-    final excerpt = currentNote == null
-        ? item.body
-        : _excerpt(NoteDocument.parse(currentNote.body).content);
+    final excerpt =
+        currentNote == null
+            ? item.body
+            : _excerpt(NoteDocument.parse(currentNote.body).content);
     return Card(
       elevation: selected || connectionSource ? 7 : 2,
       color: color.withValues(alpha: 0.10),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(
-          color: connectionSource
-              ? color
-              : selected
+          color:
+              connectionSource
+                  ? color
+                  : selected
                   ? Theme.of(context).colorScheme.primary
                   : color.withValues(alpha: 0.48),
           width: selected || connectionSource ? 2.5 : 1.2,
@@ -1027,9 +1031,8 @@ class _ResearchCanvasCard extends StatelessWidget {
                           title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
                       _CardMenu(onEdit: onEdit, onDelete: onDelete),
@@ -1049,12 +1052,12 @@ class _ResearchCanvasCard extends StatelessWidget {
                         missingNote
                             ? 'Исходная заметка недоступна'
                             : <String>[
-                                if (currentProject != null)
-                                  '${currentProject.emoji} ${currentProject.title}',
-                                if (currentNote != null &&
-                                    currentNote.noteType.trim().isNotEmpty)
-                                  noteTypeLabel(currentNote.noteType),
-                              ].join(' · '),
+                              if (currentProject != null)
+                                '${currentProject.emoji} ${currentProject.title}',
+                              if (currentNote != null &&
+                                  currentNote.noteType.trim().isNotEmpty)
+                                noteTypeLabel(currentNote.noteType),
+                            ].join(' · '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall,
@@ -1072,7 +1075,10 @@ class _ResearchCanvasCard extends StatelessWidget {
                       const Spacer(),
                     if (currentNote != null && currentNote.tags.isNotEmpty)
                       Text(
-                        currentNote.tags.take(4).map((tag) => '#$tag').join(' '),
+                        currentNote.tags
+                            .take(4)
+                            .map((tag) => '#$tag')
+                            .join(' '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall,
@@ -1088,11 +1094,12 @@ class _ResearchCanvasCard extends StatelessWidget {
   }
 
   static String _excerpt(String markdown) {
-    final text = markdown
-        .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
-        .replaceAll(RegExp(r'[#>*_`\[\]()]'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    final text =
+        markdown
+            .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
+            .replaceAll(RegExp(r'[#>*_`\[\]()]'), ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
     return text.length <= 280 ? text : '${text.substring(0, 277)}…';
   }
 }
@@ -1112,10 +1119,11 @@ class _CardMenu extends StatelessWidget {
         if (value == 'edit') onEdit();
         if (value == 'delete') onDelete();
       },
-      itemBuilder: (context) => const [
-        PopupMenuItem(value: 'edit', child: Text('Открыть или изменить')),
-        PopupMenuItem(value: 'delete', child: Text('Убрать с карты')),
-      ],
+      itemBuilder:
+          (context) => const [
+            PopupMenuItem(value: 'edit', child: Text('Открыть или изменить')),
+            PopupMenuItem(value: 'delete', child: Text('Убрать с карты')),
+          ],
       icon: const Icon(Icons.more_horiz_rounded, size: 19),
     );
   }
@@ -1155,29 +1163,28 @@ class _CanvasInspector extends StatelessWidget {
     final currentNote = note;
     final currentProject = project;
     final isGroup = item.type == ResearchCanvasItemType.group;
-    final sizeOptions = isGroup
-        ? const <(String, double, double)>[
-            ('Компактная', 480, 300),
-            ('Обычная', 660, 430),
-            ('Большая', 860, 580),
-          ]
-        : const <(String, double, double)>[
-            ('Компактная', 230, 145),
-            ('Обычная', 300, 190),
-            ('Широкая', 430, 220),
-          ];
+    final sizeOptions =
+        isGroup
+            ? const <(String, double, double)>[
+              ('Компактная', 480, 300),
+              ('Обычная', 660, 430),
+              ('Большая', 860, 580),
+            ]
+            : const <(String, double, double)>[
+              ('Компактная', 230, 145),
+              ('Обычная', 300, 190),
+              ('Широкая', 430, 220),
+            ];
     return ListView(
       padding: const EdgeInsets.all(18),
       children: [
         Row(
           children: [
-            Icon(
-              switch (item.type) {
-                ResearchCanvasItemType.note => Icons.description_outlined,
-                ResearchCanvasItemType.text => Icons.sticky_note_2_outlined,
-                ResearchCanvasItemType.group => Icons.crop_free_rounded,
-              },
-            ),
+            Icon(switch (item.type) {
+              ResearchCanvasItemType.note => Icons.description_outlined,
+              ResearchCanvasItemType.text => Icons.sticky_note_2_outlined,
+              ResearchCanvasItemType.group => Icons.crop_free_rounded,
+            }),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -1260,11 +1267,9 @@ class _CanvasInspector extends StatelessWidget {
                     : Icons.arrow_back_rounded,
               ),
               title: Text(
-                itemsById[
-                          connection.sourceItemId == item.id
-                              ? connection.targetItemId
-                              : connection.sourceItemId
-                        ]
+                itemsById[connection.sourceItemId == item.id
+                            ? connection.targetItemId
+                            : connection.sourceItemId]
                         ?.title ??
                     'Карточка',
               ),
@@ -1290,12 +1295,14 @@ class _GridPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final minor = Paint()
-      ..color = const Color(0x14000000)
-      ..strokeWidth = 1;
-    final major = Paint()
-      ..color = const Color(0x22000000)
-      ..strokeWidth = 1.2;
+    final minor =
+        Paint()
+          ..color = const Color(0x14000000)
+          ..strokeWidth = 1;
+    final major =
+        Paint()
+          ..color = const Color(0x22000000)
+          ..strokeWidth = 1.2;
     const step = 40.0;
     for (var x = 0.0; x <= size.width; x += step) {
       canvas.drawLine(
@@ -1338,24 +1345,33 @@ class _ConnectionPainter extends CustomPainter {
       final source = itemsById[connection.sourceItemId];
       final target = itemsById[connection.targetItemId];
       if (source == null || target == null) continue;
-      final start = Offset(source.x + source.width / 2, source.y + source.height / 2);
-      final end = Offset(target.x + target.width / 2, target.y + target.height / 2);
+      final start = Offset(
+        source.x + source.width / 2,
+        source.y + source.height / 2,
+      );
+      final end = Offset(
+        target.x + target.width / 2,
+        target.y + target.height / 2,
+      );
       final active = selectedItemId == source.id || selectedItemId == target.id;
-      final paint = Paint()
-        ..color = active
-            ? activeColor.withValues(alpha: 0.88)
-            : color.withValues(alpha: 0.48)
-        ..strokeWidth = active ? 3 : 2
-        ..style = PaintingStyle.stroke;
+      final paint =
+          Paint()
+            ..color =
+                active
+                    ? activeColor.withValues(alpha: 0.88)
+                    : color.withValues(alpha: 0.48)
+            ..strokeWidth = active ? 3 : 2
+            ..style = PaintingStyle.stroke;
       final direction = end - start;
       if (direction.distance < 12) continue;
       final control = Offset(
         (start.dx + end.dx) / 2,
         (start.dy + end.dy) / 2 - math.min(90, direction.distance * 0.14),
       );
-      final path = Path()
-        ..moveTo(start.dx, start.dy)
-        ..quadraticBezierTo(control.dx, control.dy, end.dx, end.dy);
+      final path =
+          Path()
+            ..moveTo(start.dx, start.dy)
+            ..quadraticBezierTo(control.dx, control.dy, end.dx, end.dy);
       canvas.drawPath(path, paint);
       _drawArrow(canvas, control, end, paint);
     }

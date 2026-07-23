@@ -32,8 +32,7 @@ class NoteHomePreferencesStore {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return NoteHomePreferences.defaults();
       return NoteHomePreferences.fromJson(<String, Object?>{
-        for (final entry in decoded.entries)
-          entry.key.toString(): entry.value,
+        for (final entry in decoded.entries) entry.key.toString(): entry.value,
       });
     } on Object {
       return NoteHomePreferences.defaults();

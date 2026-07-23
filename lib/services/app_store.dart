@@ -87,8 +87,7 @@ class AppStore extends ChangeNotifier {
   late final LanAutoSyncService autoSyncService;
   final _uuid = const Uuid();
   final ChronicleUndoJournal _undoJournal = ChronicleUndoJournal();
-  final ValueNotifier<int> _attachmentRefreshNotifier =
-      ValueNotifier<int>(0);
+  final ValueNotifier<int> _attachmentRefreshNotifier = ValueNotifier<int>(0);
 
   ValueListenable<int> get attachmentRefreshListenable =>
       _attachmentRefreshNotifier;
@@ -268,7 +267,8 @@ class AppStore extends ChangeNotifier {
     List<String> defaultTags = const <String>[],
     Map<String, String> defaultProperties = const <String, String>{},
   }) async {
-    if (customNoteTemplates.length >= CustomNoteTemplateStore.maxTemplateCount) {
+    if (customNoteTemplates.length >=
+        CustomNoteTemplateStore.maxTemplateCount) {
       throw StateError('Достигнут лимит пользовательских шаблонов.');
     }
     final template = _normalizeCustomNoteTemplate(
@@ -298,7 +298,9 @@ class AppStore extends ChangeNotifier {
     List<String> defaultTags = const <String>[],
     Map<String, String> defaultProperties = const <String, String>{},
   }) async {
-    final index = customNoteTemplates.indexWhere((template) => template.id == id);
+    final index = customNoteTemplates.indexWhere(
+      (template) => template.id == id,
+    );
     if (index < 0) {
       throw StateError('Пользовательский шаблон не найден.');
     }
@@ -319,7 +321,9 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<NoteTemplate> duplicateCustomNoteTemplate(String id) async {
-    final index = customNoteTemplates.indexWhere((template) => template.id == id);
+    final index = customNoteTemplates.indexWhere(
+      (template) => template.id == id,
+    );
     if (index < 0) {
       throw StateError('Пользовательский шаблон не найден.');
     }
@@ -339,8 +343,8 @@ class AppStore extends ChangeNotifier {
     List<NoteTemplate> imported,
   ) async {
     if (imported.isEmpty) return const <NoteTemplate>[];
-    final remaining = CustomNoteTemplateStore.maxTemplateCount -
-        customNoteTemplates.length;
+    final remaining =
+        CustomNoteTemplateStore.maxTemplateCount - customNoteTemplates.length;
     if (remaining <= 0) {
       throw StateError('Достигнут лимит пользовательских шаблонов.');
     }
@@ -389,13 +393,14 @@ class AppStore extends ChangeNotifier {
     while (true) {
       final prefix = index == 1 ? 'Копия — ' : 'Копия $index — ';
       final maxSourceLength = 120 - prefix.length;
-      final source = normalized.length <= maxSourceLength
-          ? normalized
-          : normalized.substring(0, maxSourceLength).trimRight();
+      final source =
+          normalized.length <= maxSourceLength
+              ? normalized
+              : normalized.substring(0, maxSourceLength).trimRight();
       final candidate = '$prefix$source';
       final exists = customNoteTemplates.any(
-        (template) => template.title.trim().toLowerCase() ==
-            candidate.toLowerCase(),
+        (template) =>
+            template.title.trim().toLowerCase() == candidate.toLowerCase(),
       );
       if (!exists) return candidate;
       index += 1;
@@ -497,10 +502,12 @@ class AppStore extends ChangeNotifier {
     var candidates = notesByTitle(reference.noteTitle);
     if (reference.projectTitle != null) {
       final projectName = reference.projectTitle!.trim().toLowerCase();
-      candidates = candidates.where((note) {
-        final project = projectById(note.projectId);
-        return project?.title.trim().toLowerCase() == projectName;
-      }).toList(growable: false);
+      candidates = candidates
+          .where((note) {
+            final project = projectById(note.projectId);
+            return project?.title.trim().toLowerCase() == projectName;
+          })
+          .toList(growable: false);
     }
 
     final sorted = List<Note>.from(candidates);
@@ -566,13 +573,16 @@ class AppStore extends ChangeNotifier {
       .toList(growable: false);
 
   List<NoteLink> backlinksFor(Note note) {
-    return data.noteLinks.where((link) {
-      if (link.targetNoteId != null) {
-        return link.targetNoteId == note.id;
-      }
-      final source = noteById(link.sourceNoteId);
-      return resolveWikiTarget(link.targetTitle, source: source)?.id == note.id;
-    }).toList(growable: false);
+    return data.noteLinks
+        .where((link) {
+          if (link.targetNoteId != null) {
+            return link.targetNoteId == note.id;
+          }
+          final source = noteById(link.sourceNoteId);
+          return resolveWikiTarget(link.targetTitle, source: source)?.id ==
+              note.id;
+        })
+        .toList(growable: false);
   }
 
   NoteWikiRenamePlan buildWikiRenamePlan(Note note, String newTitle) {
@@ -581,11 +591,9 @@ class AppStore extends ChangeNotifier {
       newTitle: newTitle,
       notes: data.notes,
       resolveTarget:
-          (source, rawTarget) =>
-              resolveWikiTarget(rawTarget, source: source),
+          (source, rawTarget) => resolveWikiTarget(rawTarget, source: source),
       targetCandidates:
-          (source, rawTarget) =>
-              notesForWikiTarget(rawTarget, source: source),
+          (source, rawTarget) => notesForWikiTarget(rawTarget, source: source),
     );
   }
 
@@ -593,11 +601,9 @@ class AppStore extends ChangeNotifier {
     return NoteWikiRenamePlanner.findIssues(
       notes: data.notes,
       resolveTarget:
-          (source, rawTarget) =>
-              resolveWikiTarget(rawTarget, source: source),
+          (source, rawTarget) => resolveWikiTarget(rawTarget, source: source),
       targetCandidates:
-          (source, rawTarget) =>
-              notesForWikiTarget(rawTarget, source: source),
+          (source, rawTarget) => notesForWikiTarget(rawTarget, source: source),
     );
   }
 
@@ -774,7 +780,8 @@ class AppStore extends ChangeNotifier {
     var content = parsed.content;
     var changed = false;
     final normalized = rawTarget.trim().toLowerCase();
-    for (final reference in NoteWikiLinkSyntax.all(parsed.content).toList().reversed) {
+    for (final reference
+        in NoteWikiLinkSyntax.all(parsed.content).toList().reversed) {
       if (reference.target.trim().toLowerCase() != normalized) {
         continue;
       }
@@ -976,10 +983,7 @@ class AppStore extends ChangeNotifier {
         await _repository.restoreTask(restored.id);
         await _repository.saveTask(restored);
         data.tasks.removeWhere((task) => task.id == restored.id);
-        data.tasks.insert(
-          index.clamp(0, data.tasks.length).toInt(),
-          restored,
-        );
+        data.tasks.insert(index.clamp(0, data.tasks.length).toInt(), restored);
         for (final snapshot in childSnapshots) {
           final restoredChild = _cloneTask(snapshot);
           final childIndex = data.tasks.indexWhere(
@@ -1026,9 +1030,10 @@ class AppStore extends ChangeNotifier {
     project.updatedAt = DateTime.now();
     await _repository.saveProject(project);
     _registerUndo(
-      label: archived
-          ? 'Архивирование проекта «$projectTitle»'
-          : 'Возврат проекта «$projectTitle» из архива',
+      label:
+          archived
+              ? 'Архивирование проекта «$projectTitle»'
+              : 'Возврат проекта «$projectTitle» из архива',
       restore: () async {
         final current = projectById(projectId);
         if (current == null) {
@@ -1059,7 +1064,9 @@ class AppStore extends ChangeNotifier {
 
   void updateCitationSource(CitationSource source) {
     source.updatedAt = DateTime.now();
-    final index = data.citationSources.indexWhere((item) => item.id == source.id);
+    final index = data.citationSources.indexWhere(
+      (item) => item.id == source.id,
+    );
     if (index < 0) {
       data.citationSources.insert(0, source);
     } else {
@@ -1092,13 +1099,15 @@ class AppStore extends ChangeNotifier {
   }
 
   int importCitationSources(Iterable<CitationSource> sources) {
-    final keys = data.citationSources
-        .map((source) => source.normalizedCitationKey)
-        .toSet();
-    final dois = data.citationSources
-        .map((source) => source.normalizedDoi)
-        .where((doi) => doi.isNotEmpty)
-        .toSet();
+    final keys =
+        data.citationSources
+            .map((source) => source.normalizedCitationKey)
+            .toSet();
+    final dois =
+        data.citationSources
+            .map((source) => source.normalizedDoi)
+            .where((doi) => doi.isNotEmpty)
+            .toSet();
     var imported = 0;
     for (final source in sources) {
       final key = source.normalizedCitationKey;
@@ -1222,7 +1231,8 @@ class AppStore extends ChangeNotifier {
           await _recordReliability(
             stage: ReliabilityStage.system,
             level: ReliabilityLevel.warning,
-            message: 'Заметка восстановлена, но индекс связей требует перестроения.',
+            message:
+                'Заметка восстановлена, но индекс связей требует перестроения.',
             details: <String, Object?>{'error': error.toString()},
             notify: false,
           );
@@ -1447,9 +1457,10 @@ class AppStore extends ChangeNotifier {
       await _recordReliability(
         stage: ReliabilityStage.connection,
         level: cancelled ? ReliabilityLevel.info : ReliabilityLevel.error,
-        message: cancelled
-            ? 'Ручная LAN-синхронизация отменена пользователем.'
-            : 'Ручная LAN-синхронизация не выполнена.',
+        message:
+            cancelled
+                ? 'Ручная LAN-синхронизация отменена пользователем.'
+                : 'Ручная LAN-синхронизация не выполнена.',
         peerDeviceId: expectedPeerDeviceId,
         details: <String, Object?>{'error': _friendlyLanError(error)},
         notify: false,
@@ -2678,9 +2689,8 @@ class AppStore extends ChangeNotifier {
         backupRoundTrip: roundTrip,
         vaultStatus: vaultStatus,
         undoDepth: undoDepth,
-        automaticBackupCount: automaticBackups
-            .where((entry) => entry.isValid)
-            .length,
+        automaticBackupCount:
+            automaticBackups.where((entry) => entry.isValid).length,
         pendingConflictCount:
             readinessScan?.conflicts.length ?? vaultStatus.conflictCount,
       );
@@ -2694,9 +2704,10 @@ class AppStore extends ChangeNotifier {
       await _recordReliability(
         stage: ReliabilityStage.system,
         level: reliabilityLevel,
-        message: report.ready
-            ? 'Проверка готовности Chronicle 1.0 завершена успешно.'
-            : 'Проверка готовности Chronicle 1.0 требует внимания.',
+        message:
+            report.ready
+                ? 'Проверка готовности Chronicle 1.0 завершена успешно.'
+                : 'Проверка готовности Chronicle 1.0 требует внимания.',
         details: <String, Object?>{
           'integrityErrors': integrity.errorCount,
           'integrityWarnings': integrity.warningCount,
@@ -2723,9 +2734,7 @@ class AppStore extends ChangeNotifier {
     required String label,
     required Future<void> Function() restore,
   }) {
-    _undoJournal.push(
-      ChronicleUndoEntry(label: label, restore: restore),
-    );
+    _undoJournal.push(ChronicleUndoEntry(label: label, restore: restore));
   }
 
   Note _cloneNote(Note note) =>

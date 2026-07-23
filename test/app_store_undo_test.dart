@@ -4,60 +4,66 @@ import 'package:chronicle/services/app_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('deleting and undoing a note restores task and wiki relationships', () async {
-    final project = Project(id: 'project-1', title: 'Research', emoji: '🧬');
-    final note = Note(
-      id: 'note-1',
-      title: 'Result',
-      projectId: project.id,
-      body: '# Result',
-    );
-    final other = Note(
-      id: 'note-2',
-      title: 'Discussion',
-      projectId: project.id,
-      body: 'See [[id:note-1|Result]].',
-    );
-    final task = WorkTask(
-      id: 'task-1',
-      title: 'Check result',
-      projectId: project.id,
-      noteId: note.id,
-    );
-    final repository = InMemoryAppRepository();
-    await repository.replaceAll(
-      AppData(
-        projects: <Project>[project],
-        tasks: <WorkTask>[task],
-        notes: <Note>[note, other],
-        entries: <TimeEntry>[],
-      ),
-    );
-    await repository.markInitialized();
-    final store = AppStore(repository: repository);
-    await store.load();
+  test(
+    'deleting and undoing a note restores task and wiki relationships',
+    () async {
+      final project = Project(id: 'project-1', title: 'Research', emoji: '🧬');
+      final note = Note(
+        id: 'note-1',
+        title: 'Result',
+        projectId: project.id,
+        body: '# Result',
+      );
+      final other = Note(
+        id: 'note-2',
+        title: 'Discussion',
+        projectId: project.id,
+        body: 'See [[id:note-1|Result]].',
+      );
+      final task = WorkTask(
+        id: 'task-1',
+        title: 'Check result',
+        projectId: project.id,
+        noteId: note.id,
+      );
+      final repository = InMemoryAppRepository();
+      await repository.replaceAll(
+        AppData(
+          projects: <Project>[project],
+          tasks: <WorkTask>[task],
+          notes: <Note>[note, other],
+          entries: <TimeEntry>[],
+        ),
+      );
+      await repository.markInitialized();
+      final store = AppStore(repository: repository);
+      await store.load();
 
-    await store.deleteNote(note.id);
+      await store.deleteNote(note.id);
 
-    expect(store.noteById(note.id), isNull);
-    expect(store.data.tasks.single.noteId, isNull);
-    expect(store.canUndo, isTrue);
+      expect(store.noteById(note.id), isNull);
+      expect(store.data.tasks.single.noteId, isNull);
+      expect(store.canUndo, isTrue);
 
-    final label = await store.undoLastAction();
+      final label = await store.undoLastAction();
 
-    expect(label, contains('Result'));
-    expect(store.noteById(note.id), isNotNull);
-    expect(store.data.tasks.single.noteId, note.id);
-    expect(
-      store.data.noteLinks.any(
-        (link) =>
-            link.sourceNoteId == other.id && link.targetNoteId == note.id,
-      ),
-      isTrue,
-    );
-    expect((await repository.load()).notes.map((item) => item.id), contains(note.id));
-    store.dispose();
-  });
+      expect(label, contains('Result'));
+      expect(store.noteById(note.id), isNotNull);
+      expect(store.data.tasks.single.noteId, note.id);
+      expect(
+        store.data.noteLinks.any(
+          (link) =>
+              link.sourceNoteId == other.id && link.targetNoteId == note.id,
+        ),
+        isTrue,
+      );
+      expect(
+        (await repository.load()).notes.map((item) => item.id),
+        contains(note.id),
+      );
+      store.dispose();
+    },
+  );
 
   test('task deletion undo restores child hierarchy', () async {
     final project = Project(id: 'project-1', title: 'Research', emoji: '🧬');

@@ -147,7 +147,6 @@ void main() {
     expect(manifest.entries, isEmpty);
   });
 
-
   test('synced attachment is verified, stored, and indexed', () async {
     final backend = _AttachmentBackend(const <PickedVaultFile>[]);
     final service = VaultService(backend: backend);
@@ -226,7 +225,6 @@ void main() {
     expect(backend.binaryFiles, isEmpty);
     expect(manifest.tombstoneCount, 1);
   });
-
 }
 
 class _AttachmentBackend extends VaultBackend {

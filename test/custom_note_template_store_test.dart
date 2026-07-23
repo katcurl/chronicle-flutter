@@ -46,7 +46,6 @@ void main() {
     expect(CustomNoteTemplateStore.decode(null), isEmpty);
   });
 
-
   test('export bundle preserves category and portable metadata', () {
     final encoded = CustomNoteTemplateStore.encodeExportBundle(
       const <NoteTemplate>[template],
@@ -60,9 +59,9 @@ void main() {
   });
 
   test('legacy JSON list remains importable', () {
-    final legacy = CustomNoteTemplateStore.encode(
-      const <NoteTemplate>[template],
-    );
+    final legacy = CustomNoteTemplateStore.encode(const <NoteTemplate>[
+      template,
+    ]);
     final decoded = CustomNoteTemplateStore.decodeImportBundle(legacy);
 
     expect(decoded.single.id, template.id);

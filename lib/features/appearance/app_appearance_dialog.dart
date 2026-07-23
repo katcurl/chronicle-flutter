@@ -21,10 +21,11 @@ class AppAppearanceDialog extends StatefulWidget {
   }) {
     return showDialog<AppAppearanceChange>(
       context: context,
-      builder: (context) => AppAppearanceDialog(
-        initialPreferences: preferences,
-        existingBackgroundImage: existingBackgroundImage,
-      ),
+      builder:
+          (context) => AppAppearanceDialog(
+            initialPreferences: preferences,
+            existingBackgroundImage: existingBackgroundImage,
+          ),
     );
   }
 
@@ -98,14 +99,15 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
           child: const Text('Отмена'),
         ),
         FilledButton.icon(
-          onPressed: () => Navigator.pop(
-            context,
-            AppAppearanceChange(
-              preferences: draft,
-              background: pendingBackground,
-              removeBackground: removeBackground,
-            ),
-          ),
+          onPressed:
+              () => Navigator.pop(
+                context,
+                AppAppearanceChange(
+                  preferences: draft,
+                  background: pendingBackground,
+                  removeBackground: removeBackground,
+                ),
+              ),
           icon: const Icon(Icons.check_rounded),
           label: const Text('Применить'),
         ),
@@ -122,17 +124,16 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
         const SizedBox(height: 6),
         Text(
           'Тема согласованно меняет акцент, иконки, фон и панели. Каждый параметр можно переопределить ниже.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: colors.onSurfaceVariant,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 14),
         Wrap(
           spacing: 10,
           runSpacing: 10,
           children: <Widget>[
-            for (final palette in ChroniclePalette.values)
-              _presetChip(palette),
+            for (final palette in ChroniclePalette.values) _presetChip(palette),
           ],
         ),
         const SizedBox(height: 26),
@@ -182,14 +183,18 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
           minimum: 0,
           maximum: 30,
           divisions: 15,
-          label: draft.panelBlurSigma == 0
-              ? 'выкл.'
-              : draft.panelBlurSigma.toStringAsFixed(0),
-          onChanged: draft.panelOpacity >= 0.999
-              ? null
-              : (value) {
-                  setState(() => draft = draft.copyWith(panelBlurSigma: value));
-                },
+          label:
+              draft.panelBlurSigma == 0
+                  ? 'выкл.'
+                  : draft.panelBlurSigma.toStringAsFixed(0),
+          onChanged:
+              draft.panelOpacity >= 0.999
+                  ? null
+                  : (value) {
+                    setState(
+                      () => draft = draft.copyWith(panelBlurSigma: value),
+                    );
+                  },
         ),
         if (draft.surfaceStyle == ChronicleSurfaceStyle.shiny)
           _slider(
@@ -246,21 +251,22 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
         const SizedBox(height: 6),
         Text(
           'PNG, JPEG, WebP или GIF до 30 МБ. Файл копируется в локальное хранилище Chronicle.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: colors.onSurfaceVariant,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
         Row(
           children: <Widget>[
             FilledButton.tonalIcon(
               onPressed: pickingBackground ? null : _pickBackground,
-              icon: pickingBackground
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.wallpaper_rounded),
+              icon:
+                  pickingBackground
+                      ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.wallpaper_rounded),
               label: Text(hasBackground ? 'Заменить фон' : 'Выбрать фон'),
             ),
             if (hasBackground) ...<Widget>[
@@ -308,8 +314,8 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
   }
 
   Widget _presetChip(ChroniclePalette palette) {
-    final selected = draft.usesCoordinatedPalette &&
-        draft.accentPalette == palette;
+    final selected =
+        draft.usesCoordinatedPalette && draft.accentPalette == palette;
     return FilterChip(
       selected: selected,
       avatar: _colorDot(palette.seed, size: 18),
@@ -348,13 +354,11 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             children: <Widget>[
-              Icon(
-                switch (style) {
-                  ChronicleSurfaceStyle.matte => Icons.crop_square_rounded,
-                  ChronicleSurfaceStyle.glossy => Icons.gradient_rounded,
-                  ChronicleSurfaceStyle.shiny => Icons.auto_awesome_rounded,
-                },
-              ),
+              Icon(switch (style) {
+                ChronicleSurfaceStyle.matte => Icons.crop_square_rounded,
+                ChronicleSurfaceStyle.glossy => Icons.gradient_rounded,
+                ChronicleSurfaceStyle.shiny => Icons.auto_awesome_rounded,
+              }),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -429,7 +433,10 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
           Row(
             children: <Widget>[
               Expanded(child: _sectionTitle(title)),
-              Text(selected.label, style: Theme.of(context).textTheme.labelMedium),
+              Text(
+                selected.label,
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -451,9 +458,10 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: selected == palette
-                              ? Theme.of(context).colorScheme.onSurface
-                              : Colors.transparent,
+                          color:
+                              selected == palette
+                                  ? Theme.of(context).colorScheme.onSurface
+                                  : Colors.transparent,
                           width: 2,
                         ),
                       ),
@@ -490,9 +498,10 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
             backgroundImage: background,
             revision: draft.backgroundRevision,
             child: ColoredBox(
-              color: background == null
-                  ? Theme.of(previewContext).scaffoldBackgroundColor
-                  : Colors.transparent,
+              color:
+                  background == null
+                      ? Theme.of(previewContext).scaffoldBackgroundColor
+                      : Colors.transparent,
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -526,12 +535,11 @@ class _AppAppearanceDialogState extends State<AppAppearanceDialog> {
                                   ),
                                   Text(
                                     'Активное исследование',
-                                    style: Theme.of(previewContext)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                          color: colors.onSurfaceVariant,
-                                        ),
+                                    style: Theme.of(
+                                      previewContext,
+                                    ).textTheme.bodySmall?.copyWith(
+                                      color: colors.onSurfaceVariant,
+                                    ),
                                   ),
                                 ],
                               ),

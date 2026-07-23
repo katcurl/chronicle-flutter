@@ -287,9 +287,10 @@ class NoteToolbarProfile {
     final name = _trimmed(json['name'], maxNameLength);
     final emoji = _trimmed(json['emoji'], maxEmojiLength);
     final rawActions = json['actionIds'];
-    final actions = rawActions is List
-        ? rawActions.map((value) => value.toString())
-        : const <String>[];
+    final actions =
+        rawActions is List
+            ? rawActions.map((value) => value.toString())
+            : const <String>[];
     return NoteToolbarProfile(
       id: id,
       name: name.isEmpty ? 'Панель действий' : name,
@@ -367,9 +368,8 @@ class NoteToolbarPreferences {
     }
     if (result.isEmpty) return NoteToolbarPreferences.defaults();
     return NoteToolbarPreferences(
-      activeProfileId: ids.contains(activeProfileId)
-          ? activeProfileId
-          : result.first.id,
+      activeProfileId:
+          ids.contains(activeProfileId) ? activeProfileId : result.first.id,
       profiles: List<NoteToolbarProfile>.unmodifiable(result),
     );
   }
@@ -386,8 +386,7 @@ class NoteToolbarPreferences {
       for (final raw in rawProfiles) {
         if (raw is! Map) continue;
         final normalized = <String, Object?>{
-          for (final entry in raw.entries)
-            entry.key.toString(): entry.value,
+          for (final entry in raw.entries) entry.key.toString(): entry.value,
         };
         final profile = NoteToolbarProfile.fromJson(normalized);
         if (profile != null) profiles.add(profile);

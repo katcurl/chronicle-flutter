@@ -64,9 +64,8 @@ void main() {
   });
 
   test('image metadata does not inflate note word count', () {
-    final image = NoteImageSyntax.first(
-      '![Orf9b](../../Attachments/orf9b.png)',
-    )!;
+    final image =
+        NoteImageSyntax.first('![Orf9b](../../Attachments/orf9b.png)')!;
     final markdown = image.toMarkdown(
       presentation: const NoteImagePresentation(
         widthPercent: 50,
@@ -78,9 +77,8 @@ void main() {
   });
 
   test('image presentation survives note save and reload', () {
-    final image = NoteImageSyntax.first(
-      '![Orf9b](../../Attachments/orf9b.png)',
-    )!;
+    final image =
+        NoteImageSyntax.first('![Orf9b](../../Attachments/orf9b.png)')!;
     final configured = image.toMarkdown(
       presentation: const NoteImagePresentation(
         widthPercent: 45,

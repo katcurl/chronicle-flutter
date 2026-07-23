@@ -67,28 +67,28 @@ void main() {
     expect(index.brokenCrossReferences, hasLength(1));
   });
 
-  test('detects duplicate identifiers without choosing an arbitrary target', () {
-    final imageA = NoteImageSyntax.first(
-      '![A](../../Attachments/a.png)',
-    )!.toMarkdown(
-      presentation: const NoteImagePresentation(figureId: 'same-id'),
-    );
-    final imageB = NoteImageSyntax.first(
-      '![B](../../Attachments/b.png)',
-    )!.toMarkdown(
-      presentation: const NoteImagePresentation(figureId: 'same-id'),
-    );
-    final source = '$imageA\n\n$imageB\n\n@fig(same-id)';
+  test(
+    'detects duplicate identifiers without choosing an arbitrary target',
+    () {
+      final imageA = NoteImageSyntax.first(
+        '![A](../../Attachments/a.png)',
+      )!.toMarkdown(
+        presentation: const NoteImagePresentation(figureId: 'same-id'),
+      );
+      final imageB = NoteImageSyntax.first(
+        '![B](../../Attachments/b.png)',
+      )!.toMarkdown(
+        presentation: const NoteImagePresentation(figureId: 'same-id'),
+      );
+      final source = '$imageA\n\n$imageB\n\n@fig(same-id)';
 
-    final index = ScientificReferenceSyntax.index(source);
+      final index = ScientificReferenceSyntax.index(source);
 
-    expect(index.duplicateKeys, contains('figure:same-id'));
-    expect(
-      index.objectFor(ScientificObjectType.figure, 'same-id'),
-      isNull,
-    );
-    expect(index.ambiguousCrossReferences, hasLength(1));
-  });
+      expect(index.duplicateKeys, contains('figure:same-id'));
+      expect(index.objectFor(ScientificObjectType.figure, 'same-id'), isNull);
+      expect(index.ambiguousCrossReferences, hasLength(1));
+    },
+  );
 
   test('scientific table remains one portable Markdown block', () {
     const draft = ScientificTableDraft(
@@ -125,14 +125,10 @@ void main() {
   test('reference number follows object order without rewriting its token', () {
     final imageA = NoteImageSyntax.first(
       '![A](../../Attachments/a.png)',
-    )!.toMarkdown(
-      presentation: const NoteImagePresentation(figureId: 'a'),
-    );
+    )!.toMarkdown(presentation: const NoteImagePresentation(figureId: 'a'));
     final imageB = NoteImageSyntax.first(
       '![B](../../Attachments/b.png)',
-    )!.toMarkdown(
-      presentation: const NoteImagePresentation(figureId: 'b'),
-    );
+    )!.toMarkdown(presentation: const NoteImagePresentation(figureId: 'b'));
     final source = '$imageB\n\n$imageA\n\nСм. @fig(b).';
     final index = ScientificReferenceSyntax.index(source);
 

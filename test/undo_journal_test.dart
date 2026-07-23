@@ -52,10 +52,7 @@ void main() {
     final journal = ChronicleUndoJournal(maxEntries: 2);
     for (var index = 0; index < 4; index += 1) {
       journal.push(
-        ChronicleUndoEntry(
-          label: 'Действие $index',
-          restore: () async {},
-        ),
+        ChronicleUndoEntry(label: 'Действие $index', restore: () async {}),
       );
     }
 

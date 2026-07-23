@@ -38,17 +38,17 @@ void main() {
 
   test('multiple stable links can be inserted inline or as a list', () {
     expect(
-      NoteLinkTools.compose(
-        const <NoteLinkTarget>[rmsd, buffer],
-        style: NoteLinkInsertStyle.inline,
-      ),
+      NoteLinkTools.compose(const <NoteLinkTarget>[
+        rmsd,
+        buffer,
+      ], style: NoteLinkInsertStyle.inline),
       '[[id:note-rmsd|RMSD analysis]], [[id:note-buffer|NMR buffer]]',
     );
     expect(
-      NoteLinkTools.compose(
-        const <NoteLinkTarget>[rmsd, buffer],
-        style: NoteLinkInsertStyle.bulleted,
-      ),
+      NoteLinkTools.compose(const <NoteLinkTarget>[
+        rmsd,
+        buffer,
+      ], style: NoteLinkInsertStyle.bulleted),
       '- [[id:note-rmsd|RMSD analysis]]\n'
       '- [[id:note-buffer|NMR buffer]]',
     );

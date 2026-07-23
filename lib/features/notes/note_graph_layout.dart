@@ -77,9 +77,8 @@ class NoteGraphLayoutEngine {
     }
     for (final notes in notesByProject.values) {
       notes.sort(
-        (left, right) => left.title.toLowerCase().compareTo(
-          right.title.toLowerCase(),
-        ),
+        (left, right) =>
+            left.title.toLowerCase().compareTo(right.title.toLowerCase()),
       );
     }
 
@@ -90,19 +89,19 @@ class NoteGraphLayoutEngine {
         if (!projectOrder.contains(projectId)) projectId,
     ];
 
-    final clusterColumns = math
-        .min(
-          3,
-          math.max(1, math.sqrt(orderedProjects.length).ceil()),
-        )
-        .toInt();
+    final clusterColumns =
+        math
+            .min(3, math.max(1, math.sqrt(orderedProjects.length).ceil()))
+            .toInt();
     final columnBottoms = List<double>.filled(clusterColumns, _outerMargin);
     final nodeBounds = <String, Rect>{};
     final clusters = <NoteGraphClusterLayout>[];
 
-    for (var clusterIndex = 0;
-        clusterIndex < orderedProjects.length;
-        clusterIndex += 1) {
+    for (
+      var clusterIndex = 0;
+      clusterIndex < orderedProjects.length;
+      clusterIndex += 1
+    ) {
       final projectId = orderedProjects[clusterIndex];
       final projectNotes = notesByProject[projectId]!;
       final column = _shortestColumn(columnBottoms);
@@ -113,8 +112,7 @@ class NoteGraphLayoutEngine {
           (_clusterPadding * 2) +
           (rows * _nodeHeight) +
           (rowGaps * _nodeGap);
-      final left =
-          _outerMargin + column * (_clusterWidth + _clusterGap);
+      final left = _outerMargin + column * (_clusterWidth + _clusterGap);
       final top = columnBottoms[column];
       final clusterBounds = Rect.fromLTWH(
         left,
@@ -130,8 +128,7 @@ class NoteGraphLayoutEngine {
         ),
       );
 
-      final nodeWidth =
-          (_clusterWidth - (_clusterPadding * 2) - _nodeGap) / 2;
+      final nodeWidth = (_clusterWidth - (_clusterPadding * 2) - _nodeGap) / 2;
       for (var index = 0; index < projectNotes.length; index += 1) {
         final row = index ~/ 2;
         final nodeColumn = index % 2;
@@ -153,9 +150,7 @@ class NoteGraphLayoutEngine {
       columnBottoms[column] = clusterBounds.bottom + _clusterGap;
     }
 
-    final allById = <String, Note>{
-      for (final note in allNotes) note.id: note,
-    };
+    final allById = <String, Note>{for (final note in allNotes) note.id: note};
     final visibleIds = visibleNotes.map((note) => note.id).toSet();
     final edgeKeys = <String>{};
     final edges = <NoteGraphEdgeLayout>[];

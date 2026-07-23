@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 import 'note_editor_profile.dart';
 
 class NoteEditorProfileDialog extends StatefulWidget {
-  const NoteEditorProfileDialog({
-    super.key,
-    required this.initialPreferences,
-  });
+  const NoteEditorProfileDialog({super.key, required this.initialPreferences});
 
   final NoteEditorPreferences initialPreferences;
 
@@ -16,9 +13,8 @@ class NoteEditorProfileDialog extends StatefulWidget {
   }) {
     return showDialog<NoteEditorPreferences>(
       context: context,
-      builder: (context) => NoteEditorProfileDialog(
-        initialPreferences: preferences,
-      ),
+      builder:
+          (context) => NoteEditorProfileDialog(initialPreferences: preferences),
     );
   }
 
@@ -90,10 +86,7 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Отмена'),
         ),
-        FilledButton(
-          onPressed: _save,
-          child: const Text('Сохранить'),
-        ),
+        FilledButton(onPressed: _save, child: const Text('Сохранить')),
       ],
     );
   }
@@ -123,16 +116,16 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
         const SizedBox(width: 8),
         IconButton(
           tooltip: 'Новый профиль',
-          onPressed: profiles.length >= NoteEditorProfile.maxProfiles
-              ? null
-              : _create,
+          onPressed:
+              profiles.length >= NoteEditorProfile.maxProfiles ? null : _create,
           icon: const Icon(Icons.add_rounded),
         ),
         IconButton(
           tooltip: 'Дублировать',
-          onPressed: profiles.length >= NoteEditorProfile.maxProfiles
-              ? null
-              : _duplicate,
+          onPressed:
+              profiles.length >= NoteEditorProfile.maxProfiles
+                  ? null
+                  : _duplicate,
           icon: const Icon(Icons.copy_outlined),
         ),
         IconButton(
@@ -158,9 +151,9 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
         const SizedBox(height: 8),
         Text(
           'Профиль меняет только внешний вид и поведение редактора.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: colors.onSurfaceVariant,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 14),
         Expanded(
@@ -190,9 +183,13 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
                   subtitle: Text(
                     '${profile.font.label} · ${profile.fontSize.round()} px',
                   ),
-                  trailing: isActive
-                      ? Icon(Icons.check_circle_rounded, color: colors.primary)
-                      : null,
+                  trailing:
+                      isActive
+                          ? Icon(
+                            Icons.check_circle_rounded,
+                            color: colors.primary,
+                          )
+                          : null,
                   onTap: () => _select(index),
                 ),
               );
@@ -204,17 +201,19 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
           children: [
             IconButton.filledTonal(
               tooltip: 'Новый профиль',
-              onPressed: profiles.length >= NoteEditorProfile.maxProfiles
-                  ? null
-                  : _create,
+              onPressed:
+                  profiles.length >= NoteEditorProfile.maxProfiles
+                      ? null
+                      : _create,
               icon: const Icon(Icons.add_rounded),
             ),
             const SizedBox(width: 8),
             IconButton.filledTonal(
               tooltip: 'Дублировать',
-              onPressed: profiles.length >= NoteEditorProfile.maxProfiles
-                  ? null
-                  : _duplicate,
+              onPressed:
+                  profiles.length >= NoteEditorProfile.maxProfiles
+                      ? null
+                      : _duplicate,
               icon: const Icon(Icons.copy_outlined),
             ),
             const Spacer(),
@@ -255,9 +254,9 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
                   labelText: 'Значок',
                   counterText: '',
                 ),
-                onChanged: (value) => _replaceSelected(
-                  profile.copyWith(emoji: value.trim()),
-                ),
+                onChanged:
+                    (value) =>
+                        _replaceSelected(profile.copyWith(emoji: value.trim())),
               ),
             ),
             const SizedBox(width: 12),
@@ -269,9 +268,9 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
                   labelText: 'Название',
                   counterText: '',
                 ),
-                onChanged: (value) => _replaceSelected(
-                  profile.copyWith(name: value.trim()),
-                ),
+                onChanged:
+                    (value) =>
+                        _replaceSelected(profile.copyWith(name: value.trim())),
               ),
             ),
           ],
@@ -345,9 +344,8 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
           min: 12,
           max: 24,
           divisions: 12,
-          onChanged: (value) => _replaceSelected(
-            profile.copyWith(fontSize: value),
-          ),
+          onChanged:
+              (value) => _replaceSelected(profile.copyWith(fontSize: value)),
         ),
         _slider(
           label: 'Межстрочный интервал',
@@ -356,9 +354,8 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
           min: 1.2,
           max: 2.2,
           divisions: 20,
-          onChanged: (value) => _replaceSelected(
-            profile.copyWith(lineHeight: value),
-          ),
+          onChanged:
+              (value) => _replaceSelected(profile.copyWith(lineHeight: value)),
         ),
         _slider(
           label: 'Масштаб предпросмотра',
@@ -367,9 +364,9 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
           min: 0.8,
           max: 1.4,
           divisions: 12,
-          onChanged: (value) => _replaceSelected(
-            profile.copyWith(previewScale: value),
-          ),
+          onChanged:
+              (value) =>
+                  _replaceSelected(profile.copyWith(previewScale: value)),
         ),
         const SizedBox(height: 4),
         SwitchListTile(
@@ -381,9 +378,10 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
                 : 'Максимальная ширина: ${profile.contentWidth.round()} px.',
           ),
           value: profile.contentWidth > 0,
-          onChanged: (value) => _replaceSelected(
-            profile.copyWith(contentWidth: value ? 940 : 0),
-          ),
+          onChanged:
+              (value) => _replaceSelected(
+                profile.copyWith(contentWidth: value ? 940 : 0),
+              ),
         ),
         if (profile.contentWidth > 0)
           _slider(
@@ -393,9 +391,9 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
             min: 560,
             max: 1400,
             divisions: 21,
-            onChanged: (value) => _replaceSelected(
-              profile.copyWith(contentWidth: value),
-            ),
+            onChanged:
+                (value) =>
+                    _replaceSelected(profile.copyWith(contentWidth: value)),
           ),
         const SizedBox(height: 8),
         Text(
@@ -408,38 +406,37 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
         _switch(
           title: 'Поле названия',
           value: profile.showTitle,
-          onChanged: (value) => _replaceSelected(
-            profile.copyWith(showTitle: value),
-          ),
+          onChanged:
+              (value) => _replaceSelected(profile.copyWith(showTitle: value)),
         ),
         _switch(
           title: 'Панель инструментов Markdown',
           value: profile.showToolbar,
-          onChanged: (value) => _replaceSelected(
-            profile.copyWith(showToolbar: value),
-          ),
+          onChanged:
+              (value) => _replaceSelected(profile.copyWith(showToolbar: value)),
         ),
         _switch(
           title: 'Подсказки wiki-ссылок',
           value: profile.showLinkSuggestions,
-          onChanged: (value) => _replaceSelected(
-            profile.copyWith(showLinkSuggestions: value),
-          ),
+          onChanged:
+              (value) => _replaceSelected(
+                profile.copyWith(showLinkSuggestions: value),
+              ),
         ),
         _switch(
           title: 'Контекстная панель заметки',
           subtitle: 'На узком экране она по-прежнему доступна через кнопку.',
           value: profile.showContextPanel,
-          onChanged: (value) => _replaceSelected(
-            profile.copyWith(showContextPanel: value),
-          ),
+          onChanged:
+              (value) =>
+                  _replaceSelected(profile.copyWith(showContextPanel: value)),
         ),
         _switch(
           title: 'Кнопка «Работать»',
           value: profile.showTimerButton,
-          onChanged: (value) => _replaceSelected(
-            profile.copyWith(showTimerButton: value),
-          ),
+          onChanged:
+              (value) =>
+                  _replaceSelected(profile.copyWith(showTimerButton: value)),
         ),
         const SizedBox(height: 14),
         _preview(profile, colors),
@@ -476,10 +473,7 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
         Row(
           children: [
             Expanded(child: Text(label)),
-            Text(
-              valueLabel,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
+            Text(valueLabel, style: Theme.of(context).textTheme.labelLarge),
           ],
         ),
         Slider(
@@ -523,9 +517,10 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
         ),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: profile.contentWidth > 0
-                ? profile.contentWidth
-                : double.infinity,
+            maxWidth:
+                profile.contentWidth > 0
+                    ? profile.contentWidth
+                    : double.infinity,
           ),
           child: Text(
             '# ORF9b\n\nГипотеза, наблюдения и результаты эксперимента.',

@@ -7,37 +7,40 @@ import 'package:chronicle/vault/vault_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('stable Vault manifest publishes the 1.0 compatibility contract', () async {
-    final root = await Directory.systemTemp.createTemp('chronicle-vault-v1-');
-    addTearDown(() => root.delete(recursive: true));
-    final backend = _ManifestBackend(root);
-    final service = VaultService(backend: backend);
+  test(
+    'stable Vault manifest publishes the 1.0 compatibility contract',
+    () async {
+      final root = await Directory.systemTemp.createTemp('chronicle-vault-v1-');
+      addTearDown(() => root.delete(recursive: true));
+      final backend = _ManifestBackend(root);
+      final service = VaultService(backend: backend);
 
-    final status = await service.writeMirror(
-      AppData(
-        projects: <Project>[
-          Project(id: 'project-1', title: 'Research', emoji: '🧬'),
-        ],
-        tasks: <WorkTask>[],
-        notes: <Note>[],
-        entries: <TimeEntry>[],
-      ),
-    );
-    final manifest = jsonDecode(
-      await File('${root.path}/manifest.json').readAsString(),
-    ) as Map<String, dynamic>;
+      final status = await service.writeMirror(
+        AppData(
+          projects: <Project>[
+            Project(id: 'project-1', title: 'Research', emoji: '🧬'),
+          ],
+          tasks: <WorkTask>[],
+          notes: <Note>[],
+          entries: <TimeEntry>[],
+        ),
+      );
+      final manifest =
+          jsonDecode(await File('${root.path}/manifest.json').readAsString())
+              as Map<String, dynamic>;
 
-    expect(status.readOnly, isFalse);
-    expect(status.formatVersion, VaultService.currentVaultFormatVersion);
-    expect(manifest['version'], VaultService.currentVaultFormatVersion);
-    expect(
-      manifest['minimumReaderVersion'],
-      VaultService.minimumReadableVaultFormatVersion,
-    );
-    expect(manifest['stableSince'], '1.0.0');
-    expect(manifest['unknownFrontmatterPolicy'], 'preserve');
-    expect(manifest['conflictPolicy'], 'never-silently-overwrite');
-  });
+      expect(status.readOnly, isFalse);
+      expect(status.formatVersion, VaultService.currentVaultFormatVersion);
+      expect(manifest['version'], VaultService.currentVaultFormatVersion);
+      expect(
+        manifest['minimumReaderVersion'],
+        VaultService.minimumReadableVaultFormatVersion,
+      );
+      expect(manifest['stableSince'], '1.0.0');
+      expect(manifest['unknownFrontmatterPolicy'], 'preserve');
+      expect(manifest['conflictPolicy'], 'never-silently-overwrite');
+    },
+  );
 
   test('newer Vault stays read-only and is never overwritten', () async {
     final root = await Directory.systemTemp.createTemp('chronicle-vault-v2-');
@@ -50,7 +53,9 @@ void main() {
       'noteCount': 42,
       'fileCount': 100,
     };
-    await File('${root.path}/manifest.json').writeAsString(jsonEncode(manifest));
+    await File(
+      '${root.path}/manifest.json',
+    ).writeAsString(jsonEncode(manifest));
     final backend = _ManifestBackend(root);
     final service = VaultService(backend: backend);
 

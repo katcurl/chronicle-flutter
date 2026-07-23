@@ -45,19 +45,21 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       return const Scaffold(body: Center(child: Text('Проект не найден')));
     }
 
-    final tasks = widget.store.data.tasks
-        .where((task) => task.projectId == project.id)
-        .toList()
-      ..sort((a, b) {
-        final priority = b.priority.compareTo(a.priority);
-        if (priority != 0) return priority;
-        return b.updatedAt.compareTo(a.updatedAt);
-      });
+    final tasks =
+        widget.store.data.tasks
+            .where((task) => task.projectId == project.id)
+            .toList()
+          ..sort((a, b) {
+            final priority = b.priority.compareTo(a.priority);
+            if (priority != 0) return priority;
+            return b.updatedAt.compareTo(a.updatedAt);
+          });
     final rootTasks = tasks.where((task) => task.parentTaskId == null).toList();
-    final notes = widget.store.data.notes
-        .where((note) => note.projectId == project.id)
-        .toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final notes =
+        widget.store.data.notes
+            .where((note) => note.projectId == project.id)
+            .toList()
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     final publicationNotes = notes
         .where(PublicationWorkspaceCodec.isPublication)
         .toList(growable: false);
@@ -65,10 +67,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         .where((note) => !PublicationWorkspaceCodec.isPublication(note))
         .toList(growable: false);
     final linkedSourceIds = project.linkedSourceIds.toSet();
-    final sources = widget.store.data.citationSources
-        .where((source) => linkedSourceIds.contains(source.id))
-        .toList()
-      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    final sources =
+        widget.store.data.citationSources
+            .where((source) => linkedSourceIds.contains(source.id))
+            .toList()
+          ..sort(
+            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+          );
     final pinnedIds = project.pinnedNoteIds.toSet();
     final pinnedNotes = sourceNotes
         .where((note) => pinnedIds.contains(note.id))
@@ -78,11 +83,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         .map((source) => source.pdfPath.trim())
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
-    final files = <String>{...attachmentPaths, ...sourceFiles}.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    final entries = widget.store.data.entries
-        .where((entry) => entry.projectId == project.id)
-        .toList();
+    final files =
+        <String>{...attachmentPaths, ...sourceFiles}.toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final entries =
+        widget.store.data.entries
+            .where((entry) => entry.projectId == project.id)
+            .toList();
     final seconds = entries.fold<int>(
       0,
       (sum, entry) => sum + entry.durationSeconds,
@@ -115,9 +122,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           actions: [
             IconButton(
               tooltip: 'Исследовательская страница',
-              onPressed: project.archived
-                  ? null
-                  : () => _editResearch(project, sourceNotes),
+              onPressed:
+                  project.archived
+                      ? null
+                      : () => _editResearch(project, sourceNotes),
               icon: const Icon(Icons.science_outlined),
             ),
             IconButton(
@@ -141,33 +149,35 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   }
                 }
               },
-              itemBuilder: (_) => [
-                const PopupMenuItem<String>(
-                  value: 'export',
-                  child: ListTile(
-                    leading: Icon(Icons.download_outlined),
-                    title: Text('Экспортировать проект'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const PopupMenuDivider(),
-                PopupMenuItem<String>(
-                  value: 'archive',
-                  child: Text(
-                    project.archived ? 'Вернуть из архива' : 'Архивировать',
-                  ),
-                ),
-              ],
+              itemBuilder:
+                  (_) => [
+                    const PopupMenuItem<String>(
+                      value: 'export',
+                      child: ListTile(
+                        leading: Icon(Icons.download_outlined),
+                        title: Text('Экспортировать проект'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      value: 'archive',
+                      child: Text(
+                        project.archived ? 'Вернуть из архива' : 'Архивировать',
+                      ),
+                    ),
+                  ],
             ),
           ],
         ),
-        floatingActionButton: project.archived
-            ? null
-            : FloatingActionButton.extended(
-                onPressed: () => _addTask(project),
-                icon: const Icon(Icons.add_task_rounded),
-                label: const Text('Задача'),
-              ),
+        floatingActionButton:
+            project.archived
+                ? null
+                : FloatingActionButton.extended(
+                  onPressed: () => _addTask(project),
+                  icon: const Icon(Icons.add_task_rounded),
+                  label: const Text('Задача'),
+                ),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
           children: [
@@ -182,9 +192,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             const SizedBox(height: 14),
             _ResearchBriefCard(
               project: project,
-              onEdit: project.archived
-                  ? null
-                  : () => _editResearch(project, sourceNotes),
+              onEdit:
+                  project.archived
+                      ? null
+                      : () => _editResearch(project, sourceNotes),
             ),
             const SizedBox(height: 14),
             _ProjectMetrics(
@@ -197,30 +208,35 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             _KnowledgeStatusSection(
               knownFindings: project.knownFindings,
               openChecks: project.openChecks,
-              onEdit: project.archived
-                  ? null
-                  : () => _editResearch(project, sourceNotes),
+              onEdit:
+                  project.archived
+                      ? null
+                      : () => _editResearch(project, sourceNotes),
             ),
             const SizedBox(height: 22),
             _PinnedResultsSection(
               notes: pinnedNotes,
-              onEdit: project.archived
-                  ? null
-                  : () => _editResearch(project, sourceNotes),
+              onEdit:
+                  project.archived
+                      ? null
+                      : () => _editResearch(project, sourceNotes),
             ),
             const SizedBox(height: 22),
             _LocalIntelligenceCard(
               noteCount: sourceNotes.length,
-              onOpen: () => LocalIntelligenceScreen.show(
-                context, store: widget.store, project: project),
+              onOpen:
+                  () => LocalIntelligenceScreen.show(
+                    context,
+                    store: widget.store,
+                    project: project,
+                  ),
             ),
             const SizedBox(height: 22),
             _PublicationOutputsSection(
               publications: publicationNotes,
               readOnly: project.archived,
               onCreate: () => _createPublication(project),
-              onOpen: (publication) =>
-                  _openPublication(project, publication),
+              onOpen: (publication) => _openPublication(project, publication),
             ),
             const SizedBox(height: 22),
             _ProjectMaterialsSection(
@@ -239,9 +255,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               for (var index = 0; index < rootTasks.length; index++) ...[
                 _ProjectTaskCard(
                   task: rootTasks[index],
-                  children: tasks
-                      .where((item) => item.parentTaskId == rootTasks[index].id)
-                      .toList(),
+                  children:
+                      tasks
+                          .where(
+                            (item) => item.parentTaskId == rootTasks[index].id,
+                          )
+                          .toList(),
                   onToggle: (value) {
                     widget.store.updateTaskStatus(
                       rootTasks[index],
@@ -480,8 +499,8 @@ class _ResearchBriefCard extends StatelessWidget {
                   child: Text(
                     'Цель и исследовательские вопросы',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -567,7 +586,9 @@ class _ProjectMetrics extends StatelessWidget {
         return Wrap(
           spacing: gap,
           runSpacing: gap,
-          children: [for (final metric in metrics) SizedBox(width: width, child: metric)],
+          children: [
+            for (final metric in metrics) SizedBox(width: width, child: metric),
+          ],
         );
       },
     );
@@ -611,17 +632,14 @@ class _KnowledgeStatusSection extends StatelessWidget {
               _KnowledgeListCard(
                 icon: Icons.manage_search_rounded,
                 title: 'Нужно проверить',
-                emptyText: 'Здесь можно держать пробелы, сомнения и следующие проверки.',
+                emptyText:
+                    'Здесь можно держать пробелы, сомнения и следующие проверки.',
                 items: openChecks,
               ),
             ];
             if (constraints.maxWidth < 720) {
               return Column(
-                children: [
-                  cards.first,
-                  const SizedBox(height: 12),
-                  cards.last,
-                ],
+                children: [cards.first, const SizedBox(height: 12), cards.last],
               );
             }
             return Row(
@@ -667,8 +685,8 @@ class _KnowledgeListCard extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),
@@ -763,22 +781,46 @@ class _PinnedResultsSection extends StatelessWidget {
 
 class _LocalIntelligenceCard extends StatelessWidget {
   const _LocalIntelligenceCard({required this.noteCount, required this.onOpen});
-  final int noteCount; final VoidCallback onOpen;
+  final int noteCount;
+  final VoidCallback onOpen;
   @override
   Widget build(BuildContext context) => Card(
     child: Padding(
       padding: const EdgeInsets.all(18),
-      child: Row(children: [
-        Icon(Icons.manage_search_rounded, size: 34, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 14),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Локальный интеллектуальный поиск', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 5),
-          Text('Смысловой поиск, похожие заметки, возможные связи и противоречия, ответы с источниками и история эксперимента. Индекс для $noteCount заметок хранится только на этом устройстве.', style: Theme.of(context).textTheme.bodySmall),
-        ])),
-        const SizedBox(width: 12),
-        FilledButton.tonalIcon(onPressed: onOpen, icon: const Icon(Icons.auto_awesome_outlined), label: const Text('Открыть')),
-      ]),
+      child: Row(
+        children: [
+          Icon(
+            Icons.manage_search_rounded,
+            size: 34,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Локальный интеллектуальный поиск',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  'Смысловой поиск, похожие заметки, возможные связи и противоречия, ответы с источниками и история эксперимента. Индекс для $noteCount заметок хранится только на этом устройстве.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          FilledButton.tonalIcon(
+            onPressed: onOpen,
+            icon: const Icon(Icons.auto_awesome_outlined),
+            label: const Text('Открыть'),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -908,8 +950,8 @@ class _PublicationOutputCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   const Icon(Icons.chevron_right_rounded),
@@ -919,9 +961,9 @@ class _PublicationOutputCard extends StatelessWidget {
               Text(
                 workspace.kind.label,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 8),
               Wrap(
@@ -977,7 +1019,9 @@ class _ProjectMaterialsSection extends StatelessWidget {
                       dense: true,
                       leading: const Icon(Icons.description_outlined),
                       title: Text(note.title),
-                      subtitle: Text('${note.noteType} · ${shortDate(note.updatedAt)}'),
+                      subtitle: Text(
+                        '${note.noteType} · ${shortDate(note.updatedAt)}',
+                      ),
                     ),
                 const Divider(height: 18),
                 _MaterialHeader(
@@ -986,7 +1030,9 @@ class _ProjectMaterialsSection extends StatelessWidget {
                   count: sources.length,
                 ),
                 if (sources.isEmpty)
-                  const _MaterialEmpty('Источники можно связать через исследовательскую страницу.')
+                  const _MaterialEmpty(
+                    'Источники можно связать через исследовательскую страницу.',
+                  )
                 else
                   for (final source in sources.take(5))
                     ListTile(
@@ -1008,14 +1054,20 @@ class _ProjectMaterialsSection extends StatelessWidget {
                   count: files.length,
                 ),
                 if (files.isEmpty)
-                  const _MaterialEmpty('Файлы появятся из вложений заметок и PDF связанных источников.')
+                  const _MaterialEmpty(
+                    'Файлы появятся из вложений заметок и PDF связанных источников.',
+                  )
                 else
                   for (final file in files.take(8))
                     ListTile(
                       dense: true,
                       leading: const Icon(Icons.insert_drive_file_outlined),
                       title: Text(path.basename(file)),
-                      subtitle: Text(file, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(
+                        file,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
               ],
             ),
@@ -1044,9 +1096,9 @@ class _MaterialHeader extends StatelessWidget {
       leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
       title: Text(
         title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
       ),
       trailing: Text('$count'),
     );
@@ -1060,12 +1112,12 @@ class _MaterialEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(text, style: Theme.of(context).textTheme.bodySmall),
-        ),
-      );
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: Text(text, style: Theme.of(context).textTheme.bodySmall),
+    ),
+  );
 }
 
 class _ProjectTimelineItem {
@@ -1101,7 +1153,10 @@ List<_ProjectTimelineItem> _projectTimeline(
       _ProjectTimelineItem(
         at: note.updatedAt,
         icon: Icons.description_outlined,
-        title: note.createdAt == note.updatedAt ? 'Заметка создана' : 'Заметка обновлена',
+        title:
+            note.createdAt == note.updatedAt
+                ? 'Заметка создана'
+                : 'Заметка обновлена',
         detail: note.title,
       ),
     );
@@ -1125,9 +1180,10 @@ List<_ProjectTimelineItem> _projectTimeline(
         at: entry.startedAt,
         icon: Icons.timer_outlined,
         title: 'Работа над проектом',
-        detail: entry.description.trim().isEmpty
-            ? formatDuration(entry.durationSeconds)
-            : '${entry.description} · ${formatDuration(entry.durationSeconds)}',
+        detail:
+            entry.description.trim().isEmpty
+                ? formatDuration(entry.durationSeconds)
+                : '${entry.description} · ${formatDuration(entry.durationSeconds)}',
       ),
     );
   }

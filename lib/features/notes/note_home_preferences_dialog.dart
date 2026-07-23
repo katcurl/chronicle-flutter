@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 import 'note_home_preferences.dart';
 
 class NoteHomePreferencesDialog extends StatefulWidget {
-  const NoteHomePreferencesDialog({
-    super.key,
-    required this.initialValue,
-  });
+  const NoteHomePreferencesDialog({super.key, required this.initialValue});
 
   final NoteHomePreferences initialValue;
 
@@ -25,8 +22,7 @@ class NoteHomePreferencesDialog extends StatefulWidget {
       _NoteHomePreferencesDialogState();
 }
 
-class _NoteHomePreferencesDialogState
-    extends State<NoteHomePreferencesDialog> {
+class _NoteHomePreferencesDialogState extends State<NoteHomePreferencesDialog> {
   late List<NoteHomeSection> sections;
   late Set<String> hiddenSectionIds;
   late int itemLimit;
@@ -37,9 +33,7 @@ class _NoteHomePreferencesDialogState
   void initState() {
     super.initState();
     sections = List<NoteHomeSection>.from(widget.initialValue.orderedSections);
-    hiddenSectionIds = Set<String>.from(
-      widget.initialValue.hiddenSectionIds,
-    );
+    hiddenSectionIds = Set<String>.from(widget.initialValue.hiddenSectionIds);
     itemLimit = widget.initialValue.itemLimit;
     compactCards = widget.initialValue.compactCards;
     openOnHome = widget.initialValue.openOnHome;
@@ -61,9 +55,9 @@ class _NoteHomePreferencesDialogState
             Text(
               'Секции хранятся только в локальных настройках интерфейса. '
               'Перетаскивайте их, скрывайте лишнее и задавайте плотность обзора.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
             ),
             const SizedBox(height: 18),
             SwitchListTile(

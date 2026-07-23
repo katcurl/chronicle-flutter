@@ -4,14 +4,17 @@ import 'package:chronicle/features/workspaces/workspace_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('settings center exposes customization and reliability destinations', () {
-    expect(AppSettingsDestination.values, <AppSettingsDestination>[
-      AppSettingsDestination.appearance,
-      AppSettingsDestination.workspaces,
-      AppSettingsDestination.projectAppearance,
-      AppSettingsDestination.reliability,
-    ]);
-  });
+  test(
+    'settings center exposes customization and reliability destinations',
+    () {
+      expect(AppSettingsDestination.values, <AppSettingsDestination>[
+        AppSettingsDestination.appearance,
+        AppSettingsDestination.workspaces,
+        AppSettingsDestination.projectAppearance,
+        AppSettingsDestination.reliability,
+      ]);
+    },
+  );
 
   test('appearance summary names palette, surface and brightness', () {
     const appearance = AppAppearancePreferences(

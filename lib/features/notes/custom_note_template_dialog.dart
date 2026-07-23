@@ -29,8 +29,7 @@ typedef CustomNoteTemplateUpdate =
       NoteTemplate template,
       CustomNoteTemplateDraft draft,
     );
-typedef CustomNoteTemplateDelete =
-    Future<void> Function(NoteTemplate template);
+typedef CustomNoteTemplateDelete = Future<void> Function(NoteTemplate template);
 typedef CustomNoteTemplateDuplicate =
     Future<NoteTemplate> Function(NoteTemplate template);
 typedef CustomNoteTemplateImport =
@@ -260,9 +259,8 @@ class _CustomNoteTemplateEditorDialogState
                       const SizedBox(height: 16),
                       Text(
                         'Markdown шаблона',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 8),
                       SizedBox(
@@ -535,9 +533,8 @@ class _CustomNoteTemplateManagerDialogState
                     onChanged:
                         _busy
                             ? null
-                            : (value) => setState(
-                              () => _categoryFilter = value ?? '',
-                            ),
+                            : (value) =>
+                                setState(() => _categoryFilter = value ?? ''),
                     items: [
                       const DropdownMenuItem<String>(
                         value: '',
@@ -701,13 +698,10 @@ class _CustomNoteTemplateManagerDialogState
   Future<void> _create() async {
     final draft = await CustomNoteTemplateEditorDialog.show(context);
     if (draft == null || !mounted) return;
-    await _run(
-      () async {
-        final created = await widget.onCreate(draft);
-        _templates.add(created);
-      },
-      errorPrefix: 'Не удалось создать шаблон',
-    );
+    await _run(() async {
+      final created = await widget.onCreate(draft);
+      _templates.add(created);
+    }, errorPrefix: 'Не удалось создать шаблон');
   }
 
   Future<void> _edit(NoteTemplate template) async {
@@ -716,42 +710,33 @@ class _CustomNoteTemplateManagerDialogState
       template: template,
     );
     if (draft == null || !mounted) return;
-    await _run(
-      () async {
-        final updated = await widget.onUpdate(template, draft);
-        final index = _templates.indexWhere((item) => item.id == template.id);
-        if (index >= 0) _templates[index] = updated;
-      },
-      errorPrefix: 'Не удалось сохранить шаблон',
-    );
+    await _run(() async {
+      final updated = await widget.onUpdate(template, draft);
+      final index = _templates.indexWhere((item) => item.id == template.id);
+      if (index >= 0) _templates[index] = updated;
+    }, errorPrefix: 'Не удалось сохранить шаблон');
   }
 
   Future<void> _duplicate(NoteTemplate template) async {
-    await _run(
-      () async {
-        final duplicate = await widget.onDuplicate(template);
-        _templates.add(duplicate);
-        _showMessage('Создан шаблон «${duplicate.title}».');
-      },
-      errorPrefix: 'Не удалось дублировать шаблон',
-    );
+    await _run(() async {
+      final duplicate = await widget.onDuplicate(template);
+      _templates.add(duplicate);
+      _showMessage('Создан шаблон «${duplicate.title}».');
+    }, errorPrefix: 'Не удалось дублировать шаблон');
   }
 
   Future<void> _import() async {
-    await _run(
-      () async {
-        final imported = await widget.fileService.importTemplates();
-        if (imported == null) return;
-        final added = await widget.onImport(imported);
-        _templates.addAll(added);
-        _showMessage(
-          added.isEmpty
-              ? 'Новых шаблонов нет: точные копии уже находятся в библиотеке.'
-              : 'Импортировано шаблонов: ${added.length}.',
-        );
-      },
-      errorPrefix: 'Не удалось импортировать шаблоны',
-    );
+    await _run(() async {
+      final imported = await widget.fileService.importTemplates();
+      if (imported == null) return;
+      final added = await widget.onImport(imported);
+      _templates.addAll(added);
+      _showMessage(
+        added.isEmpty
+            ? 'Новых шаблонов нет: точные копии уже находятся в библиотеке.'
+            : 'Импортировано шаблонов: ${added.length}.',
+      );
+    }, errorPrefix: 'Не удалось импортировать шаблоны');
   }
 
   Future<void> _exportAll() async {
@@ -759,23 +744,19 @@ class _CustomNoteTemplateManagerDialogState
   }
 
   Future<void> _exportOne(NoteTemplate template) async {
-    await _exportTemplates(
-      <NoteTemplate>[template],
-      'Шаблон «${template.title}» экспортирован.',
-    );
+    await _exportTemplates(<NoteTemplate>[
+      template,
+    ], 'Шаблон «${template.title}» экспортирован.');
   }
 
   Future<void> _exportTemplates(
     List<NoteTemplate> templates,
     String successMessage,
   ) async {
-    await _run(
-      () async {
-        final path = await widget.fileService.exportTemplates(templates);
-        if (path != null) _showMessage(successMessage);
-      },
-      errorPrefix: 'Не удалось экспортировать шаблоны',
-    );
+    await _run(() async {
+      final path = await widget.fileService.exportTemplates(templates);
+      if (path != null) _showMessage(successMessage);
+    }, errorPrefix: 'Не удалось экспортировать шаблоны');
   }
 
   Future<void> _delete(NoteTemplate template) async {
@@ -801,13 +782,10 @@ class _CustomNoteTemplateManagerDialogState
           ),
     );
     if (confirmed != true || !mounted) return;
-    await _run(
-      () async {
-        await widget.onDelete(template);
-        _templates.removeWhere((item) => item.id == template.id);
-      },
-      errorPrefix: 'Не удалось удалить шаблон',
-    );
+    await _run(() async {
+      await widget.onDelete(template);
+      _templates.removeWhere((item) => item.id == template.id);
+    }, errorPrefix: 'Не удалось удалить шаблон');
   }
 
   Future<void> _run(
@@ -849,9 +827,9 @@ class _EmptyCustomTemplates extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'Пока нет своих шаблонов',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
             const Text(

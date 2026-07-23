@@ -6,10 +6,7 @@ void main() {
   test('note home defaults expose every section in a stable order', () {
     final preferences = NoteHomePreferences.defaults();
 
-    expect(
-      preferences.orderedSections,
-      NoteHomeSection.values,
-    );
+    expect(preferences.orderedSections, NoteHomeSection.values);
     expect(preferences.hiddenSectionIds, isEmpty);
     expect(preferences.itemLimit, 4);
     expect(preferences.compactCards, isFalse);
@@ -18,22 +15,14 @@ void main() {
 
   test('normalization removes invalid duplicates and appends new sections', () {
     final preferences = NoteHomePreferences.normalized(
-      sectionIds: const <String>[
-        'recent',
-        'unknown',
-        'recent',
-        'pinned',
-      ],
+      sectionIds: const <String>['recent', 'unknown', 'recent', 'pinned'],
       hiddenSectionIds: const <String>['pinned', 'missing'],
       itemLimit: 99,
       compactCards: true,
       openOnHome: false,
     );
 
-    expect(
-      preferences.sectionIds.take(2),
-      const <String>['recent', 'pinned'],
-    );
+    expect(preferences.sectionIds.take(2), const <String>['recent', 'pinned']);
     expect(preferences.sectionIds.toSet(), <String>{
       for (final section in NoteHomeSection.values) section.id,
     });

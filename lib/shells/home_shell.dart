@@ -42,15 +42,13 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  final WorkspacePreferencesStore _workspaceStore =
-      WorkspacePreferencesStore();
+  final WorkspacePreferencesStore _workspaceStore = WorkspacePreferencesStore();
   final ProjectAppearanceController _projectAppearanceController =
       ProjectAppearanceController();
   WorkspacePreferences _workspacePreferences = WorkspacePreferences.defaults();
   AppSection section = AppSection.today;
 
-  WorkspaceProfile get activeWorkspace =>
-      _workspacePreferences.activeProfile;
+  WorkspaceProfile get activeWorkspace => _workspacePreferences.activeProfile;
 
   @override
   void initState() {
@@ -98,29 +96,25 @@ class _HomeShellState extends State<HomeShell> {
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true):
             () => unawaited(_undo()),
         const SingleActivator(
-          LogicalKeyboardKey.keyW,
-          control: true,
-          shift: true,
-        ): () => unawaited(_openWorkspaceManager()),
-        const SingleActivator(
-          LogicalKeyboardKey.keyW,
-          meta: true,
-          shift: true,
-        ): () => unawaited(_openWorkspaceManager()),
+              LogicalKeyboardKey.keyW,
+              control: true,
+              shift: true,
+            ):
+            () => unawaited(_openWorkspaceManager()),
+        const SingleActivator(LogicalKeyboardKey.keyW, meta: true, shift: true):
+            () => unawaited(_openWorkspaceManager()),
         const SingleActivator(LogicalKeyboardKey.comma, control: true):
             () => unawaited(_openSettings()),
         const SingleActivator(LogicalKeyboardKey.comma, meta: true):
             () => unawaited(_openSettings()),
         const SingleActivator(
-          LogicalKeyboardKey.keyA,
-          control: true,
-          shift: true,
-        ): () => unawaited(_openAppearance()),
-        const SingleActivator(
-          LogicalKeyboardKey.keyA,
-          meta: true,
-          shift: true,
-        ): () => unawaited(_openAppearance()),
+              LogicalKeyboardKey.keyA,
+              control: true,
+              shift: true,
+            ):
+            () => unawaited(_openAppearance()),
+        const SingleActivator(LogicalKeyboardKey.keyA, meta: true, shift: true):
+            () => unawaited(_openAppearance()),
       },
       child: Focus(
         autofocus: true,
@@ -153,12 +147,12 @@ class _HomeShellState extends State<HomeShell> {
                   _workspaceSwitcher(compact: false),
                   const SizedBox(width: 8),
                   IconButton(
-                    tooltip: widget.store.canUndo
-                        ? 'Отменить: ${widget.store.nextUndoLabel} (Ctrl+Z)'
-                        : 'Нет действий для отмены',
-                    onPressed: widget.store.canUndo
-                        ? () => unawaited(_undo())
-                        : null,
+                    tooltip:
+                        widget.store.canUndo
+                            ? 'Отменить: ${widget.store.nextUndoLabel} (Ctrl+Z)'
+                            : 'Нет действий для отмены',
+                    onPressed:
+                        widget.store.canUndo ? () => unawaited(_undo()) : null,
                     icon: const Icon(Icons.undo_rounded),
                   ),
                   const SizedBox(width: 4),
@@ -237,12 +231,14 @@ class _HomeShellState extends State<HomeShell> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton.filledTonal(
-                        tooltip: widget.store.canUndo
-                            ? 'Отменить: ${widget.store.nextUndoLabel} (Ctrl+Z)'
-                            : 'Нет действий для отмены',
-                        onPressed: widget.store.canUndo
-                            ? () => unawaited(_undo())
-                            : null,
+                        tooltip:
+                            widget.store.canUndo
+                                ? 'Отменить: ${widget.store.nextUndoLabel} (Ctrl+Z)'
+                                : 'Нет действий для отмены',
+                        onPressed:
+                            widget.store.canUndo
+                                ? () => unawaited(_undo())
+                                : null,
                         icon: const Icon(Icons.undo_rounded),
                       ),
                       const SizedBox(height: 8),
@@ -439,37 +435,38 @@ class _HomeShellState extends State<HomeShell> {
           unawaited(_activateWorkspace(value));
         }
       },
-      itemBuilder: (context) => <PopupMenuEntry<String>>[
-        for (final profile in _workspacePreferences.profiles)
-          PopupMenuItem<String>(
-            value: profile.id,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 30,
-                  child: Text(
-                    profile.emoji,
-                    style: const TextStyle(fontSize: 20),
-                  ),
+      itemBuilder:
+          (context) => <PopupMenuEntry<String>>[
+            for (final profile in _workspacePreferences.profiles)
+              PopupMenuItem<String>(
+                value: profile.id,
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 30,
+                      child: Text(
+                        profile.emoji,
+                        style: const TextStyle(fontSize: 20),
+                      ),
+                    ),
+                    Expanded(child: Text(profile.name)),
+                    if (profile.id == _workspacePreferences.activeWorkspaceId)
+                      Icon(Icons.check_rounded, color: colors.primary),
+                  ],
                 ),
-                Expanded(child: Text(profile.name)),
-                if (profile.id == _workspacePreferences.activeWorkspaceId)
-                  Icon(Icons.check_rounded, color: colors.primary),
-              ],
+              ),
+            const PopupMenuDivider(),
+            const PopupMenuItem<String>(
+              value: '__manage__',
+              child: Row(
+                children: [
+                  Icon(Icons.tune_rounded),
+                  SizedBox(width: 12),
+                  Text('Настроить пространства'),
+                ],
+              ),
             ),
-          ),
-        const PopupMenuDivider(),
-        const PopupMenuItem<String>(
-          value: '__manage__',
-          child: Row(
-            children: [
-              Icon(Icons.tune_rounded),
-              SizedBox(width: 12),
-              Text('Настроить пространства'),
-            ],
-          ),
-        ),
-      ],
+          ],
       child: ChroniclePanelSurface(
         borderRadius: BorderRadius.circular(compact ? 14 : 12),
         clipBehavior: Clip.antiAlias,
@@ -509,9 +506,9 @@ class _HomeShellState extends State<HomeShell> {
       if (!mounted || label == null) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Отменено: $label')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Отменено: $label')));
     } on Object catch (error) {
       if (!mounted) {
         return;

@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 import 'note_toolbar_profile.dart';
 
 class NoteToolbarProfileDialog extends StatefulWidget {
-  const NoteToolbarProfileDialog({
-    super.key,
-    required this.initialPreferences,
-  });
+  const NoteToolbarProfileDialog({super.key, required this.initialPreferences});
 
   final NoteToolbarPreferences initialPreferences;
 
@@ -16,9 +13,9 @@ class NoteToolbarProfileDialog extends StatefulWidget {
   }) {
     return showDialog<NoteToolbarPreferences>(
       context: context,
-      builder: (context) => NoteToolbarProfileDialog(
-        initialPreferences: preferences,
-      ),
+      builder:
+          (context) =>
+              NoteToolbarProfileDialog(initialPreferences: preferences),
     );
   }
 
@@ -27,8 +24,7 @@ class NoteToolbarProfileDialog extends StatefulWidget {
       _NoteToolbarProfileDialogState();
 }
 
-class _NoteToolbarProfileDialogState
-    extends State<NoteToolbarProfileDialog> {
+class _NoteToolbarProfileDialogState extends State<NoteToolbarProfileDialog> {
   late List<NoteToolbarProfile> profiles;
   late String activeProfileId;
   late int selectedIndex;
@@ -96,10 +92,7 @@ class _NoteToolbarProfileDialogState
           onPressed: () => Navigator.pop(context),
           child: const Text('Отмена'),
         ),
-        FilledButton(
-          onPressed: _save,
-          child: const Text('Сохранить'),
-        ),
+        FilledButton(onPressed: _save, child: const Text('Сохранить')),
       ],
     );
   }
@@ -129,16 +122,18 @@ class _NoteToolbarProfileDialogState
         const SizedBox(width: 8),
         IconButton(
           tooltip: 'Новая панель',
-          onPressed: profiles.length >= NoteToolbarProfile.maxProfiles
-              ? null
-              : _create,
+          onPressed:
+              profiles.length >= NoteToolbarProfile.maxProfiles
+                  ? null
+                  : _create,
           icon: const Icon(Icons.add_rounded),
         ),
         IconButton(
           tooltip: 'Дублировать',
-          onPressed: profiles.length >= NoteToolbarProfile.maxProfiles
-              ? null
-              : _duplicate,
+          onPressed:
+              profiles.length >= NoteToolbarProfile.maxProfiles
+                  ? null
+                  : _duplicate,
           icon: const Icon(Icons.copy_outlined),
         ),
         IconButton(
@@ -164,9 +159,9 @@ class _NoteToolbarProfileDialogState
         const SizedBox(height: 8),
         Text(
           'Панель определяет только набор быстрых кнопок после инструментов блока.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: colors.onSurfaceVariant,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 14),
         Expanded(
@@ -194,9 +189,13 @@ class _NoteToolbarProfileDialogState
                     overflow: TextOverflow.ellipsis,
                   ),
                   subtitle: Text('${profile.actionIds.length} действий'),
-                  trailing: isActive
-                      ? Icon(Icons.check_circle_rounded, color: colors.primary)
-                      : null,
+                  trailing:
+                      isActive
+                          ? Icon(
+                            Icons.check_circle_rounded,
+                            color: colors.primary,
+                          )
+                          : null,
                   onTap: () => _select(index),
                 ),
               );
@@ -208,17 +207,19 @@ class _NoteToolbarProfileDialogState
           children: [
             IconButton.filledTonal(
               tooltip: 'Новая панель',
-              onPressed: profiles.length >= NoteToolbarProfile.maxProfiles
-                  ? null
-                  : _create,
+              onPressed:
+                  profiles.length >= NoteToolbarProfile.maxProfiles
+                      ? null
+                      : _create,
               icon: const Icon(Icons.add_rounded),
             ),
             const SizedBox(width: 8),
             IconButton.filledTonal(
               tooltip: 'Дублировать',
-              onPressed: profiles.length >= NoteToolbarProfile.maxProfiles
-                  ? null
-                  : _duplicate,
+              onPressed:
+                  profiles.length >= NoteToolbarProfile.maxProfiles
+                      ? null
+                      : _duplicate,
               icon: const Icon(Icons.copy_outlined),
             ),
             const Spacer(),
@@ -238,13 +239,14 @@ class _NoteToolbarProfileDialogState
     final selectedActions = profile.actions;
     final selectedIds = profile.actionIds.toSet();
     final normalizedQuery = actionQuery.trim().toLowerCase();
-    final available = NoteToolbarAction.values.where((action) {
-      if (selectedIds.contains(action.id)) return false;
-      if (normalizedQuery.isEmpty) return true;
-      return action.label.toLowerCase().contains(normalizedQuery) ||
-          action.description.toLowerCase().contains(normalizedQuery) ||
-          action.group.label.toLowerCase().contains(normalizedQuery);
-    }).toList();
+    final available =
+        NoteToolbarAction.values.where((action) {
+          if (selectedIds.contains(action.id)) return false;
+          if (normalizedQuery.isEmpty) return true;
+          return action.label.toLowerCase().contains(normalizedQuery) ||
+              action.description.toLowerCase().contains(normalizedQuery) ||
+              action.group.label.toLowerCase().contains(normalizedQuery);
+        }).toList();
 
     return ListView(
       padding: const EdgeInsets.only(right: 4),
@@ -348,7 +350,9 @@ class _NoteToolbarProfileDialogState
                 ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
-            Text('${profile.actionIds.length}/${NoteToolbarProfile.maxActions}'),
+            Text(
+              '${profile.actionIds.length}/${NoteToolbarProfile.maxActions}',
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -391,9 +395,9 @@ class _NoteToolbarProfileDialogState
                               NoteToolbarProfile.maxActions,
                           onTap:
                               profile.actionIds.length >=
-                                  NoteToolbarProfile.maxActions
-                              ? null
-                              : () => _addAction(action),
+                                      NoteToolbarProfile.maxActions
+                                  ? null
+                                  : () => _addAction(action),
                         ),
                   ],
                 ),
@@ -411,10 +415,7 @@ class _NoteToolbarProfileDialogState
     return Column(
       children: [
         ListTile(
-          leading: CircleAvatar(
-            radius: 16,
-            child: Text('${index + 1}'),
-          ),
+          leading: CircleAvatar(radius: 16, child: Text('${index + 1}')),
           title: Text(action.label),
           subtitle: Text(action.group.label),
           trailing: Row(
@@ -427,9 +428,8 @@ class _NoteToolbarProfileDialogState
               ),
               IconButton(
                 tooltip: 'Переместить правее',
-                onPressed: index == length - 1
-                    ? null
-                    : () => _moveAction(index, 1),
+                onPressed:
+                    index == length - 1 ? null : () => _moveAction(index, 1),
                 icon: const Icon(Icons.arrow_downward_rounded),
               ),
               IconButton(

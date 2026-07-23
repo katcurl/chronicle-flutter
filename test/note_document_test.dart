@@ -48,10 +48,6 @@ void main() {
 
     final replaced = NoteDocument.replaceContent(original, 'New text');
 
-    expect(
-      replaced,
-      '---\nstatus: draft\ncustom: value\n---\n\nNew text',
-    );
+    expect(replaced, '---\nstatus: draft\ncustom: value\n---\n\nNew text');
   });
-
 }

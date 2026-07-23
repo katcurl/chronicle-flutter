@@ -24,9 +24,8 @@ class DesktopContextPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final activeTasks = store.data.tasks
-        .where((task) => task.status != 'done')
-        .length;
+    final activeTasks =
+        store.data.tasks.where((task) => task.status != 'done').length;
     final recentEntries = store.data.entries.take(3).toList();
     final panels = workspace.panelOrder
         .where(workspace.visiblePanels.contains)
@@ -56,9 +55,9 @@ class DesktopContextPanel extends StatelessWidget {
               '${workspace.name} · ${section.label}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
             ),
           ),
         ],
@@ -77,9 +76,9 @@ class DesktopContextPanel extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Text(
               'В этом рабочем пространстве контекстные блоки скрыты.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
             ),
           ),
         ),
@@ -259,9 +258,9 @@ class _RecentSessions extends StatelessWidget {
         if (entries.isEmpty)
           Text(
             'Завершённые сессии появятся здесь.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colors.onSurfaceVariant,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
           )
         else
           ...entries.map(
@@ -292,9 +291,8 @@ class _RecentSessions extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         formatDuration(entry.durationSeconds),
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
@@ -326,10 +324,7 @@ class _ShortcutPanel extends StatelessWidget {
         const SizedBox(height: 8),
         const _ShortcutRow(keys: 'Ctrl  T', action: 'Запустить таймер'),
         const SizedBox(height: 8),
-        const _ShortcutRow(
-          keys: 'Ctrl ⇧ W',
-          action: 'Настроить пространства',
-        ),
+        const _ShortcutRow(keys: 'Ctrl ⇧ W', action: 'Настроить пространства'),
       ],
     );
   }
@@ -352,9 +347,9 @@ class _LocalFirstPanel extends StatelessWidget {
         Expanded(
           child: Text(
             'Local-first · данные хранятся на устройстве',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colors.onSurfaceVariant,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
           ),
         ),
       ],

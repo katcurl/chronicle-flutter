@@ -30,20 +30,22 @@ class BibTexCodec {
           );
           continue;
         }
-        final authors = _cleanValue(fields['author'] ?? '')
-            .split(RegExp(r'\s+and\s+', caseSensitive: false))
-            .map((value) => value.trim())
-            .where((value) => value.isNotEmpty)
-            .toList();
+        final authors =
+            _cleanValue(fields['author'] ?? '')
+                .split(RegExp(r'\s+and\s+', caseSensitive: false))
+                .map((value) => value.trim())
+                .where((value) => value.isNotEmpty)
+                .toList();
         final yearText = _cleanValue(fields['year'] ?? '');
         final yearMatch = RegExp(r'\d{4}').firstMatch(yearText);
         final archivePrefix = _cleanValue(fields['archiveprefix'] ?? '');
         final eprint = _cleanValue(fields['eprint'] ?? '');
-        final keywords = _cleanValue(fields['keywords'] ?? '')
-            .split(RegExp(r'[,;]'))
-            .map((value) => value.trim())
-            .where((value) => value.isNotEmpty)
-            .toList();
+        final keywords =
+            _cleanValue(fields['keywords'] ?? '')
+                .split(RegExp(r'[,;]'))
+                .map((value) => value.trim())
+                .where((value) => value.isNotEmpty)
+                .toList();
 
         sources.add(
           CitationSource(
@@ -54,7 +56,10 @@ class BibTexCodec {
             authors: authors,
             year: yearMatch == null ? null : int.tryParse(yearMatch.group(0)!),
             containerTitle: _cleanValue(
-              fields['journal'] ?? fields['booktitle'] ?? fields['publisher'] ?? '',
+              fields['journal'] ??
+                  fields['booktitle'] ??
+                  fields['publisher'] ??
+                  '',
             ),
             doi: _cleanValue(fields['doi'] ?? ''),
             pmid: _cleanValue(fields['pmid'] ?? ''),
@@ -69,12 +74,16 @@ class BibTexCodec {
           ),
         );
       } on Object catch (error) {
-        errors.add('Не удалось прочитать @${record.type}{${record.key}}: $error');
+        errors.add(
+          'Не удалось прочитать @${record.type}{${record.key}}: $error',
+        );
       }
     }
 
     if (records.isEmpty && raw.trim().isNotEmpty) {
-      errors.add('BibTeX-записи не найдены. Ожидается формат @article{key, ...}.');
+      errors.add(
+        'BibTeX-записи не найдены. Ожидается формат @article{key, ...}.',
+      );
     }
     return BibTexParseResult(sources: sources, errors: errors);
   }
@@ -129,7 +138,8 @@ class BibTexCodec {
       while (cursor < raw.length && _isWhitespace(raw.codeUnitAt(cursor))) {
         cursor += 1;
       }
-      if (type.isEmpty || cursor >= raw.length ||
+      if (type.isEmpty ||
+          cursor >= raw.length ||
           (raw[cursor] != '{' && raw[cursor] != '(')) {
         index = at + 1;
         continue;

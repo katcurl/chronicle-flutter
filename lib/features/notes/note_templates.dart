@@ -211,12 +211,7 @@ const laboratoryNoteTemplates = <NoteTemplate>[
     icon: '🧬',
     noteType: 'protein_purification',
     defaultTags: ['лаборатория', 'белок', 'очистка'],
-    defaultProperties: {
-      'construct': '',
-      'host': '',
-      'batch': '',
-      'date': '',
-    },
+    defaultProperties: {'construct': '', 'host': '', 'batch': '', 'date': ''},
     content: '''# Экспрессия и очистка белка
 
 ## Конструкт и штамм

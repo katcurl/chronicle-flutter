@@ -136,14 +136,15 @@ class NoteEditHistory extends ChangeNotifier {
   TextEditingValue _normalized(TextEditingValue value) {
     final textLength = value.text.length;
     final selection = value.selection;
-    final normalizedSelection = selection.isValid
-        ? TextSelection(
-            baseOffset: selection.baseOffset.clamp(0, textLength).toInt(),
-            extentOffset: selection.extentOffset.clamp(0, textLength).toInt(),
-            affinity: selection.affinity,
-            isDirectional: selection.isDirectional,
-          )
-        : TextSelection.collapsed(offset: textLength);
+    final normalizedSelection =
+        selection.isValid
+            ? TextSelection(
+              baseOffset: selection.baseOffset.clamp(0, textLength).toInt(),
+              extentOffset: selection.extentOffset.clamp(0, textLength).toInt(),
+              affinity: selection.affinity,
+              isDirectional: selection.isDirectional,
+            )
+            : TextSelection.collapsed(offset: textLength);
     return value.copyWith(
       selection: normalizedSelection,
       composing: TextRange.empty,

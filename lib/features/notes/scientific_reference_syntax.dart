@@ -149,8 +149,7 @@ class ScientificTableDraft {
     final safeColumns = columns.clamp(2, 8).toInt();
     final safeRows = rows.clamp(1, 20).toInt();
     final headerCells = [
-      for (var index = 1; index <= safeColumns; index += 1)
-        'Столбец $index',
+      for (var index = 1; index <= safeColumns; index += 1) 'Столбец $index',
     ];
     final separatorCells = [
       for (var index = 0; index < safeColumns; index += 1) '---',
@@ -195,13 +194,11 @@ class ScientificReferenceSyntax {
         .replaceAll(RegExp(r'-{2,}'), '-')
         .replaceAll(RegExp(r'^[-._]+|[-._]+$'), '');
     if (normalized.length > 80) {
-      normalized = normalized.substring(0, 80).replaceFirst(
-        RegExp(r'[-._]+$'),
-        '',
-      );
+      normalized = normalized
+          .substring(0, 80)
+          .replaceFirst(RegExp(r'[-._]+$'), '');
     }
-    if (normalized.isEmpty ||
-        !RegExp(r'^[A-Za-z0-9]').hasMatch(normalized)) {
+    if (normalized.isEmpty || !RegExp(r'^[A-Za-z0-9]').hasMatch(normalized)) {
       normalized = 'object-$normalized'.replaceFirst(RegExp(r'-$'), '');
     }
     return normalized;
@@ -210,9 +207,10 @@ class ScientificReferenceSyntax {
   static String tableMarker({required String id, required String caption}) {
     final normalizedId = normalizeId(id);
     final normalizedCaption = caption.trim();
-    final captionPart = normalizedCaption.isEmpty
-        ? ''
-        : ' caption=${Uri.encodeComponent(normalizedCaption)}';
+    final captionPart =
+        normalizedCaption.isEmpty
+            ? ''
+            : ' caption=${Uri.encodeComponent(normalizedCaption)}';
     return '<!-- chronicle-table id=$normalizedId$captionPart -->';
   }
 
@@ -239,7 +237,8 @@ class ScientificReferenceSyntax {
       final separatorEnd = _lineEnd(markdown, separatorStart);
       final header = markdown.substring(firstLineStart, firstLineEnd);
       final separator = markdown.substring(separatorStart, separatorEnd);
-      if (!_looksLikeTableHeader(header) || !_looksLikeTableSeparator(separator)) {
+      if (!_looksLikeTableHeader(header) ||
+          !_looksLikeTableSeparator(separator)) {
         continue;
       }
 
@@ -274,9 +273,10 @@ class ScientificReferenceSyntax {
       if (_isInsideMarkdownCode(markdown, match.start)) {
         continue;
       }
-      final type = match.group(1) == 'fig'
-          ? ScientificObjectType.figure
-          : ScientificObjectType.table;
+      final type =
+          match.group(1) == 'fig'
+              ? ScientificObjectType.figure
+              : ScientificObjectType.table;
       result.add(
         ScientificCrossReference(
           type: type,
@@ -377,9 +377,10 @@ class ScientificReferenceSyntax {
       final id = _decode(match.group(1) ?? '').trim();
       final caption = _decode(match.group(2) ?? '').trim();
       final object = index.objectFor(ScientificObjectType.table, id);
-      final captionLine = index.isDuplicate(ScientificObjectType.table, id)
-          ? '**[повторяющийся идентификатор таблицы: $id]**'
-          : object == null
+      final captionLine =
+          index.isDuplicate(ScientificObjectType.table, id)
+              ? '**[повторяющийся идентификатор таблицы: $id]**'
+              : object == null
               ? '**[некорректная таблица: $id]**'
               : '**${object.label}${caption.isEmpty ? '' : ' — $caption'}**';
       final replacement = '$captionLine\n';
@@ -392,14 +393,16 @@ class ScientificReferenceSyntax {
       if (_isInsideMarkdownCode(markdown, match.start)) {
         continue;
       }
-      final type = match.group(1) == 'fig'
-          ? ScientificObjectType.figure
-          : ScientificObjectType.table;
+      final type =
+          match.group(1) == 'fig'
+              ? ScientificObjectType.figure
+              : ScientificObjectType.table;
       final id = match.group(2) ?? '';
       final object = index.objectFor(type, id);
-      final replacement = index.isDuplicate(type, id)
-          ? '**[неоднозначная ссылка: ${type.singularLower} $id]**'
-          : object == null
+      final replacement =
+          index.isDuplicate(type, id)
+              ? '**[неоднозначная ссылка: ${type.singularLower} $id]**'
+              : object == null
               ? '**[нет объекта: ${type.singularLower} $id]**'
               : '**${object.inlineLabel}**';
       replacements.add(
@@ -446,7 +449,8 @@ class ScientificReferenceSyntax {
 
   static bool _looksLikeTableHeader(String line) {
     final trimmed = line.trim();
-    return trimmed.contains('|') && trimmed.replaceAll('|', '').trim().isNotEmpty;
+    return trimmed.contains('|') &&
+        trimmed.replaceAll('|', '').trim().isNotEmpty;
   }
 
   static bool _looksLikeTableSeparator(String line) {
@@ -520,16 +524,13 @@ bool _isStandaloneImage(String source, NoteImageReference image) {
 
 bool _isInsideMarkdownCode(String source, int offset) {
   final before = source.substring(0, offset);
-  final fenceCount = RegExp(
-    r'^[ \t]*(?:```|~~~)',
-    multiLine: true,
-  ).allMatches(before).length;
+  final fenceCount =
+      RegExp(r'^[ \t]*(?:```|~~~)', multiLine: true).allMatches(before).length;
   if (fenceCount.isOdd) {
     return true;
   }
 
-  final lineStart =
-      source.lastIndexOf('\n', offset == 0 ? 0 : offset - 1) + 1;
+  final lineStart = source.lastIndexOf('\n', offset == 0 ? 0 : offset - 1) + 1;
   final linePrefix = source.substring(lineStart, offset);
   var backticks = 0;
   for (var index = 0; index < linePrefix.length; index += 1) {

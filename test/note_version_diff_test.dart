@@ -12,16 +12,13 @@ void main() {
     expect(diff.addedLineCount, 2);
     expect(diff.removedLineCount, 1);
     expect(diff.unchangedLineCount, 2);
-    expect(
-      diff.lines.map((line) => line.kind),
-      <NoteVersionDiffKind>[
-        NoteVersionDiffKind.unchanged,
-        NoteVersionDiffKind.removed,
-        NoteVersionDiffKind.added,
-        NoteVersionDiffKind.unchanged,
-        NoteVersionDiffKind.added,
-      ],
-    );
+    expect(diff.lines.map((line) => line.kind), <NoteVersionDiffKind>[
+      NoteVersionDiffKind.unchanged,
+      NoteVersionDiffKind.removed,
+      NoteVersionDiffKind.added,
+      NoteVersionDiffKind.unchanged,
+      NoteVersionDiffKind.added,
+    ]);
     expect(diff.lines.first.oldLineNumber, 1);
     expect(diff.lines.first.newLineNumber, 1);
     expect(diff.lines.last.newLineNumber, 4);
@@ -48,11 +45,7 @@ void main() {
       'end',
     ].join('\n');
 
-    final diff = NoteVersionDiff.compare(
-      oldText,
-      newText,
-      maxMatrixCells: 10,
-    );
+    final diff = NoteVersionDiff.compare(oldText, newText, maxMatrixCells: 10);
 
     expect(diff.isApproximate, isTrue);
     expect(diff.unchangedLineCount, 2);

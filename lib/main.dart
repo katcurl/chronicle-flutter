@@ -57,29 +57,32 @@ class _ChronicleAppState extends State<ChronicleApp>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: store,
-      builder: (_, __) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Chronicle',
-        themeMode: _appearance.brightnessMode.themeMode,
-        theme: buildChronicleTheme(
-          Brightness.light,
-          _appearance,
-          backgroundAvailable: _backgroundFile != null,
-        ),
-        darkTheme: buildChronicleTheme(
-          Brightness.dark,
-          _appearance,
-          backgroundAvailable: _backgroundFile != null,
-        ),
-        builder: (context, child) => ChronicleBackdrop(
-          backgroundImage: _backgroundFile == null
-              ? null
-              : FileImage(_backgroundFile!),
-          revision: _appearance.backgroundRevision,
-          child: child ?? const SizedBox.shrink(),
-        ),
-        home: _home(),
-      ),
+      builder:
+          (_, __) => MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'Chronicle',
+            themeMode: _appearance.brightnessMode.themeMode,
+            theme: buildChronicleTheme(
+              Brightness.light,
+              _appearance,
+              backgroundAvailable: _backgroundFile != null,
+            ),
+            darkTheme: buildChronicleTheme(
+              Brightness.dark,
+              _appearance,
+              backgroundAvailable: _backgroundFile != null,
+            ),
+            builder:
+                (context, child) => ChronicleBackdrop(
+                  backgroundImage:
+                      _backgroundFile == null
+                          ? null
+                          : FileImage(_backgroundFile!),
+                  revision: _appearance.backgroundRevision,
+                  child: child ?? const SizedBox.shrink(),
+                ),
+            home: _home(),
+          ),
     );
   }
 
@@ -93,9 +96,8 @@ class _ChronicleAppState extends State<ChronicleApp>
     return HomeShell(
       store: store,
       appearance: _appearance,
-      backgroundImage: _backgroundFile == null
-          ? null
-          : FileImage(_backgroundFile!),
+      backgroundImage:
+          _backgroundFile == null ? null : FileImage(_backgroundFile!),
       onAppearanceChanged: _updateAppearance,
     );
   }

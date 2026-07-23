@@ -85,16 +85,15 @@ class ResearchCanvasItem {
     return ResearchCanvasItem(
       id: id.trim(),
       type: safeType,
-      noteId: safeType == ResearchCanvasItemType.note
-          ? noteId?.trim()
-          : null,
-      title: safeTitle.isEmpty
-          ? switch (safeType) {
-              ResearchCanvasItemType.note => 'Заметка',
-              ResearchCanvasItemType.text => 'Карточка',
-              ResearchCanvasItemType.group => 'Область',
-            }
-          : safeTitle,
+      noteId: safeType == ResearchCanvasItemType.note ? noteId?.trim() : null,
+      title:
+          safeTitle.isEmpty
+              ? switch (safeType) {
+                ResearchCanvasItemType.note => 'Заметка',
+                ResearchCanvasItemType.text => 'Карточка',
+                ResearchCanvasItemType.group => 'Область',
+              }
+              : safeTitle,
       body: safeBody,
       x: x.clamp(minX, maxX - safeWidth).toDouble(),
       y: y.clamp(minY, maxY - safeHeight).toDouble(),
@@ -121,9 +120,10 @@ class ResearchCanvasItem {
     final id = json['id']?.toString().trim() ?? '';
     if (id.isEmpty) return null;
     final rawType = json['type']?.toString();
-    final type = ResearchCanvasItemType.values.where(
-      (value) => value.name == rawType,
-    ).firstOrNull;
+    final type =
+        ResearchCanvasItemType.values
+            .where((value) => value.name == rawType)
+            .firstOrNull;
     if (type == null) return null;
     final item = ResearchCanvasItem.normalized(
       id: id,
@@ -307,9 +307,7 @@ class ResearchCanvas {
       emoji: safeEmoji.isEmpty ? '🧭' : safeEmoji,
       projectId: projectId?.trim().isEmpty == true ? null : projectId?.trim(),
       items: List<ResearchCanvasItem>.unmodifiable(safeItems),
-      connections: List<ResearchCanvasConnection>.unmodifiable(
-        safeConnections,
-      ),
+      connections: List<ResearchCanvasConnection>.unmodifiable(safeConnections),
       updatedAt: updatedAt ?? DateTime.now(),
     );
   }
@@ -371,12 +369,9 @@ class ResearchCanvas {
     if (rawConnections is List) {
       for (final raw in rawConnections) {
         if (raw is! Map) continue;
-        final connection = ResearchCanvasConnection.fromJson(
-          <String, Object?>{
-            for (final entry in raw.entries)
-              entry.key.toString(): entry.value,
-          },
-        );
+        final connection = ResearchCanvasConnection.fromJson(<String, Object?>{
+          for (final entry in raw.entries) entry.key.toString(): entry.value,
+        });
         if (connection != null) connections.add(connection);
       }
     }
@@ -452,7 +447,8 @@ class ResearchCanvasPreferences {
       safe.add(canvas);
     }
     if (safe.isEmpty) return ResearchCanvasPreferences.defaults();
-    final active = ids.contains(activeCanvasId) ? activeCanvasId : safe.first.id;
+    final active =
+        ids.contains(activeCanvasId) ? activeCanvasId : safe.first.id;
     return ResearchCanvasPreferences(
       activeCanvasId: active,
       canvases: List<ResearchCanvas>.unmodifiable(safe),
@@ -461,7 +457,9 @@ class ResearchCanvasPreferences {
 
   Map<String, Object?> toJson() => <String, Object?>{
     'activeCanvasId': activeCanvasId,
-    'canvases': canvases.map((canvas) => canvas.toJson()).toList(growable: false),
+    'canvases': canvases
+        .map((canvas) => canvas.toJson())
+        .toList(growable: false),
   };
 
   static ResearchCanvasPreferences fromJson(Map<String, Object?> json) {

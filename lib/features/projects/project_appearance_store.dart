@@ -31,7 +31,9 @@ class ProjectIconSelection {
       throw const FormatException('Выбранный файл пуст.');
     }
     if (bytes.length > maxBytes) {
-      throw const FormatException('Иконка проекта должна быть не больше 10 МБ.');
+      throw const FormatException(
+        'Иконка проекта должна быть не больше 10 МБ.',
+      );
     }
     final extension = _detectImageExtension(bytes);
     if (extension == null) {
@@ -228,10 +230,7 @@ class ProjectAppearanceController extends ChangeNotifier {
   }
 
   File? iconFileFor(String projectId) {
-    return _managedFile(
-      _iconDirectory,
-      preferencesFor(projectId).iconFileName,
-    );
+    return _managedFile(_iconDirectory, preferencesFor(projectId).iconFileName);
   }
 
   File? backgroundFileFor(String projectId) {
@@ -378,18 +377,12 @@ class ProjectAppearanceController extends ChangeNotifier {
     required String projectId,
     required String extension,
   }) {
-    final safeProjectId = projectId.replaceAll(
-      RegExp(r'[^A-Za-z0-9_-]'),
-      '_',
-    );
+    final safeProjectId = projectId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
     return '${prefix}_${safeProjectId}_'
         '${DateTime.now().microsecondsSinceEpoch}.$extension';
   }
 
-  Future<void> _deleteManagedFile(
-    String? fileName,
-    Directory directory,
-  ) async {
+  Future<void> _deleteManagedFile(String? fileName, Directory directory) async {
     if (fileName == null || path.basename(fileName) != fileName) return;
     final file = File(path.join(directory.path, fileName));
     try {

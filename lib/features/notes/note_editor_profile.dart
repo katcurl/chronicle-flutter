@@ -346,9 +346,10 @@ class NoteEditorPreferences {
     }
     if (safeProfiles.isEmpty) return NoteEditorPreferences.defaults();
     return NoteEditorPreferences(
-      activeProfileId: ids.contains(activeProfileId)
-          ? activeProfileId
-          : safeProfiles.first.id,
+      activeProfileId:
+          ids.contains(activeProfileId)
+              ? activeProfileId
+              : safeProfiles.first.id,
       profiles: List<NoteEditorProfile>.unmodifiable(safeProfiles),
     );
   }
@@ -365,8 +366,7 @@ class NoteEditorPreferences {
       for (final raw in rawProfiles) {
         if (raw is! Map) continue;
         final normalized = <String, Object?>{
-          for (final entry in raw.entries)
-            entry.key.toString(): entry.value,
+          for (final entry in raw.entries) entry.key.toString(): entry.value,
         };
         final profile = NoteEditorProfile.fromJson(normalized);
         if (profile != null) profiles.add(profile);

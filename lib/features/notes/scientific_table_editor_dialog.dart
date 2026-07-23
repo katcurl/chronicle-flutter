@@ -21,10 +21,11 @@ class ScientificTableEditorDialog extends StatefulWidget {
   }) {
     return showDialog<NoteTableModel>(
       context: context,
-      builder: (context) => ScientificTableEditorDialog(
-        existingKeys: existingKeys,
-        initialTable: initialTable,
-      ),
+      builder:
+          (context) => ScientificTableEditorDialog(
+            existingKeys: existingKeys,
+            initialTable: initialTable,
+          ),
     );
   }
 
@@ -52,7 +53,8 @@ class _ScientificTableEditorDialogState
   @override
   void initState() {
     super.initState();
-    final initial = widget.initialTable ??
+    final initial =
+        widget.initialTable ??
         NoteTableModel(
           id: 'table',
           caption: '',
@@ -84,7 +86,11 @@ class _ScientificTableEditorDialogState
     final height = (size.height - 100).clamp(520.0, 760.0).toDouble();
 
     return AlertDialog(
-      title: Text(isEditing ? 'Редактировать научную таблицу' : 'Добавить научную таблицу'),
+      title: Text(
+        isEditing
+            ? 'Редактировать научную таблицу'
+            : 'Добавить научную таблицу',
+      ),
       content: SizedBox(
         width: width,
         height: height,
@@ -132,21 +138,26 @@ class _ScientificTableEditorDialogState
                 children: [
                   FilledButton.tonalIcon(
                     onPressed: clipboardBusy ? null : _pasteClipboard,
-                    icon: clipboardBusy
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.content_paste_rounded),
+                    icon:
+                        clipboardBusy
+                            ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Icon(Icons.content_paste_rounded),
                     label: const Text('Вставить из Excel/CSV'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: bodyRowCount < NoteTableSyntax.maxRows ? _addRow : null,
+                    onPressed:
+                        bodyRowCount < NoteTableSyntax.maxRows ? _addRow : null,
                     icon: const Icon(Icons.add_rounded),
                     label: const Text('Строка'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: columnCount < NoteTableSyntax.maxColumns ? _addColumn : null,
+                    onPressed:
+                        columnCount < NoteTableSyntax.maxColumns
+                            ? _addColumn
+                            : null,
                     icon: const Icon(Icons.view_column_outlined),
                     label: const Text('Столбец'),
                   ),
@@ -170,7 +181,8 @@ class _ScientificTableEditorDialogState
                     child: Scrollbar(
                       controller: horizontalController,
                       thumbVisibility: true,
-                      notificationPredicate: (notification) => notification.depth == 1,
+                      notificationPredicate:
+                          (notification) => notification.depth == 1,
                       child: SingleChildScrollView(
                         controller: horizontalController,
                         scrollDirection: Axis.horizontal,
@@ -244,10 +256,14 @@ class _ScientificTableEditorDialogState
                       ),
                       IconButton(
                         tooltip: 'Удалить строку',
-                        onPressed: bodyRowCount > NoteTableSyntax.minRows
-                            ? () => _removeRow(row)
-                            : null,
-                        icon: const Icon(Icons.remove_circle_outline_rounded, size: 19),
+                        onPressed:
+                            bodyRowCount > NoteTableSyntax.minRows
+                                ? () => _removeRow(row)
+                                : null,
+                        icon: const Icon(
+                          Icons.remove_circle_outline_rounded,
+                          size: 19,
+                        ),
                       ),
                     ],
                   ),
@@ -266,7 +282,10 @@ class _ScientificTableEditorDialogState
                           hintText: 'Значение',
                           isDense: true,
                           filled: true,
-                          fillColor: Theme.of(context).colorScheme.surfaceContainerLowest,
+                          fillColor:
+                              Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerLowest,
                         ),
                       ),
                     ),
@@ -288,19 +307,25 @@ class _ScientificTableEditorDialogState
       }
       if (parsed.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('В буфере нет табличных текстовых данных.')),
+          const SnackBar(
+            content: Text('В буфере нет табличных текстовых данных.'),
+          ),
         );
         return;
       }
       final rows = parsed.rows;
       final headers = rows.first;
-      final body = rows.length > 1
-          ? rows.skip(1).toList()
-          : [List<String>.filled(headers.length, '')];
+      final body =
+          rows.length > 1
+              ? rows.skip(1).toList()
+              : [List<String>.filled(headers.length, '')];
       setState(() {
         _replaceGrid(
           [headers, ...body],
-          List<NoteTableAlignment>.filled(headers.length, NoteTableAlignment.left),
+          List<NoteTableAlignment>.filled(
+            headers.length,
+            NoteTableAlignment.left,
+          ),
         );
       });
     } on Object catch (error) {
@@ -308,7 +333,9 @@ class _ScientificTableEditorDialogState
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось прочитать таблицу из буфера: $error')),
+        SnackBar(
+          content: Text('Не удалось прочитать таблицу из буфера: $error'),
+        ),
       );
     } finally {
       if (mounted) {
@@ -370,9 +397,14 @@ class _ScientificTableEditorDialogState
     cellControllers.clear();
     alignments.clear();
 
-    final width = source.fold<int>(0, (maximum, row) => row.length > maximum ? row.length : maximum)
-        .clamp(NoteTableSyntax.minColumns, NoteTableSyntax.maxColumns)
-        .toInt();
+    final width =
+        source
+            .fold<int>(
+              0,
+              (maximum, row) => row.length > maximum ? row.length : maximum,
+            )
+            .clamp(NoteTableSyntax.minColumns, NoteTableSyntax.maxColumns)
+            .toInt();
     final limitedRows = source.take(NoteTableSyntax.maxRows + 1).toList();
     if (limitedRows.isEmpty) {
       limitedRows.add(List<String>.filled(width, ''));
@@ -385,9 +417,10 @@ class _ScientificTableEditorDialogState
       cellControllers.add([
         for (var column = 0; column < width; column += 1)
           TextEditingController(
-            text: column < row.length
-                ? row[column]
-                : rowIndex == 0
+            text:
+                column < row.length
+                    ? row[column]
+                    : rowIndex == 0
                     ? 'Столбец ${column + 1}'
                     : '',
           ),
@@ -431,7 +464,9 @@ class _ScientificTableEditorDialogState
       NoteTableModel(
         id: id,
         caption: captionController.text.trim(),
-        headers: [for (final controller in cellControllers.first) controller.text],
+        headers: [
+          for (final controller in cellControllers.first) controller.text,
+        ],
         rows: [
           for (final row in cellControllers.skip(1))
             [for (final controller in row) controller.text],
@@ -487,38 +522,42 @@ class _HeaderCell extends StatelessWidget {
                   tooltip: 'Выравнивание столбца',
                   initialValue: alignment,
                   onSelected: onAlignmentChanged,
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: NoteTableAlignment.left,
-                      child: ListTile(
-                        leading: Icon(Icons.format_align_left_rounded),
-                        title: Text('По левому краю'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: NoteTableAlignment.center,
-                      child: ListTile(
-                        leading: Icon(Icons.format_align_center_rounded),
-                        title: Text('По центру'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: NoteTableAlignment.right,
-                      child: ListTile(
-                        leading: Icon(Icons.format_align_right_rounded),
-                        title: Text('По правому краю'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ],
+                  itemBuilder:
+                      (context) => const [
+                        PopupMenuItem(
+                          value: NoteTableAlignment.left,
+                          child: ListTile(
+                            leading: Icon(Icons.format_align_left_rounded),
+                            title: Text('По левому краю'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: NoteTableAlignment.center,
+                          child: ListTile(
+                            leading: Icon(Icons.format_align_center_rounded),
+                            title: Text('По центру'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: NoteTableAlignment.right,
+                          child: ListTile(
+                            leading: Icon(Icons.format_align_right_rounded),
+                            title: Text('По правому краю'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
                   icon: Icon(_alignmentIcon(alignment), size: 19),
                 ),
                 IconButton(
                   tooltip: 'Удалить столбец',
                   onPressed: canRemove ? onRemove : null,
-                  icon: const Icon(Icons.remove_circle_outline_rounded, size: 19),
+                  icon: const Icon(
+                    Icons.remove_circle_outline_rounded,
+                    size: 19,
+                  ),
                 ),
               ],
             ),

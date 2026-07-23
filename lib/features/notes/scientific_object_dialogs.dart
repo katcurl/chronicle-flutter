@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 import 'scientific_reference_syntax.dart';
 
 class ScientificTableDialog extends StatefulWidget {
-  const ScientificTableDialog({
-    super.key,
-    required this.existingKeys,
-  });
+  const ScientificTableDialog({super.key, required this.existingKeys});
 
   final Set<String> existingKeys;
 
@@ -142,10 +139,7 @@ class _ScientificTableDialogState extends State<ScientificTableDialog> {
 }
 
 class ScientificReferencePickerDialog extends StatefulWidget {
-  const ScientificReferencePickerDialog({
-    super.key,
-    required this.objects,
-  });
+  const ScientificReferencePickerDialog({super.key, required this.objects});
 
   final List<ScientificObjectReference> objects;
 
@@ -171,16 +165,17 @@ class _ScientificReferencePickerDialogState
   @override
   Widget build(BuildContext context) {
     final normalized = query.trim().toLowerCase();
-    final objects = widget.objects.where((object) {
-      if (normalized.isEmpty) {
-        return true;
-      }
-      return [
-        object.label,
-        object.id,
-        object.caption,
-      ].join(' ').toLowerCase().contains(normalized);
-    }).toList();
+    final objects =
+        widget.objects.where((object) {
+          if (normalized.isEmpty) {
+            return true;
+          }
+          return [
+            object.label,
+            object.id,
+            object.caption,
+          ].join(' ').toLowerCase().contains(normalized);
+        }).toList();
 
     return AlertDialog(
       title: const Text('Вставить перекрёстную ссылку'),
@@ -196,33 +191,34 @@ class _ScientificReferencePickerDialogState
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: objects.isEmpty
-                  ? const Center(child: Text('Объекты не найдены'))
-                  : ListView.separated(
-                      itemCount: objects.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final object = objects[index];
-                        return ListTile(
-                          leading: Icon(
-                            object.type == ScientificObjectType.figure
-                                ? Icons.image_outlined
-                                : Icons.table_chart_outlined,
-                          ),
-                          title: Text(object.label),
-                          subtitle: Text(
-                            [
-                              object.id,
-                              if (object.caption.isNotEmpty) object.caption,
-                            ].join(' · '),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: Text(object.markdownReference),
-                          onTap: () => Navigator.pop(context, object),
-                        );
-                      },
-                    ),
+              child:
+                  objects.isEmpty
+                      ? const Center(child: Text('Объекты не найдены'))
+                      : ListView.separated(
+                        itemCount: objects.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final object = objects[index];
+                          return ListTile(
+                            leading: Icon(
+                              object.type == ScientificObjectType.figure
+                                  ? Icons.image_outlined
+                                  : Icons.table_chart_outlined,
+                            ),
+                            title: Text(object.label),
+                            subtitle: Text(
+                              [
+                                object.id,
+                                if (object.caption.isNotEmpty) object.caption,
+                              ].join(' · '),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: Text(object.markdownReference),
+                            onTap: () => Navigator.pop(context, object),
+                          );
+                        },
+                      ),
             ),
           ],
         ),
@@ -238,10 +234,7 @@ class _ScientificReferencePickerDialogState
 }
 
 class ScientificObjectsDialog extends StatelessWidget {
-  const ScientificObjectsDialog({
-    super.key,
-    required this.index,
-  });
+  const ScientificObjectsDialog({super.key, required this.index});
 
   final ScientificReferenceIndex index;
 
@@ -257,12 +250,14 @@ class ScientificObjectsDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final figures = index.objects
-        .where((object) => object.type == ScientificObjectType.figure)
-        .toList();
-    final tables = index.objects
-        .where((object) => object.type == ScientificObjectType.table)
-        .toList();
+    final figures =
+        index.objects
+            .where((object) => object.type == ScientificObjectType.figure)
+            .toList();
+    final tables =
+        index.objects
+            .where((object) => object.type == ScientificObjectType.table)
+            .toList();
     final broken = index.brokenCrossReferences;
     final ambiguous = index.ambiguousCrossReferences;
 
@@ -276,7 +271,8 @@ class ScientificObjectsDialog extends StatelessWidget {
             _SummaryCard(
               figures: figures.length,
               tables: tables.length,
-              warnings: index.duplicateKeys.length + broken.length + ambiguous.length,
+              warnings:
+                  index.duplicateKeys.length + broken.length + ambiguous.length,
             ),
             const SizedBox(height: 14),
             if (index.objects.isEmpty)
@@ -405,9 +401,10 @@ class _SummaryCard extends StatelessWidget {
             Text(
               warnings == 0 ? 'Ошибок нет' : 'Предупреждения: $warnings',
               style: TextStyle(
-                color: warnings == 0
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.error,
+                color:
+                    warnings == 0
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.error,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -435,9 +432,9 @@ class _ObjectsSection extends StatelessWidget {
           children: [
             Text(
               title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             for (final object in objects)
@@ -513,10 +510,7 @@ class _EmptyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Text(text),
-      ),
+      child: Padding(padding: const EdgeInsets.all(18), child: Text(text)),
     );
   }
 }

@@ -319,7 +319,9 @@ String _progressDetails(LanSyncProgress progress) {
   if (progress.round > 0) {
     parts.add('пакет ${progress.round}');
   }
-  return parts.isEmpty ? 'Устанавливаем защищённое соединение.' : parts.join(' · ');
+  return parts.isEmpty
+      ? 'Устанавливаем защищённое соединение.'
+      : parts.join(' · ');
 }
 
 String _formatBytes(int bytes) {
@@ -372,10 +374,22 @@ class _SuccessCard extends StatelessWidget {
                 _Metric(label: 'Записей отправлено', value: report.sentCount),
                 _Metric(label: 'Записей получено', value: report.receivedCount),
                 _Metric(label: 'Применено', value: report.appliedCount),
-                _Metric(label: 'Файлов отправлено', value: report.attachmentFilesSent),
-                _Metric(label: 'Файлов получено', value: report.attachmentFilesReceived),
-                _Metric(label: 'Удалений', value: report.attachmentTombstonesApplied),
-                _Metric(label: 'Конфликтов', value: report.attachmentConflictCount),
+                _Metric(
+                  label: 'Файлов отправлено',
+                  value: report.attachmentFilesSent,
+                ),
+                _Metric(
+                  label: 'Файлов получено',
+                  value: report.attachmentFilesReceived,
+                ),
+                _Metric(
+                  label: 'Удалений',
+                  value: report.attachmentTombstonesApplied,
+                ),
+                _Metric(
+                  label: 'Конфликтов',
+                  value: report.attachmentConflictCount,
+                ),
                 _Metric(label: 'Пакетов', value: report.roundCount),
               ],
             ),

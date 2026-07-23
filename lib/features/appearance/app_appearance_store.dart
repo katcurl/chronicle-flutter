@@ -69,10 +69,7 @@ Future<AppBackgroundSelection?> pickAppBackground() async {
     throw const FormatException('Фон должен быть не больше 30 МБ.');
   }
   final bytes = await file.readAsBytes();
-  return AppBackgroundSelection.validate(
-    bytes: bytes,
-    originalName: file.name,
-  );
+  return AppBackgroundSelection.validate(bytes: bytes, originalName: file.name);
 }
 
 class AppAppearanceStore {
@@ -178,8 +175,7 @@ class AppAppearanceStore {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return AppAppearancePreferences.defaults();
       return AppAppearancePreferences.fromJson(<String, Object?>{
-        for (final entry in decoded.entries)
-          entry.key.toString(): entry.value,
+        for (final entry in decoded.entries) entry.key.toString(): entry.value,
       });
     } on Object {
       return AppAppearancePreferences.defaults();

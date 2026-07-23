@@ -49,11 +49,12 @@ class ProjectEditorSheet extends StatefulWidget {
       isScrollControlled: true,
       showDragHandle: true,
       constraints: const BoxConstraints(maxWidth: 720),
-      builder: (_) => ProjectEditorSheet(
-        project: project,
-        appearanceController: appearanceController,
-        globalAppearance: globalAppearance,
-      ),
+      builder:
+          (_) => ProjectEditorSheet(
+            project: project,
+            appearanceController: appearanceController,
+            globalAppearance: globalAppearance,
+          ),
     );
   }
 
@@ -97,15 +98,19 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
     );
     emojiController = TextEditingController(text: project?.emoji ?? '📁');
     budgetController = TextEditingController(
-      text: project?.budgetMinutes == null
-          ? ''
-          : (project!.budgetMinutes! / 60).toStringAsFixed(1),
+      text:
+          project?.budgetMinutes == null
+              ? ''
+              : (project!.budgetMinutes! / 60).toStringAsFixed(1),
     );
     colorValue = project?.colorValue ?? colors.first;
     dueAt = project?.dueAt;
-    projectAppearance = project == null
-        ? ProjectAppearancePreferences.fromAppearance(widget.globalAppearance)
-        : widget.appearanceController.preferencesFor(project.id);
+    projectAppearance =
+        project == null
+            ? ProjectAppearancePreferences.fromAppearance(
+              widget.globalAppearance,
+            )
+            : widget.appearanceController.preferencesFor(project.id);
     emojiController.addListener(_refreshEmojiPreview);
   }
 
@@ -152,7 +157,10 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
                 decoration: const InputDecoration(labelText: 'Описание'),
               ),
               const SizedBox(height: 18),
-              Text('Цвет проекта', style: Theme.of(context).textTheme.labelLarge),
+              Text(
+                'Цвет проекта',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 10,
@@ -262,9 +270,8 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
         size: 64,
         borderRadius: 19,
         emojiFontSize: 32,
-        fallbackEmoji: emojiController.text.trim().isEmpty
-            ? '📁'
-            : emojiController.text,
+        fallbackEmoji:
+            emojiController.text.trim().isEmpty ? '📁' : emojiController.text,
       );
     } else {
       visual = _emojiVisual();
@@ -280,12 +287,13 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
             IconButton(
               tooltip: 'Загрузить PNG, JPEG, WebP или GIF',
               onPressed: pickingIcon ? null : _pickIcon,
-              icon: pickingIcon
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add_photo_alternate_outlined),
+              icon:
+                  pickingIcon
+                      ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.add_photo_alternate_outlined),
             ),
             if (pendingIcon != null ||
                 (!removeIcon &&
@@ -335,15 +343,17 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
           color: Color(value),
           shape: BoxShape.circle,
           border: Border.all(
-            color: selected
-                ? Theme.of(context).colorScheme.onSurface
-                : Colors.transparent,
+            color:
+                selected
+                    ? Theme.of(context).colorScheme.onSurface
+                    : Colors.transparent,
             width: 3,
           ),
         ),
-        child: selected
-            ? const Icon(Icons.check_rounded, color: Colors.white)
-            : null,
+        child:
+            selected
+                ? const Icon(Icons.check_rounded, color: Colors.white)
+                : null,
       ),
     );
   }
@@ -366,7 +376,10 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
               ),
-              Text(selected.label, style: Theme.of(context).textTheme.labelSmall),
+              Text(
+                selected.label,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -388,9 +401,10 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: selected == palette
-                              ? Theme.of(context).colorScheme.onSurface
-                              : Colors.transparent,
+                          color:
+                              selected == palette
+                                  ? Theme.of(context).colorScheme.onSurface
+                                  : Colors.transparent,
                           width: 2,
                         ),
                       ),
@@ -410,7 +424,6 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
     );
   }
 
-
   ImageProvider<Object>? _projectBackgroundImage() {
     final pending = pendingBackground;
     if (pending != null) return MemoryImage(pending.bytes);
@@ -425,26 +438,29 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Фоновое изображение или GIF',
-            style: Theme.of(context).textTheme.labelLarge),
+        Text(
+          'Фоновое изображение или GIF',
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
         const SizedBox(height: 5),
         Text(
           'PNG, JPEG, WebP или GIF до 30 МБ. Файл хранится локально в Chronicle.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: colors.onSurfaceVariant,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 10),
         Row(
           children: [
             FilledButton.tonalIcon(
               onPressed: pickingBackground ? null : _pickBackground,
-              icon: pickingBackground
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.wallpaper_rounded),
+              icon:
+                  pickingBackground
+                      ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.wallpaper_rounded),
               label: Text(background == null ? 'Выбрать фон' : 'Заменить фон'),
             ),
             if (background != null) ...[
@@ -473,10 +489,13 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
                 image: background,
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
-                errorBuilder: (_, __, ___) => ColoredBox(
-                  color: colors.surfaceContainerHigh,
-                  child: const Center(child: Icon(Icons.broken_image_outlined)),
-                ),
+                errorBuilder:
+                    (_, __, ___) => ColoredBox(
+                      color: colors.surfaceContainerHigh,
+                      child: const Center(
+                        child: Icon(Icons.broken_image_outlined),
+                      ),
+                    ),
               ),
             ),
           ),
@@ -523,9 +542,10 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
       widget.globalAppearance,
     );
     final brightness = Theme.of(context).brightness;
-    final previewLabel = projectAppearance.inheritsGlobal
-        ? 'Глобальное оформление Chronicle'
-        : '${projectAppearance.usesCoordinatedPalette ? projectAppearance.accentPalette.label : 'Собственная палитра'} · ${projectAppearance.surfaceStyle.label}';
+    final previewLabel =
+        projectAppearance.inheritsGlobal
+            ? 'Глобальное оформление Chronicle'
+            : '${projectAppearance.usesCoordinatedPalette ? projectAppearance.accentPalette.label : 'Собственная палитра'} · ${projectAppearance.surfaceStyle.label}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -568,7 +588,8 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
                 ChoiceChip(
                   avatar: CircleAvatar(backgroundColor: palette.seed),
                   label: Text(palette.label),
-                  selected: projectAppearance.usesCoordinatedPalette &&
+                  selected:
+                      projectAppearance.usesCoordinatedPalette &&
                       projectAppearance.accentPalette == palette,
                   onSelected: (_) {
                     setState(() {
@@ -632,14 +653,11 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
             children: [
               for (final style in ChronicleSurfaceStyle.values)
                 ChoiceChip(
-                  avatar: Icon(
-                    switch (style) {
-                      ChronicleSurfaceStyle.matte => Icons.crop_square_rounded,
-                      ChronicleSurfaceStyle.glossy => Icons.gradient_rounded,
-                      ChronicleSurfaceStyle.shiny => Icons.auto_awesome_rounded,
-                    },
-                    size: 18,
-                  ),
+                  avatar: Icon(switch (style) {
+                    ChronicleSurfaceStyle.matte => Icons.crop_square_rounded,
+                    ChronicleSurfaceStyle.glossy => Icons.gradient_rounded,
+                    ChronicleSurfaceStyle.shiny => Icons.auto_awesome_rounded,
+                  }, size: 18),
                   label: Text(style.label),
                   selected: projectAppearance.surfaceStyle == style,
                   onSelected: (_) {
@@ -655,7 +673,10 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
           const SizedBox(height: 20),
           _backgroundControls(),
           const SizedBox(height: 18),
-          Text('Стекло и эффекты', style: Theme.of(context).textTheme.labelLarge),
+          Text(
+            'Стекло и эффекты',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
           _effectSlider(
             title: 'Прозрачность панелей',
             value: projectAppearance.panelOpacity,
@@ -677,18 +698,20 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
             min: 0,
             max: 30,
             divisions: 15,
-            label: projectAppearance.panelBlurSigma == 0
-                ? 'выкл.'
-                : projectAppearance.panelBlurSigma.toStringAsFixed(0),
-            onChanged: projectAppearance.panelOpacity >= 0.999
-                ? null
-                : (value) {
-                    setState(() {
-                      projectAppearance = projectAppearance.copyWith(
-                        panelBlurSigma: value,
-                      );
-                    });
-                  },
+            label:
+                projectAppearance.panelBlurSigma == 0
+                    ? 'выкл.'
+                    : projectAppearance.panelBlurSigma.toStringAsFixed(0),
+            onChanged:
+                projectAppearance.panelOpacity >= 0.999
+                    ? null
+                    : (value) {
+                      setState(() {
+                        projectAppearance = projectAppearance.copyWith(
+                          panelBlurSigma: value,
+                        );
+                      });
+                    },
           ),
           if (_projectBackgroundImage() != null) ...[
             _effectSlider(
@@ -744,50 +767,54 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
           data: buildChronicleTheme(
             brightness,
             effective,
-            backgroundAvailable: !projectAppearance.inheritsGlobal &&
+            backgroundAvailable:
+                !projectAppearance.inheritsGlobal &&
                 _projectBackgroundImage() != null,
           ),
           child: Builder(
-            builder: (previewContext) => SizedBox(
-              height: 110,
-              child: ChronicleBackdrop(
-                backgroundImage: projectAppearance.inheritsGlobal
-                    ? null
-                    : _projectBackgroundImage(),
-                revision: projectAppearance.backgroundRevision,
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: ChroniclePanelSurface(
-                    emphasized: true,
-                    borderRadius: BorderRadius.circular(18),
+            builder:
+                (previewContext) => SizedBox(
+                  height: 110,
+                  child: ChronicleBackdrop(
+                    backgroundImage:
+                        projectAppearance.inheritsGlobal
+                            ? null
+                            : _projectBackgroundImage(),
+                    revision: projectAppearance.backgroundRevision,
                     child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.folder_special_rounded,
-                            color: Theme.of(previewContext)
-                                .extension<ChronicleAppearanceTheme>()
-                                ?.iconAccent,
+                      padding: const EdgeInsets.all(10),
+                      child: ChroniclePanelSurface(
+                        emphasized: true,
+                        borderRadius: BorderRadius.circular(18),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.folder_special_rounded,
+                                color:
+                                    Theme.of(previewContext)
+                                        .extension<ChronicleAppearanceTheme>()
+                                        ?.iconAccent,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  previewLabel,
+                                  style: Theme.of(previewContext)
+                                      .textTheme
+                                      .titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              const Icon(Icons.auto_awesome_rounded, size: 18),
+                            ],
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              previewLabel,
-                              style: Theme.of(previewContext)
-                                  .textTheme
-                                  .titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          const Icon(Icons.auto_awesome_rounded, size: 18),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
           ),
         ),
       ],
@@ -863,9 +890,10 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
         project: Project(
           id: projectId,
           title: title,
-          emoji: emojiController.text.trim().isEmpty
-              ? '📁'
-              : emojiController.text.trim(),
+          emoji:
+              emojiController.text.trim().isEmpty
+                  ? '📁'
+                  : emojiController.text.trim(),
           description: descriptionController.text.trim(),
           researchGoal: existing?.researchGoal ?? '',
           researchQuestions: existing?.researchQuestions ?? const <String>[],
@@ -875,9 +903,10 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
           linkedSourceIds: existing?.linkedSourceIds ?? const <String>[],
           colorValue: colorValue,
           dueAt: dueAt,
-          budgetMinutes: budgetHours == null
-              ? null
-              : (budgetHours * 60).round().clamp(1, 1000000).toInt(),
+          budgetMinutes:
+              budgetHours == null
+                  ? null
+                  : (budgetHours * 60).round().clamp(1, 1000000).toInt(),
           archived: existing?.archived ?? false,
           createdAt: existing?.createdAt ?? now,
           updatedAt: now,

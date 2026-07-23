@@ -1,8 +1,5 @@
 class NoteColumnsLayout {
-  const NoteColumnsLayout({
-    required this.columnCount,
-    required this.widths,
-  });
+  const NoteColumnsLayout({required this.columnCount, required this.widths});
 
   final int columnCount;
   final List<int> widths;
@@ -66,9 +63,7 @@ class NoteColumnsReference {
       order ?? [for (var index = 0; index < columnCount; index += 1) index],
       columnCount,
     );
-    return [
-      for (final index in normalizedOrder) columns[index].markdown,
-    ];
+    return [for (final index in normalizedOrder) columns[index].markdown];
   }
 
   String toPlainMarkdown({List<int>? order}) {
@@ -78,10 +73,7 @@ class NoteColumnsReference {
         .join('\n\n');
   }
 
-  String toMarkdown({
-    List<int>? widths,
-    List<String>? contents,
-  }) {
+  String toMarkdown({List<int>? widths, List<String>? contents}) {
     final renderedContents = contents ?? orderedContents();
     final normalizedWidths = NoteColumnsSyntax.normalizeWidths(
       widths ?? this.widths,
@@ -127,7 +119,10 @@ class NoteColumnsSyntax {
       }
 
       RegExpMatch? endMatch;
-      for (final candidate in _endPattern.allMatches(markdown, startMatch.end)) {
+      for (final candidate in _endPattern.allMatches(
+        markdown,
+        startMatch.end,
+      )) {
         if (!_isInsideMarkdownCode(markdown, candidate.start)) {
           endMatch = candidate;
           break;
@@ -156,8 +151,7 @@ class NoteColumnsSyntax {
 
       final boundaries = <int>[
         _afterLineBreak(markdown, startMatch.end),
-        for (final divider in dividers)
-          _afterLineBreak(markdown, divider.end),
+        for (final divider in dividers) _afterLineBreak(markdown, divider.end),
       ];
       final ends = <int>[
         for (final divider in dividers)
@@ -181,10 +175,7 @@ class NoteColumnsSyntax {
         start: startMatch.start,
         end: endMatch.end,
         raw: markdown.substring(startMatch.start, endMatch.end),
-        widths: normalizeWidths(
-          _parseWidths(startMatch.group(1)),
-          columnCount,
-        ),
+        widths: normalizeWidths(_parseWidths(startMatch.group(1)), columnCount),
         columns: columns,
       );
       occupiedUntil = reference.end;
@@ -406,10 +397,11 @@ class NoteColumnsSyntax {
 
   static bool _isInsideMarkdownCode(String source, int offset) {
     final before = source.substring(0, offset);
-    final fenceCount = RegExp(
-      r'^[ \t]*(?:```|~~~)',
-      multiLine: true,
-    ).allMatches(before).length;
+    final fenceCount =
+        RegExp(
+          r'^[ \t]*(?:```|~~~)',
+          multiLine: true,
+        ).allMatches(before).length;
     if (fenceCount.isOdd) {
       return true;
     }

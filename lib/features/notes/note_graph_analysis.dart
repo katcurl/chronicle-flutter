@@ -1,10 +1,7 @@
 import '../../models/app_models.dart';
 
 class NoteGraphDegree {
-  const NoteGraphDegree({
-    required this.incoming,
-    required this.outgoing,
-  });
+  const NoteGraphDegree({required this.incoming, required this.outgoing});
 
   final int incoming;
   final int outgoing;
@@ -33,9 +30,7 @@ class NoteGraphAnalysis {
     required List<Note> notes,
     required List<NoteLink> links,
   }) {
-    final notesById = <String, Note>{
-      for (final note in notes) note.id: note,
-    };
+    final notesById = <String, Note>{for (final note in notes) note.id: note};
     final incoming = <String, Set<String>>{
       for (final note in notes) note.id: <String>{},
     };
@@ -161,14 +156,13 @@ class NoteGraphAnalysis {
   }
 
   List<String> hubNoteIds({int limit = 8}) {
-    final ids = degrees.keys.toList(growable: false)
-      ..sort((left, right) {
-        final byDegree = degrees[right]!.total.compareTo(degrees[left]!.total);
-        if (byDegree != 0) {
-          return byDegree;
-        }
-        return left.compareTo(right);
-      });
+    final ids = degrees.keys.toList(growable: false)..sort((left, right) {
+      final byDegree = degrees[right]!.total.compareTo(degrees[left]!.total);
+      if (byDegree != 0) {
+        return byDegree;
+      }
+      return left.compareTo(right);
+    });
     return ids
         .where((id) => degrees[id]!.total > 0)
         .take(limit)

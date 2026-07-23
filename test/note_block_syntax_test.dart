@@ -33,18 +33,15 @@ $columns
 
     final blocks = NoteBlockSyntax.all(source);
 
-    expect(
-      blocks.map((block) => block.type),
-      [
-        NoteBlockType.heading,
-        NoteBlockType.paragraph,
-        NoteBlockType.checklist,
-        NoteBlockType.image,
-        NoteBlockType.math,
-        NoteBlockType.code,
-        NoteBlockType.columns,
-      ],
-    );
+    expect(blocks.map((block) => block.type), [
+      NoteBlockType.heading,
+      NoteBlockType.paragraph,
+      NoteBlockType.checklist,
+      NoteBlockType.image,
+      NoteBlockType.math,
+      NoteBlockType.code,
+      NoteBlockType.columns,
+    ]);
     expect(blocks[5].raw, contains('with blank line'));
     expect(blocks[6].raw, contains('chronicle-columns'));
   });
@@ -69,10 +66,7 @@ $columns
   test('moves a block up without rewriting its Markdown', () {
     const source = 'Первый\n\n## Второй\n\n> Третий';
 
-    final result = NoteBlockSyntax.moveUp(
-      source,
-      source.indexOf('Второй'),
-    )!;
+    final result = NoteBlockSyntax.moveUp(source, source.indexOf('Второй'))!;
 
     expect(result.text, '## Второй\n\nПервый\n\n> Третий');
     expect(
@@ -92,10 +86,7 @@ B
 
 После''';
 
-    final result = NoteBlockSyntax.moveDown(
-      source,
-      source.indexOf('```text'),
-    )!;
+    final result = NoteBlockSyntax.moveDown(source, source.indexOf('```text'))!;
 
     expect(result.text, '''До
 
@@ -122,11 +113,12 @@ B
 Последний
 ''';
 
-    final result = NoteBlockSyntax.reorder(
-      source,
-      const [2, 0, 1],
-      selectedOriginalIndex: 1,
-    )!;
+    final result =
+        NoteBlockSyntax.reorder(source, const [
+          2,
+          0,
+          1,
+        ], selectedOriginalIndex: 1)!;
 
     expect(result.text, '''
 Последний
@@ -175,10 +167,7 @@ B
   test('duplicates the selected block and preserves separators', () {
     const source = 'Один\n\nДва\n\nТри';
 
-    final result = NoteBlockSyntax.duplicate(
-      source,
-      source.indexOf('Два'),
-    )!;
+    final result = NoteBlockSyntax.duplicate(source, source.indexOf('Два'))!;
 
     expect(result.text, 'Один\n\nДва\n\nДва\n\nТри');
     expect(
@@ -190,10 +179,7 @@ B
   test('deletes one block without joining neighboring text', () {
     const source = 'Один\n\nУдалить\n\nТри';
 
-    final result = NoteBlockSyntax.delete(
-      source,
-      source.indexOf('Удалить'),
-    )!;
+    final result = NoteBlockSyntax.delete(source, source.indexOf('Удалить'))!;
 
     expect(result.text, 'Один\n\nТри');
   });
@@ -201,25 +187,20 @@ B
   test('converts paragraphs, headings, lists and quotes safely', () {
     const source = 'Первая строка\nВторая строка';
 
-    final heading = NoteBlockSyntax.convert(
-      source,
-      0,
-      NoteBlockConversion.heading2,
-    )!;
+    final heading =
+        NoteBlockSyntax.convert(source, 0, NoteBlockConversion.heading2)!;
     expect(heading.text, '## Первая строка Вторая строка');
 
-    final checklist = NoteBlockSyntax.convert(
-      source,
-      0,
-      NoteBlockConversion.checklist,
-    )!;
+    final checklist =
+        NoteBlockSyntax.convert(source, 0, NoteBlockConversion.checklist)!;
     expect(checklist.text, '- [ ] Первая строка\n- [ ] Вторая строка');
 
-    final paragraph = NoteBlockSyntax.convert(
-      '> Первая строка\n> Вторая строка',
-      2,
-      NoteBlockConversion.paragraph,
-    )!;
+    final paragraph =
+        NoteBlockSyntax.convert(
+          '> Первая строка\n> Вторая строка',
+          2,
+          NoteBlockConversion.paragraph,
+        )!;
     expect(paragraph.text, 'Первая строка\nВторая строка');
   });
 
@@ -244,11 +225,7 @@ B
     final blocks = NoteBlockSyntax.all(source);
     final targetOffset = source.indexOf('Текст блока 973');
 
-    final target = NoteBlockSyntax.findIn(
-      blocks,
-      source.length,
-      targetOffset,
-    );
+    final target = NoteBlockSyntax.findIn(blocks, source.length, targetOffset);
     final gap = NoteBlockSyntax.findIn(
       blocks,
       source.length,
@@ -280,6 +257,4 @@ B
     ]);
     expect(blocks[1].raw, contains('Temperature | 300 K'));
   });
-
-
 }

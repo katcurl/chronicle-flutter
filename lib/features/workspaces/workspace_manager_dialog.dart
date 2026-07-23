@@ -4,10 +4,7 @@ import '../../navigation/app_section.dart';
 import 'workspace_profile.dart';
 
 class WorkspaceManagerDialog extends StatefulWidget {
-  const WorkspaceManagerDialog({
-    super.key,
-    required this.initialPreferences,
-  });
+  const WorkspaceManagerDialog({super.key, required this.initialPreferences});
 
   final WorkspacePreferences initialPreferences;
 
@@ -17,15 +14,13 @@ class WorkspaceManagerDialog extends StatefulWidget {
   }) {
     return showDialog<WorkspacePreferences>(
       context: context,
-      builder: (context) => WorkspaceManagerDialog(
-        initialPreferences: preferences,
-      ),
+      builder:
+          (context) => WorkspaceManagerDialog(initialPreferences: preferences),
     );
   }
 
   @override
-  State<WorkspaceManagerDialog> createState() =>
-      _WorkspaceManagerDialogState();
+  State<WorkspaceManagerDialog> createState() => _WorkspaceManagerDialogState();
 }
 
 class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
@@ -91,10 +86,7 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Отмена'),
         ),
-        FilledButton(
-          onPressed: _save,
-          child: const Text('Сохранить'),
-        ),
+        FilledButton(onPressed: _save, child: const Text('Сохранить')),
       ],
     );
   }
@@ -124,16 +116,16 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
         const SizedBox(width: 8),
         IconButton(
           tooltip: 'Новое пространство',
-          onPressed: profiles.length >= WorkspaceProfile.maxProfiles
-              ? null
-              : _create,
+          onPressed:
+              profiles.length >= WorkspaceProfile.maxProfiles ? null : _create,
           icon: const Icon(Icons.add_rounded),
         ),
         IconButton(
           tooltip: 'Дублировать',
-          onPressed: profiles.length >= WorkspaceProfile.maxProfiles
-              ? null
-              : _duplicate,
+          onPressed:
+              profiles.length >= WorkspaceProfile.maxProfiles
+                  ? null
+                  : _duplicate,
           icon: const Icon(Icons.copy_outlined),
         ),
         IconButton(
@@ -159,9 +151,9 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
         const SizedBox(height: 8),
         Text(
           'Переключение пространства меняет только расположение интерфейса.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: colors.onSurfaceVariant,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 14),
         Expanded(
@@ -189,9 +181,13 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   subtitle: Text(profile.startSection.label),
-                  trailing: isActive
-                      ? Icon(Icons.check_circle_rounded, color: colors.primary)
-                      : null,
+                  trailing:
+                      isActive
+                          ? Icon(
+                            Icons.check_circle_rounded,
+                            color: colors.primary,
+                          )
+                          : null,
                   onTap: () => _select(index),
                 ),
               );
@@ -203,17 +199,19 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
           children: [
             IconButton.filledTonal(
               tooltip: 'Новое пространство',
-              onPressed: profiles.length >= WorkspaceProfile.maxProfiles
-                  ? null
-                  : _create,
+              onPressed:
+                  profiles.length >= WorkspaceProfile.maxProfiles
+                      ? null
+                      : _create,
               icon: const Icon(Icons.add_rounded),
             ),
             const SizedBox(width: 8),
             IconButton.filledTonal(
               tooltip: 'Дублировать',
-              onPressed: profiles.length >= WorkspaceProfile.maxProfiles
-                  ? null
-                  : _duplicate,
+              onPressed:
+                  profiles.length >= WorkspaceProfile.maxProfiles
+                      ? null
+                      : _duplicate,
               icon: const Icon(Icons.copy_outlined),
             ),
             const Spacer(),
@@ -254,9 +252,9 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
                   labelText: 'Значок',
                   counterText: '',
                 ),
-                onChanged: (value) => _replaceSelected(
-                  profile.copyWith(emoji: value.trim()),
-                ),
+                onChanged:
+                    (value) =>
+                        _replaceSelected(profile.copyWith(emoji: value.trim())),
               ),
             ),
             const SizedBox(width: 12),
@@ -268,9 +266,9 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
                   labelText: 'Название',
                   counterText: '',
                 ),
-                onChanged: (value) => _replaceSelected(
-                  profile.copyWith(name: value.trim()),
-                ),
+                onChanged:
+                    (value) =>
+                        _replaceSelected(profile.copyWith(name: value.trim())),
               ),
             ),
           ],
@@ -308,9 +306,9 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
             'Показывать названия разделов, когда ширины окна достаточно.',
           ),
           value: profile.extendedNavigation,
-          onChanged: (value) => _replaceSelected(
-            profile.copyWith(extendedNavigation: value),
-          ),
+          onChanged:
+              (value) =>
+                  _replaceSelected(profile.copyWith(extendedNavigation: value)),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
@@ -319,9 +317,9 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
             'Показывать панель на широких экранах. На узких она скрывается автоматически.',
           ),
           value: profile.showContextPanel,
-          onChanged: (value) => _replaceSelected(
-            profile.copyWith(showContextPanel: value),
-          ),
+          onChanged:
+              (value) =>
+                  _replaceSelected(profile.copyWith(showContextPanel: value)),
         ),
         const SizedBox(height: 8),
         Row(
@@ -329,28 +327,29 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
             Expanded(
               child: Text(
                 'Блоки контекстной панели',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
             TextButton(
-              onPressed: () => _replaceSelected(
-                profile.copyWith(
-                  visiblePanels: Set<WorkspacePanel>.from(
-                    WorkspacePanel.values,
+              onPressed:
+                  () => _replaceSelected(
+                    profile.copyWith(
+                      visiblePanels: Set<WorkspacePanel>.from(
+                        WorkspacePanel.values,
+                      ),
+                    ),
                   ),
-                ),
-              ),
               child: const Text('Показать все'),
             ),
           ],
         ),
         Text(
           'Перетаскивай блоки, чтобы изменить порядок. Скрытые блоки сохраняют своё место.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: colors.onSurfaceVariant,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 10),
         SizedBox(
@@ -504,9 +503,10 @@ class _WorkspaceManagerDialogState extends State<WorkspaceManagerDialog> {
       profiles: [
         for (final profile in profiles)
           profile.copyWith(
-            name: profile.name.trim().isEmpty
-                ? 'Рабочее пространство'
-                : profile.name.trim(),
+            name:
+                profile.name.trim().isEmpty
+                    ? 'Рабочее пространство'
+                    : profile.name.trim(),
             emoji: profile.emoji.trim().isEmpty ? '◫' : profile.emoji.trim(),
           ),
       ],

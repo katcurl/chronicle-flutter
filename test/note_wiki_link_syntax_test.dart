@@ -29,10 +29,7 @@ void main() {
       activeQuery,
       'Research :: TM-score',
     );
-    expect(
-      completion.text,
-      'Результаты описаны в [[Research :: TM-score]]',
-    );
+    expect(completion.text, 'Результаты описаны в [[Research :: TM-score]]');
     expect(completion.cursor, completion.text.length);
     expect(
       NoteWikiLinkSyntax.autocompleteAt(completion.text, completion.cursor),
@@ -83,5 +80,4 @@ void main() {
 
     expect(completion.text, 'См. [[id:note-42|RMSD]]');
   });
-
 }

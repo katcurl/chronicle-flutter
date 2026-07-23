@@ -21,13 +21,14 @@ class NoteLinkTarget {
   final String noteType;
   final List<String> tags;
 
-  String get searchableText => <String>[
-    title,
-    projectTitle,
-    folderPath,
-    noteType,
-    ...tags,
-  ].join(' ').toLowerCase();
+  String get searchableText =>
+      <String>[
+        title,
+        projectTitle,
+        folderPath,
+        noteType,
+        ...tags,
+      ].join(' ').toLowerCase();
 }
 
 class NoteLinkMention {
@@ -171,11 +172,11 @@ class NoteLinkTools {
     int? cursor,
   }) {
     var text = markdown;
-    var nextCursor = (cursor ?? markdown.length)
-        .clamp(0, markdown.length)
-        .toInt();
-    final sorted = mentions.toList()
-      ..sort((left, right) => right.start.compareTo(left.start));
+    var nextCursor =
+        (cursor ?? markdown.length).clamp(0, markdown.length).toInt();
+    final sorted =
+        mentions.toList()
+          ..sort((left, right) => right.start.compareTo(left.start));
     final seen = <String>{};
 
     for (final mention in sorted) {
@@ -236,10 +237,11 @@ class NoteLinkTools {
   static String _snippet(String markdown, int start, int end) {
     final excerptStart = math.max(0, start - 58);
     final excerptEnd = math.min(markdown.length, end + 74);
-    var excerpt = markdown
-        .substring(excerptStart, excerptEnd)
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    var excerpt =
+        markdown
+            .substring(excerptStart, excerptEnd)
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
     if (excerptStart > 0 && excerpt.isNotEmpty) {
       excerpt = '…$excerpt';
     }

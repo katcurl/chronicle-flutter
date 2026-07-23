@@ -28,18 +28,20 @@ class AppSettingsDialog extends StatelessWidget {
   }) {
     return showDialog<AppSettingsDestination>(
       context: context,
-      builder: (context) => AppSettingsDialog(
-        appearance: appearance,
-        activeWorkspace: activeWorkspace,
-      ),
+      builder:
+          (context) => AppSettingsDialog(
+            appearance: appearance,
+            activeWorkspace: activeWorkspace,
+          ),
     );
   }
 
   static String appearanceSummary(AppAppearancePreferences appearance) {
     final background = appearance.hasBackgroundImage ? 'с фоном' : 'без фона';
-    final glass = appearance.panelOpacity < 0.999
-        ? 'стекло ${(appearance.panelOpacity * 100).round()}%'
-        : appearance.surfaceStyle.label;
+    final glass =
+        appearance.panelOpacity < 0.999
+            ? 'стекло ${(appearance.panelOpacity * 100).round()}%'
+            : appearance.surfaceStyle.label;
     return '${appearance.accentPalette.label} · $glass · $background · '
         '${appearance.brightnessMode.label}';
   }
@@ -80,20 +82,22 @@ class AppSettingsDialog extends StatelessWidget {
                 title: 'Внешний вид',
                 subtitle: appearanceSummary(appearance),
                 accent: appearance.accentPalette.seed,
-                onTap: () => Navigator.pop(
-                  context,
-                  AppSettingsDestination.appearance,
-                ),
+                onTap:
+                    () => Navigator.pop(
+                      context,
+                      AppSettingsDestination.appearance,
+                    ),
               ),
               const SizedBox(height: 10),
               _SettingsRow(
                 icon: Icons.dashboard_customize_outlined,
                 title: 'Рабочие пространства',
                 subtitle: workspaceSummary(activeWorkspace),
-                onTap: () => Navigator.pop(
-                  context,
-                  AppSettingsDestination.workspaces,
-                ),
+                onTap:
+                    () => Navigator.pop(
+                      context,
+                      AppSettingsDestination.workspaces,
+                    ),
               ),
               const SizedBox(height: 10),
               _SettingsRow(
@@ -101,10 +105,11 @@ class AppSettingsDialog extends StatelessWidget {
                 title: 'Оформление проектов',
                 subtitle:
                     'Темы и изображения/GIF задаются в настройках проекта.',
-                onTap: () => Navigator.pop(
-                  context,
-                  AppSettingsDestination.projectAppearance,
-                ),
+                onTap:
+                    () => Navigator.pop(
+                      context,
+                      AppSettingsDestination.projectAppearance,
+                    ),
               ),
               const SizedBox(height: 10),
               _SettingsRow(
@@ -112,10 +117,11 @@ class AppSettingsDialog extends StatelessWidget {
                 title: 'Надёжность и восстановление',
                 subtitle:
                     'Проверка целостности, Vault, backup round-trip и undo.',
-                onTap: () => Navigator.pop(
-                  context,
-                  AppSettingsDestination.reliability,
-                ),
+                onTap:
+                    () => Navigator.pop(
+                      context,
+                      AppSettingsDestination.reliability,
+                    ),
               ),
               const SizedBox(height: 18),
               Row(

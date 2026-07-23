@@ -12,8 +12,9 @@ void main() {
     ),
   );
   final exporter = PublicationDocumentExporter(
-    readAttachment: (relativePath) async =>
-        relativePath == 'Attachments/rmsd.png' ? png : null,
+    readAttachment:
+        (relativePath) async =>
+            relativePath == 'Attachments/rmsd.png' ? png : null,
   );
   const markdown = '''# ORF9b report
 
@@ -58,9 +59,7 @@ final state = "A";
     expect(entries, contains('word/_rels/document.xml.rels'));
 
     final documentXml = utf8.decode(entries['word/document.xml']!);
-    final relationships = utf8.decode(
-      entries['word/_rels/document.xml.rels']!,
-    );
+    final relationships = utf8.decode(entries['word/_rels/document.xml.rels']!);
     expect(documentXml, contains('w:pStyle w:val="Heading1"'));
     expect(documentXml, contains('<w:b/>'));
     expect(documentXml, contains('<w:i/>'));
@@ -107,10 +106,7 @@ final state = "A";
 
 String _wordVisibleText(String documentXml) {
   final text = StringBuffer();
-  final textNode = RegExp(
-    r'<w:t(?:\s+[^>]*)?>(.*?)</w:t>',
-    dotAll: true,
-  );
+  final textNode = RegExp(r'<w:t(?:\s+[^>]*)?>(.*?)</w:t>', dotAll: true);
   for (final match in textNode.allMatches(documentXml)) {
     text.write(_decodeXmlText(match.group(1)!));
   }

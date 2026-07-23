@@ -27,11 +27,7 @@ void main() {
       id: 'custom',
       name: 'Моя панель',
       emoji: '🧬',
-      actionIds: const <String>[
-        'bold',
-        'note_link',
-        'scientific_table',
-      ],
+      actionIds: const <String>['bold', 'note_link', 'scientific_table'],
     );
     final source = NoteToolbarPreferences.normalized(
       activeProfileId: custom.id,
@@ -48,23 +44,26 @@ void main() {
     expect(decoded.activeProfile.actionIds, custom.actionIds);
   });
 
-  test('unknown and duplicate actions are removed while order is preserved', () {
-    final profile = NoteToolbarProfile.fromJson(<String, Object?>{
-      'id': 'safe',
-      'name': 'Safe',
-      'emoji': 'S',
-      'actionIds': <String>[
-        'bold',
-        'unknown-action',
-        'bold',
-        'paste_image',
-        'heading',
-      ],
-    });
+  test(
+    'unknown and duplicate actions are removed while order is preserved',
+    () {
+      final profile = NoteToolbarProfile.fromJson(<String, Object?>{
+        'id': 'safe',
+        'name': 'Safe',
+        'emoji': 'S',
+        'actionIds': <String>[
+          'bold',
+          'unknown-action',
+          'bold',
+          'paste_image',
+          'heading',
+        ],
+      });
 
-    expect(profile, isNotNull);
-    expect(profile!.actionIds, <String>['bold', 'paste_image', 'heading']);
-  });
+      expect(profile, isNotNull);
+      expect(profile!.actionIds, <String>['bold', 'paste_image', 'heading']);
+    },
+  );
 
   test('corrupt storage safely restores built-in profiles', () {
     final decoded = NoteToolbarPreferencesStore.decode('{broken json');

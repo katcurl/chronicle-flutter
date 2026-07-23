@@ -44,11 +44,12 @@ class ProjectResearchEditorSheet extends StatefulWidget {
       isScrollControlled: true,
       showDragHandle: true,
       constraints: const BoxConstraints(maxWidth: 760),
-      builder: (_) => ProjectResearchEditorSheet(
-        project: project,
-        notes: notes,
-        sources: sources,
-      ),
+      builder:
+          (_) => ProjectResearchEditorSheet(
+            project: project,
+            notes: notes,
+            sources: sources,
+          ),
     );
   }
 
@@ -97,10 +98,10 @@ class _ProjectResearchEditorSheetState
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
     final notes = List<Note>.from(widget.notes)
       ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
-    final sources = List<CitationSource>.from(widget.sources)
-      ..sort((left, right) => left.title.toLowerCase().compareTo(
-            right.title.toLowerCase(),
-          ));
+    final sources = List<CitationSource>.from(widget.sources)..sort(
+      (left, right) =>
+          left.title.toLowerCase().compareTo(right.title.toLowerCase()),
+    );
 
     return SafeArea(
       top: false,
@@ -113,8 +114,8 @@ class _ProjectResearchEditorSheetState
               Text(
                 'Исследовательская страница',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -153,7 +154,8 @@ class _ProjectResearchEditorSheetState
               const SizedBox(height: 18),
               _selectionSection(
                 title: 'Закреплённые результаты',
-                subtitle: 'Выбери заметки, которые должны оставаться на главной странице проекта.',
+                subtitle:
+                    'Выбери заметки, которые должны оставаться на главной странице проекта.',
                 emptyLabel: 'В проекте пока нет заметок.',
                 children: [
                   for (final note in notes)
@@ -177,7 +179,8 @@ class _ProjectResearchEditorSheetState
               const SizedBox(height: 8),
               _selectionSection(
                 title: 'Связанные источники',
-                subtitle: 'Отметь источники из общей библиотеки, относящиеся к этому проекту.',
+                subtitle:
+                    'Отметь источники из общей библиотеки, относящиеся к этому проекту.',
                 emptyLabel: 'Библиотека источников пока пуста.',
                 children: [
                   for (final source in sources)
@@ -242,17 +245,18 @@ class _ProjectResearchEditorSheetState
       childrenPadding: const EdgeInsets.only(bottom: 8),
       title: Text(title),
       subtitle: Text(subtitle),
-      children: children.isEmpty
-          ? <Widget>[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Text(emptyLabel),
+      children:
+          children.isEmpty
+              ? <Widget>[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(emptyLabel),
+                  ),
                 ),
-              ),
-            ]
-          : children,
+              ]
+              : children,
     );
   }
 
@@ -310,7 +314,8 @@ class ProjectTemplatePickerSheet extends StatefulWidget {
       _ProjectTemplatePickerSheetState();
 }
 
-class _ProjectTemplatePickerSheetState extends State<ProjectTemplatePickerSheet> {
+class _ProjectTemplatePickerSheetState
+    extends State<ProjectTemplatePickerSheet> {
   ProjectResearchTemplate? selected;
   late final TextEditingController titleController;
 
@@ -344,11 +349,13 @@ class _ProjectTemplatePickerSheetState extends State<ProjectTemplatePickerSheet>
               Text(
                 'Создать из шаблона',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 6),
-              const Text('Шаблон только задаёт стартовые вопросы. Его можно полностью переписать.'),
+              const Text(
+                'Шаблон только задаёт стартовые вопросы. Его можно полностью переписать.',
+              ),
               const SizedBox(height: 16),
               RadioGroup<ProjectResearchTemplate>(
                 groupValue: selected,
@@ -379,7 +386,9 @@ class _ProjectTemplatePickerSheetState extends State<ProjectTemplatePickerSheet>
               const SizedBox(height: 12),
               TextField(
                 controller: titleController,
-                decoration: const InputDecoration(labelText: 'Название проекта'),
+                decoration: const InputDecoration(
+                  labelText: 'Название проекта',
+                ),
               ),
               const SizedBox(height: 18),
               SizedBox(

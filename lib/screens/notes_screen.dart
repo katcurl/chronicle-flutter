@@ -85,8 +85,7 @@ Future<void> _showCustomNoteTemplateManager(
           defaultProperties: template.defaultProperties,
         ),
     onDelete: (template) => store.deleteCustomNoteTemplate(template.id),
-    onDuplicate:
-        (template) => store.duplicateCustomNoteTemplate(template.id),
+    onDuplicate: (template) => store.duplicateCustomNoteTemplate(template.id),
     onImport: store.importCustomNoteTemplates,
   );
 }
@@ -209,149 +208,155 @@ class _NotesScreenState extends State<NotesScreen> {
             ),
           IconButton(
             tooltip: 'Новая заметка',
-            onPressed: widget.store.activeProjects.isEmpty
-                ? null
-                : () => _add(),
+            onPressed:
+                widget.store.activeProjects.isEmpty ? null : () => _add(),
             icon: const Icon(Icons.note_add_outlined),
           ),
         ],
       ),
-      body: _showHome
-          ? NoteHomePage(
-              store: widget.store,
-              preferences: _homePreferences,
-              appearanceController: widget.appearanceController,
-              globalAppearance: widget.globalAppearance,
-              onOpenNote: _open,
-              onOpenProject: (projectId) {
-                setState(() {
-                  projectFilter = projectId;
-                  folderFilter = null;
-                  pinnedOnly = false;
-                  _showHome = false;
-                });
-              },
-              onOpenFolder: (folder) {
-                setState(() {
-                  folderFilter = folder;
-                  projectFilter = null;
-                  pinnedOnly = false;
-                  _showHome = false;
-                });
-              },
-              onCreateFromTemplate: (template) =>
-                  _add(initialTemplateId: template.id),
-              onOpenLibrary: () => setState(() => _showHome = false),
-              onConfigure: _openHomePreferences,
-            )
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  child: SearchBar(
-                    hintText: 'Поиск по базе знаний',
-                    leading: const Icon(Icons.search_rounded),
-                    onChanged: (value) => setState(() => query = value),
+      body:
+          _showHome
+              ? NoteHomePage(
+                store: widget.store,
+                preferences: _homePreferences,
+                appearanceController: widget.appearanceController,
+                globalAppearance: widget.globalAppearance,
+                onOpenNote: _open,
+                onOpenProject: (projectId) {
+                  setState(() {
+                    projectFilter = projectId;
+                    folderFilter = null;
+                    pinnedOnly = false;
+                    _showHome = false;
+                  });
+                },
+                onOpenFolder: (folder) {
+                  setState(() {
+                    folderFilter = folder;
+                    projectFilter = null;
+                    pinnedOnly = false;
+                    _showHome = false;
+                  });
+                },
+                onCreateFromTemplate:
+                    (template) => _add(initialTemplateId: template.id),
+                onOpenLibrary: () => setState(() => _showHome = false),
+                onConfigure: _openHomePreferences,
+              )
+              : Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: SearchBar(
+                      hintText: 'Поиск по базе знаний',
+                      leading: const Icon(Icons.search_rounded),
+                      onChanged: (value) => setState(() => query = value),
+                    ),
                   ),
-                ),
-                SizedBox(
-                  height: 48,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    children: [
-                      DropdownButton<String?>(
-                        value: projectFilter,
-                        hint: const Text('Все проекты'),
-                        underline: const SizedBox.shrink(),
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('Все проекты'),
-                          ),
-                          ...widget.store.activeProjects.map(
-                            (project) => DropdownMenuItem<String?>(
-                              value: project.id,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ProjectAvatar(
-                                    project: project,
-                                    controller: widget.appearanceController,
-                                    size: 22,
-                                    borderRadius: 6,
-                                    emojiFontSize: 15,
-                                  ),
-                                  const SizedBox(width: 7),
-                                  Text(project.title),
-                                ],
+                  SizedBox(
+                    height: 48,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      children: [
+                        DropdownButton<String?>(
+                          value: projectFilter,
+                          hint: const Text('Все проекты'),
+                          underline: const SizedBox.shrink(),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('Все проекты'),
+                            ),
+                            ...widget.store.activeProjects.map(
+                              (project) => DropdownMenuItem<String?>(
+                                value: project.id,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ProjectAvatar(
+                                      project: project,
+                                      controller: widget.appearanceController,
+                                      size: 22,
+                                      borderRadius: 6,
+                                      emojiFontSize: 15,
+                                    ),
+                                    const SizedBox(width: 7),
+                                    Text(project.title),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                        onChanged: (value) =>
-                            setState(() => projectFilter = value),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text('Все папки'),
-                        selected: folderFilter == null,
-                        onSelected: (_) => setState(() => folderFilter = null),
-                      ),
-                      for (final folder in folders) ...[
+                          ],
+                          onChanged:
+                              (value) => setState(() => projectFilter = value),
+                        ),
                         const SizedBox(width: 8),
                         ChoiceChip(
-                          label: Text(folder),
-                          selected: folderFilter == folder,
-                          onSelected: (_) =>
-                              setState(() => folderFilter = folder),
+                          label: const Text('Все папки'),
+                          selected: folderFilter == null,
+                          onSelected:
+                              (_) => setState(() => folderFilter = null),
                         ),
+                        for (final folder in folders) ...[
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: Text(folder),
+                            selected: folderFilter == folder,
+                            onSelected:
+                                (_) => setState(() => folderFilter = folder),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: notes.isEmpty
-                      ? _EmptyNotes(
-                          hasFilters: normalizedQuery.isNotEmpty ||
-                              pinnedOnly ||
-                              folderFilter != null ||
-                              projectFilter != null,
-                        )
-                      : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final columns = constraints.maxWidth >= 1180
-                                ? 3
-                                : constraints.maxWidth >= 760
-                                    ? 2
-                                    : 1;
-                            return GridView.builder(
-                              padding: const EdgeInsets.fromLTRB(
-                                16,
-                                10,
-                                16,
-                                110,
-                              ),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: columns,
-                                mainAxisExtent: 218,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                              ),
-                              itemCount: notes.length,
-                              itemBuilder: (_, index) => _NoteCard(
-                                store: widget.store,
-                                note: notes[index],
-                                appearanceController: widget.appearanceController,
-                                onOpen: () => _open(notes[index]),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
+                  Expanded(
+                    child:
+                        notes.isEmpty
+                            ? _EmptyNotes(
+                              hasFilters:
+                                  normalizedQuery.isNotEmpty ||
+                                  pinnedOnly ||
+                                  folderFilter != null ||
+                                  projectFilter != null,
+                            )
+                            : LayoutBuilder(
+                              builder: (context, constraints) {
+                                final columns =
+                                    constraints.maxWidth >= 1180
+                                        ? 3
+                                        : constraints.maxWidth >= 760
+                                        ? 2
+                                        : 1;
+                                return GridView.builder(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    10,
+                                    16,
+                                    110,
+                                  ),
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: columns,
+                                        mainAxisExtent: 218,
+                                        crossAxisSpacing: 12,
+                                        mainAxisSpacing: 12,
+                                      ),
+                                  itemCount: notes.length,
+                                  itemBuilder:
+                                      (_, index) => _NoteCard(
+                                        store: widget.store,
+                                        note: notes[index],
+                                        appearanceController:
+                                            widget.appearanceController,
+                                        onOpen: () => _open(notes[index]),
+                                      ),
+                                );
+                              },
+                            ),
+                  ),
+                ],
+              ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: widget.store.activeProjects.isEmpty ? null : () => _add(),
         icon: const Icon(Icons.add_rounded),
@@ -394,10 +399,7 @@ class _NotesScreenState extends State<NotesScreen> {
       final selection = await showDialog<_LinkHealthSelection>(
         context: context,
         builder:
-            (context) => _LinkHealthDialog(
-              store: widget.store,
-              issues: issues,
-            ),
+            (context) => _LinkHealthDialog(store: widget.store, issues: issues),
       );
       if (!mounted || selection == null) return;
       final source = widget.store.noteById(selection.issue.sourceNoteId);
@@ -410,10 +412,7 @@ class _NotesScreenState extends State<NotesScreen> {
     }
   }
 
-  Future<void> _repairLinkIssue(
-    NoteWikiLinkIssue issue,
-    Note source,
-  ) async {
+  Future<void> _repairLinkIssue(NoteWikiLinkIssue issue, Note source) async {
     Note? target;
     if (issue.kind == NoteWikiLinkIssueKind.ambiguous) {
       final candidates = issue.candidateNoteIds
@@ -523,11 +522,7 @@ class _NotesScreenState extends State<NotesScreen> {
   Future<void> _openKnowledgeGraph() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder:
-            (_) => NoteGraphScreen(
-              store: widget.store,
-              onOpenNote: _open,
-            ),
+        builder: (_) => NoteGraphScreen(store: widget.store, onOpenNote: _open),
       ),
     );
     if (mounted) {
@@ -538,10 +533,8 @@ class _NotesScreenState extends State<NotesScreen> {
   Future<void> _openResearchCanvas() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => ResearchCanvasScreen(
-          store: widget.store,
-          onOpenNote: _open,
-        ),
+        builder:
+            (_) => ResearchCanvasScreen(store: widget.store, onOpenNote: _open),
       ),
     );
     if (mounted) {
@@ -582,9 +575,7 @@ class _NotesScreenState extends State<NotesScreen> {
       if (project == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Не найден проект этого документа.'),
-          ),
+          const SnackBar(content: Text('Не найден проект этого документа.')),
         );
         return;
       }
@@ -598,12 +589,13 @@ class _NotesScreenState extends State<NotesScreen> {
     } else {
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
-          builder: (_) => NoteWorkspaceScreen(
-            store: widget.store,
-            note: note,
-            appearanceController: widget.appearanceController,
-            globalAppearance: widget.globalAppearance,
-          ),
+          builder:
+              (_) => NoteWorkspaceScreen(
+                store: widget.store,
+                note: note,
+                appearanceController: widget.appearanceController,
+                globalAppearance: widget.globalAppearance,
+              ),
         ),
       );
     }
@@ -823,8 +815,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       parsed.content,
       delay: const Duration(milliseconds: 420),
     );
-    _editorScrollController = ScrollController()
-      ..addListener(_rememberEditorScrollOffset);
+    _editorScrollController =
+        ScrollController()..addListener(_rememberEditorScrollOffset);
     _previewScrollController = ScrollController();
     projectId = widget.note.projectId;
     status = parsed.frontMatter['status'] ?? widget.note.status;
@@ -917,9 +909,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         return;
       }
       final position = _editorScrollController.position;
-      final target = _editorScrollOffset
-          .clamp(position.minScrollExtent, position.maxScrollExtent)
-          .toDouble();
+      final target =
+          _editorScrollOffset
+              .clamp(position.minScrollExtent, position.maxScrollExtent)
+              .toDouble();
       if ((position.pixels - target).abs() > 0.5) {
         _editorScrollController.jumpTo(target);
       }
@@ -947,181 +940,185 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         },
         child: LayoutBuilder(
           builder: (context, constraints) {
-          final showPanel =
-              constraints.maxWidth >= 860 && editorProfile.showContextPanel;
-          final split = constraints.maxWidth >= 1180;
-          final effectiveMode = mode == 2 && !split ? 0 : mode;
-          return Scaffold(
-            appBar: AppBar(
-              title: Row(
-                children: [
-                  Text(noteTypeIcon(noteType)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      dirty ? '${widget.note.title} •' : widget.note.title,
-                      overflow: TextOverflow.ellipsis,
+            final showPanel =
+                constraints.maxWidth >= 860 && editorProfile.showContextPanel;
+            final split = constraints.maxWidth >= 1180;
+            final effectiveMode = mode == 2 && !split ? 0 : mode;
+            return Scaffold(
+              appBar: AppBar(
+                title: Row(
+                  children: [
+                    Text(noteTypeIcon(noteType)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        dirty ? '${widget.note.title} •' : widget.note.title,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
+                  ],
+                ),
+                actions: [
+                  IconButton(
+                    tooltip: 'Сохранить версию',
+                    onPressed:
+                        dirty && !_renameReviewBusy
+                            ? () => unawaited(
+                              _saveWithRenameReview(createVersion: true),
+                            )
+                            : null,
+                    icon: const Icon(Icons.save_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Редактор',
+                    onPressed: () => _switchMode(0),
+                    icon: Icon(
+                      effectiveMode == 0
+                          ? Icons.edit_rounded
+                          : Icons.edit_outlined,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Предпросмотр',
+                    onPressed: () => _switchMode(1),
+                    icon: Icon(
+                      effectiveMode == 1
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_outlined,
+                    ),
+                  ),
+                  if (split)
+                    IconButton(
+                      tooltip: 'Разделить редактор',
+                      onPressed: () => _switchMode(2),
+                      icon: Icon(
+                        effectiveMode == 2
+                            ? Icons.vertical_split_rounded
+                            : Icons.vertical_split_outlined,
+                      ),
+                    ),
+                  _editorProfileSwitcher(),
+                  if (!showPanel)
+                    Builder(
+                      builder:
+                          (context) => IconButton(
+                            tooltip: 'Контекст заметки',
+                            onPressed:
+                                () => Scaffold.of(context).openEndDrawer(),
+                            icon: const Icon(Icons.tune_rounded),
+                          ),
+                    ),
+                  PopupMenuButton<String>(
+                    onSelected: (value) async {
+                      switch (value) {
+                        case 'copy_stable_link':
+                          unawaited(_copyStableNoteLink());
+                          break;
+                        case 'link_mentions':
+                          unawaited(_linkUnlinkedMentions());
+                          break;
+                        case 'delete':
+                          await widget.store.deleteNote(widget.note.id);
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                          }
+                          break;
+                      }
+                    },
+                    itemBuilder:
+                        (_) => const [
+                          PopupMenuItem(
+                            value: 'copy_stable_link',
+                            child: ListTile(
+                              leading: Icon(Icons.link_rounded),
+                              title: Text('Копировать устойчивую ссылку'),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'link_mentions',
+                            child: ListTile(
+                              leading: Icon(Icons.auto_fix_high_rounded),
+                              title: Text('Связать упоминания'),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                          PopupMenuDivider(),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: ListTile(
+                              leading: Icon(Icons.delete_outline_rounded),
+                              title: Text('Удалить'),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ],
                   ),
                 ],
               ),
-              actions: [
-                IconButton(
-                  tooltip: 'Сохранить версию',
-                  onPressed:
-                      dirty && !_renameReviewBusy
-                          ? () => unawaited(
-                            _saveWithRenameReview(createVersion: true),
-                          )
-                          : null,
-                  icon: const Icon(Icons.save_outlined),
-                ),
-                IconButton(
-                  tooltip: 'Редактор',
-                  onPressed: () => _switchMode(0),
-                  icon: Icon(
-                    effectiveMode == 0 ? Icons.edit_rounded : Icons.edit_outlined,
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Предпросмотр',
-                  onPressed: () => _switchMode(1),
-                  icon: Icon(
-                    effectiveMode == 1
-                        ? Icons.visibility_rounded
-                        : Icons.visibility_outlined,
-                  ),
-                ),
-                if (split)
-                  IconButton(
-                    tooltip: 'Разделить редактор',
-                    onPressed: () => _switchMode(2),
-                    icon: Icon(
-                      effectiveMode == 2
-                          ? Icons.vertical_split_rounded
-                          : Icons.vertical_split_outlined,
-                    ),
-                  ),
-                _editorProfileSwitcher(),
-                if (!showPanel)
-                  Builder(
-                    builder:
-                        (context) => IconButton(
-                          tooltip: 'Контекст заметки',
-                          onPressed: () => Scaffold.of(context).openEndDrawer(),
-                          icon: const Icon(Icons.tune_rounded),
-                        ),
-                  ),
-                PopupMenuButton<String>(
-                  onSelected: (value) async {
-                    switch (value) {
-                      case 'copy_stable_link':
-                        unawaited(_copyStableNoteLink());
-                        break;
-                      case 'link_mentions':
-                        unawaited(_linkUnlinkedMentions());
-                        break;
-                      case 'delete':
-                        await widget.store.deleteNote(widget.note.id);
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                        }
-                        break;
-                    }
-                  },
-                  itemBuilder:
-                      (_) => const [
-                        PopupMenuItem(
-                          value: 'copy_stable_link',
-                          child: ListTile(
-                            leading: Icon(Icons.link_rounded),
-                            title: Text('Копировать устойчивую ссылку'),
-                            contentPadding: EdgeInsets.zero,
+              endDrawer:
+                  showPanel
+                      ? null
+                      : Drawer(
+                        width: 360,
+                        child: SafeArea(
+                          child: _contextPanel(
+                            backlinks: backlinks,
+                            outgoing: outgoing,
+                            linkedTasks: linkedTasks,
+                            versions: versions,
                           ),
-                        ),
-                        PopupMenuItem(
-                          value: 'link_mentions',
-                          child: ListTile(
-                            leading: Icon(Icons.auto_fix_high_rounded),
-                            title: Text('Связать упоминания'),
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                        PopupMenuDivider(),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: ListTile(
-                            leading: Icon(Icons.delete_outline_rounded),
-                            title: Text('Удалить'),
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ],
-                ),
-              ],
-            ),
-            endDrawer:
-                showPanel
-                    ? null
-                    : Drawer(
-                      width: 360,
-                      child: SafeArea(
-                        child: _contextPanel(
-                          backlinks: backlinks,
-                          outgoing: outgoing,
-                          linkedTasks: linkedTasks,
-                          versions: versions,
                         ),
                       ),
-                    ),
-            floatingActionButton: editorProfile.showTimerButton
-                ? FloatingActionButton.extended(
-                    onPressed: () {
-                      _save(createVersion: false);
-                      widget.store.startTimer(
-                        description: 'Работа над ${widget.note.title}',
-                        projectId: projectId,
-                        noteId: widget.note.id,
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Таймер запущен')),
-                      );
-                    },
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('Работать'),
-                  )
-                : null,
-            body: Row(
-              children: [
-                Expanded(
-                  child:
-                      effectiveMode == 2 && split
-                          ? Row(
-                            children: [
-                              Expanded(child: _editorPane()),
-                              const VerticalDivider(width: 1),
-                              Expanded(child: _previewPane()),
-                            ],
-                          )
-                          : effectiveMode == 1
-                          ? _previewPane()
-                          : _editorPane(),
-                ),
-                if (showPanel) ...[
-                  const VerticalDivider(width: 1),
-                  SizedBox(
-                    width: constraints.maxWidth >= 1180 ? 350 : 310,
-                    child: _contextPanel(
-                      backlinks: backlinks,
-                      outgoing: outgoing,
-                      linkedTasks: linkedTasks,
-                      versions: versions,
-                    ),
+              floatingActionButton:
+                  editorProfile.showTimerButton
+                      ? FloatingActionButton.extended(
+                        onPressed: () {
+                          _save(createVersion: false);
+                          widget.store.startTimer(
+                            description: 'Работа над ${widget.note.title}',
+                            projectId: projectId,
+                            noteId: widget.note.id,
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Таймер запущен')),
+                          );
+                        },
+                        icon: const Icon(Icons.play_arrow_rounded),
+                        label: const Text('Работать'),
+                      )
+                      : null,
+              body: Row(
+                children: [
+                  Expanded(
+                    child:
+                        effectiveMode == 2 && split
+                            ? Row(
+                              children: [
+                                Expanded(child: _editorPane()),
+                                const VerticalDivider(width: 1),
+                                Expanded(child: _previewPane()),
+                              ],
+                            )
+                            : effectiveMode == 1
+                            ? _previewPane()
+                            : _editorPane(),
                   ),
+                  if (showPanel) ...[
+                    const VerticalDivider(width: 1),
+                    SizedBox(
+                      width: constraints.maxWidth >= 1180 ? 350 : 310,
+                      child: _contextPanel(
+                        backlinks: backlinks,
+                        outgoing: outgoing,
+                        linkedTasks: linkedTasks,
+                        versions: versions,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
-            ),
-          );
+              ),
+            );
           },
         ),
       ),
@@ -1170,12 +1167,12 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                     Expanded(
                       child: TextField(
                         controller: titleController,
-                        onSubmitted: (_) => unawaited(
-                          _saveWithRenameReview(createVersion: false),
-                        ),
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                        onSubmitted:
+                            (_) => unawaited(
+                              _saveWithRenameReview(createVersion: false),
+                            ),
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w800),
                         decoration: const InputDecoration(
                           border: InputBorder.none,
                           filled: false,
@@ -1186,11 +1183,12 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                     if (titleChanged)
                       IconButton(
                         tooltip: 'Предпросмотр безопасного переименования',
-                        onPressed: _renameReviewBusy
-                            ? null
-                            : () => unawaited(
-                                _saveWithRenameReview(createVersion: false),
-                              ),
+                        onPressed:
+                            _renameReviewBusy
+                                ? null
+                                : () => unawaited(
+                                  _saveWithRenameReview(createVersion: false),
+                                ),
                         icon: const Icon(Icons.edit_outlined),
                       ),
                   ],
@@ -1204,10 +1202,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
             history: _editHistory,
             toolbarPreferences: _toolbarPreferences,
             toolbarPreferencesLoaded: _toolbarPreferencesLoaded,
-            onActivateToolbarProfile: (id) =>
-                unawaited(_activateToolbarProfile(id)),
-            onManageToolbarProfiles: () =>
-                unawaited(_openToolbarProfileManager()),
+            onActivateToolbarProfile:
+                (id) => unawaited(_activateToolbarProfile(id)),
+            onManageToolbarProfiles:
+                () => unawaited(_openToolbarProfileManager()),
             onUndo: () => _editHistory.undo(),
             onRedo: () => _editHistory.redo(),
             onAttach: _attachFile,
@@ -1245,9 +1243,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
               child: Center(
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxWidth: profile.contentWidth > 0
-                        ? profile.contentWidth
-                        : double.infinity,
+                    maxWidth:
+                        profile.contentWidth > 0
+                            ? profile.contentWidth
+                            : double.infinity,
                   ),
                   child: SizedBox(
                     width: double.infinity,
@@ -1270,7 +1269,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                         ),
                         border: InputBorder.none,
                         filled: false,
-                        hintText: r'Markdown, $LaTeX$, [[ссылки]], изображения…',
+                        hintText:
+                            r'Markdown, $LaTeX$, [[ссылки]], изображения…',
                       ),
                     ),
                   ),
@@ -1295,9 +1295,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
             child: Center(
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxWidth: profile.contentWidth > 0
-                      ? profile.contentWidth
-                      : double.infinity,
+                  maxWidth:
+                      profile.contentWidth > 0
+                          ? profile.contentWidth
+                          : double.infinity,
                 ),
                 child: SizedBox(
                   width: double.infinity,
@@ -1352,15 +1353,12 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       _previewTextNotifier.pause();
     } else if (notification is ScrollEndNotification) {
       _previewScrollResumeTimer?.cancel();
-      _previewScrollResumeTimer = Timer(
-        const Duration(milliseconds: 140),
-        () {
-          _previewTextNotifier.resume();
-          if (dirty) {
-            _scheduleAutosave();
-          }
-        },
-      );
+      _previewScrollResumeTimer = Timer(const Duration(milliseconds: 140), () {
+        _previewTextNotifier.resume();
+        if (dirty) {
+          _scheduleAutosave();
+        }
+      });
     }
     return false;
   }
@@ -1439,9 +1437,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     final profile = _editorPreferences.activeProfile;
     final colors = Theme.of(context).colorScheme;
     return PopupMenuButton<String>(
-      tooltip: _editorProfileLoaded
-          ? 'Профиль редактора: ${profile.name}'
-          : 'Профиль редактора',
+      tooltip:
+          _editorProfileLoaded
+              ? 'Профиль редактора: ${profile.name}'
+              : 'Профиль редактора',
       onSelected: (value) {
         if (value == '__manage__') {
           unawaited(_openEditorProfileManager());
@@ -1449,37 +1448,38 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           unawaited(_activateEditorProfile(value));
         }
       },
-      itemBuilder: (context) => <PopupMenuEntry<String>>[
-        for (final candidate in _editorPreferences.profiles)
-          PopupMenuItem<String>(
-            value: candidate.id,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 32,
-                  child: Text(
-                    candidate.emoji,
-                    style: const TextStyle(fontSize: 18),
-                  ),
+      itemBuilder:
+          (context) => <PopupMenuEntry<String>>[
+            for (final candidate in _editorPreferences.profiles)
+              PopupMenuItem<String>(
+                value: candidate.id,
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 32,
+                      child: Text(
+                        candidate.emoji,
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    ),
+                    Expanded(child: Text(candidate.name)),
+                    if (candidate.id == _editorPreferences.activeProfileId)
+                      Icon(Icons.check_rounded, color: colors.primary),
+                  ],
                 ),
-                Expanded(child: Text(candidate.name)),
-                if (candidate.id == _editorPreferences.activeProfileId)
-                  Icon(Icons.check_rounded, color: colors.primary),
-              ],
+              ),
+            const PopupMenuDivider(),
+            const PopupMenuItem<String>(
+              value: '__manage__',
+              child: Row(
+                children: [
+                  Icon(Icons.tune_rounded),
+                  SizedBox(width: 12),
+                  Text('Настроить редактор'),
+                ],
+              ),
             ),
-          ),
-        const PopupMenuDivider(),
-        const PopupMenuItem<String>(
-          value: '__manage__',
-          child: Row(
-            children: [
-              Icon(Icons.tune_rounded),
-              SizedBox(width: 12),
-              Text('Настроить редактор'),
-            ],
-          ),
-        ),
-      ],
+          ],
       icon: Text(profile.emoji, style: const TextStyle(fontSize: 18)),
     );
   }
@@ -1524,9 +1524,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     } on Object catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Не удалось сохранить панель действий: $error'),
-        ),
+        SnackBar(content: Text('Не удалось сохранить панель действий: $error')),
       );
     }
   }
@@ -1785,10 +1783,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       _assignEditorState(savedTitle: oldTitle);
       _lastContentText = contentController.text;
       _lastTitleText = oldTitle;
-      final plan = widget.store.buildWikiRenamePlan(
-        widget.note,
-        proposedTitle,
-      );
+      final plan = widget.store.buildWikiRenamePlan(widget.note, proposedTitle);
 
       if (!plan.requiresReview) {
         final previous = NoteWikiSnapshot(
@@ -1824,7 +1819,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         barrierDismissible: false,
         builder: (context) => _WikiRenamePreviewDialog(plan: plan),
       );
-      if (!mounted || decision == null || decision == _WikiRenameDecision.cancel) {
+      if (!mounted ||
+          decision == null ||
+          decision == _WikiRenameDecision.cancel) {
         widget.store.updateNote(widget.note);
         setState(() => dirty = true);
         return;
@@ -1887,7 +1884,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           decision == _WikiRenameDecision.renameOnly
               ? 'Название изменено без обновления ссылок.'
               : 'Обновлено ссылок: ${plan.occurrenceCount} '
-                'в ${plan.changedNoteCount} заметках.';
+                  'в ${plan.changedNoteCount} заметках.';
       _showRenameUndo(undo, message);
     } on Object catch (error) {
       if (!mounted) return;
@@ -1981,7 +1978,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       if (!mounted) return;
       _reloadEditorFromNote();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Переименование и изменения ссылок отменены.')),
+        const SnackBar(
+          content: Text('Переименование и изменения ссылок отменены.'),
+        ),
       );
     } on Object catch (error) {
       if (!mounted) return;
@@ -2135,7 +2134,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
             id: note.id,
             title: note.title,
             projectTitle:
-                widget.store.projectById(note.projectId)?.title ?? 'Без проекта',
+                widget.store.projectById(note.projectId)?.title ??
+                'Без проекта',
             folderPath: note.folderPath,
             noteType: note.noteType,
             tags: List<String>.from(note.tags),
@@ -2147,8 +2147,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     return NoteLinkTarget(
       id: widget.note.id,
       title: _proposedTitle,
-      projectTitle:
-          widget.store.projectById(projectId)?.title ?? 'Без проекта',
+      projectTitle: widget.store.projectById(projectId)?.title ?? 'Без проекта',
       folderPath: folderPath,
       noteType: noteType,
       tags: List<String>.from(tags),
@@ -2158,9 +2157,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   Future<void> _insertNoteLinks() async {
     final targets = _availableNoteLinkTargets();
     if (targets.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Других заметок пока нет.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Других заметок пока нет.')));
       return;
     }
     final result = await NoteLinkPickerDialog.show(
@@ -2172,10 +2171,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (result == null || result.targets.isEmpty || !mounted) {
       return;
     }
-    final markdown = NoteLinkTools.compose(
-      result.targets,
-      style: result.style,
-    );
+    final markdown = NoteLinkTools.compose(result.targets, style: result.style);
     if (result.style == NoteLinkInsertStyle.inline) {
       _insertInlineMarkdown(markdown);
     } else {
@@ -2186,9 +2182,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   Future<void> _linkUnlinkedMentions() async {
     final targets = _availableNoteLinkTargets();
     if (targets.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Других заметок пока нет.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Других заметок пока нет.')));
       return;
     }
     final originalValue = contentController.value;
@@ -2200,9 +2196,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     if (selected == null || selected.isEmpty || !mounted) {
       return;
     }
-    final cursor = originalValue.selection.isValid
-        ? originalValue.selection.extentOffset
-        : originalValue.text.length;
+    final cursor =
+        originalValue.selection.isValid
+            ? originalValue.selection.extentOffset
+            : originalValue.text.length;
     final edit = NoteLinkTools.applyMentions(
       originalValue.text,
       selected,
@@ -2217,9 +2214,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       composing: TextRange.empty,
     );
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Создано устойчивых ссылок: ${selected.length}.'),
-      ),
+      SnackBar(content: Text('Создано устойчивых ссылок: ${selected.length}.')),
     );
   }
 
@@ -2237,14 +2232,17 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
   Future<void> _insertScientificTable() async {
     final value = contentController.value;
     final selection = value.selection;
-    final offset = selection.isValid ? selection.extentOffset : value.text.length;
+    final offset =
+        selection.isValid ? selection.extentOffset : value.text.length;
     ScientificTableReference? currentReference;
     for (final table in ScientificReferenceSyntax.tables(value.text)) {
-      final selectionIntersects = selection.isValid &&
+      final selectionIntersects =
+          selection.isValid &&
           !selection.isCollapsed &&
           selection.start < table.end &&
           selection.end > table.start;
-      if ((offset >= table.start && offset <= table.end) || selectionIntersects) {
+      if ((offset >= table.start && offset <= table.end) ||
+          selectionIntersects) {
         currentReference = table;
         break;
       }
@@ -2266,9 +2264,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     }
 
     final index = ScientificReferenceSyntax.index(value.text);
-    final currentKey = currentReference == null
-        ? null
-        : '${ScientificObjectType.table.name}:${currentReference.id}';
+    final currentKey =
+        currentReference == null
+            ? null
+            : '${ScientificObjectType.table.name}:${currentReference.id}';
     final table = await ScientificTableEditorDialog.show(
       context,
       existingKeys: {
@@ -2343,9 +2342,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     }
     final selected = await showDialog<List<CitationSource>>(
       context: context,
-      builder: (context) => _CitationPickerDialog(
-        sources: widget.store.data.citationSources,
-      ),
+      builder:
+          (context) =>
+              _CitationPickerDialog(sources: widget.store.data.citationSources),
     );
     if (selected == null || selected.isEmpty || !mounted) return;
     _insertInlineMarkdown(CitationSyntax.markdownFor(selected));
@@ -2536,21 +2535,13 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
           widget.store.projectById(projectId)?.title ?? 'Без проекта';
       final markdown = NoteDocument.parse(draft.body).content;
       final payload = switch (format) {
-        ChronicleExportFormat.docx || ChronicleExportFormat.pdf =>
-          await PublicationDocumentExporter(
-            readAttachment: widget.store.readManagedAttachment,
-          ).export(
-            format: format,
-            title: draft.title,
-            markdown: markdown,
-          ),
+        ChronicleExportFormat.docx ||
+        ChronicleExportFormat.pdf => await PublicationDocumentExporter(
+          readAttachment: widget.store.readManagedAttachment,
+        ).export(format: format, title: draft.title, markdown: markdown),
         _ => await NoteExportComposer(
-            readAttachment: widget.store.readManagedAttachment,
-          ).exportNote(
-            note: draft,
-            projectTitle: projectTitle,
-            format: format,
-          ),
+          readAttachment: widget.store.readManagedAttachment,
+        ).exportNote(note: draft, projectTitle: projectTitle, format: format),
       };
       final savedPath = await const NoteExportFileService().save(payload);
       if (savedPath == null || !mounted) {
@@ -2602,9 +2593,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         final index = ScientificReferenceSyntax.index(contentController.text);
         table = NoteDataImport.tableModelFor(
           file: files.single,
-          existingObjectKeys: {
-            for (final object in index.objects) object.key,
-          },
+          existingObjectKeys: {for (final object in index.objects) object.key},
         );
       }
 
@@ -2639,10 +2628,10 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       };
       _insertMarkdownAtSelection(markdown);
       _save(createVersion: false);
-      final duplicateCount = results.where((result) => result.alreadyExisted).length;
-      final duplicateSuffix = duplicateCount == 0
-          ? ''
-          : '; $duplicateCount уже были в Vault';
+      final duplicateCount =
+          results.where((result) => result.alreadyExisted).length;
+      final duplicateSuffix =
+          duplicateCount == 0 ? '' : '; $duplicateCount уже были в Vault';
       messenger.showSnackBar(
         SnackBar(
           content: Text(
@@ -2834,10 +2823,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
             : '';
     final result = await NoteColumnsEditorDialog.show(
       context,
-      initial: const NoteColumnsLayout(
-        columnCount: 2,
-        widths: [40, 60],
-      ),
+      initial: const NoteColumnsLayout(columnCount: 2, widths: [40, 60]),
       initialContents: _initialColumnComposerContents(selected),
       editingExisting: false,
     );
@@ -2882,32 +2868,20 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         columnCount: current.columnCount,
         widths: current.widths,
       ),
-      initialContents: [
-        for (final column in current.columns) column.markdown,
-      ],
+      initialContents: [for (final column in current.columns) column.markdown],
       editingExisting: true,
     );
     if (result == null || !mounted) {
       return;
     }
     if (result.unwrap) {
-      _unwrapColumnsReference(
-        current,
-        contents: result.contents,
-      );
+      _unwrapColumnsReference(current, contents: result.contents);
       return;
     }
-    _replaceColumnsLayout(
-      current,
-      result.layout,
-      contents: result.contents,
-    );
+    _replaceColumnsLayout(current, result.layout, contents: result.contents);
   }
 
-  void _replaceColumnsWidths(
-    NoteColumnsReference reference,
-    List<int> widths,
-  ) {
+  void _replaceColumnsWidths(NoteColumnsReference reference, List<int> widths) {
     final current = NoteColumnsSyntax.relocate(
       contentController.text,
       reference,
@@ -2976,17 +2950,11 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     }
     _replaceColumnsText(
       current,
-      current.toMarkdown(
-        widths: widths,
-        contents: contents,
-      ),
+      current.toMarkdown(widths: widths, contents: contents),
     );
   }
 
-  void _replaceColumnsText(
-    NoteColumnsReference reference,
-    String replacement,
-  ) {
+  void _replaceColumnsText(NoteColumnsReference reference, String replacement) {
     final value = contentController.value;
     final current = NoteColumnsSyntax.relocate(value.text, reference);
     if (current == null) {
@@ -3024,7 +2992,6 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     );
     _save(createVersion: false);
   }
-
 
   Future<void> _reorderBlocks() async {
     final value = contentController.value;
@@ -3234,10 +3201,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       rawTarget,
       source: widget.note,
     );
-    var target = widget.store.resolveWikiTarget(
-      rawTarget,
-      source: widget.note,
-    );
+    var target = widget.store.resolveWikiTarget(rawTarget, source: widget.note);
 
     if (target == null && candidates.isNotEmpty) {
       target = await _chooseWikiTarget(reference.noteTitle, candidates);
@@ -3317,10 +3281,7 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     await _openNote(target);
   }
 
-  Future<Note?> _chooseWikiTarget(
-    String title,
-    List<Note> candidates,
-  ) {
+  Future<Note?> _chooseWikiTarget(String title, List<Note> candidates) {
     return showDialog<Note>(
       context: context,
       builder:
@@ -3406,12 +3367,13 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     _save(createVersion: false);
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => NoteWorkspaceScreen(
-          store: widget.store,
-          note: note,
-          appearanceController: widget.appearanceController,
-          globalAppearance: widget.globalAppearance,
-        ),
+        builder:
+            (_) => NoteWorkspaceScreen(
+              store: widget.store,
+              note: note,
+              appearanceController: widget.appearanceController,
+              globalAppearance: widget.globalAppearance,
+            ),
       ),
     );
     if (mounted) setState(() {});
@@ -3753,8 +3715,7 @@ class _EditorToolbarState extends State<_EditorToolbar> {
                   PopupMenuItem(
                     value: _NoteBlockAction.bulletedList,
                     enabled:
-                        canConvert &&
-                        block?.type != NoteBlockType.bulletedList,
+                        canConvert && block?.type != NoteBlockType.bulletedList,
                     child: const ListTile(
                       leading: Icon(Icons.format_list_bulleted_rounded),
                       title: Text('Преобразовать в список'),
@@ -3806,9 +3767,10 @@ class _EditorToolbarState extends State<_EditorToolbar> {
     final active = preferences.activeProfile;
     final colors = Theme.of(context).colorScheme;
     return PopupMenuButton<String>(
-      tooltip: widget.toolbarPreferencesLoaded
-          ? 'Панель действий: ${active.name}'
-          : 'Панель быстрых действий',
+      tooltip:
+          widget.toolbarPreferencesLoaded
+              ? 'Панель действий: ${active.name}'
+              : 'Панель быстрых действий',
       onSelected: (value) {
         if (value == '__manage__') {
           widget.onManageToolbarProfiles();
@@ -3816,37 +3778,38 @@ class _EditorToolbarState extends State<_EditorToolbar> {
           widget.onActivateToolbarProfile(value);
         }
       },
-      itemBuilder: (context) => <PopupMenuEntry<String>>[
-        for (final profile in preferences.profiles)
-          PopupMenuItem<String>(
-            value: profile.id,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 32,
-                  child: Text(
-                    profile.emoji,
-                    style: const TextStyle(fontSize: 18),
-                  ),
+      itemBuilder:
+          (context) => <PopupMenuEntry<String>>[
+            for (final profile in preferences.profiles)
+              PopupMenuItem<String>(
+                value: profile.id,
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 32,
+                      child: Text(
+                        profile.emoji,
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    ),
+                    Expanded(child: Text(profile.name)),
+                    if (profile.id == preferences.activeProfileId)
+                      Icon(Icons.check_rounded, color: colors.primary),
+                  ],
                 ),
-                Expanded(child: Text(profile.name)),
-                if (profile.id == preferences.activeProfileId)
-                  Icon(Icons.check_rounded, color: colors.primary),
-              ],
+              ),
+            const PopupMenuDivider(),
+            const PopupMenuItem<String>(
+              value: '__manage__',
+              child: Row(
+                children: [
+                  Icon(Icons.tune_rounded),
+                  SizedBox(width: 12),
+                  Text('Настроить панель'),
+                ],
+              ),
             ),
-          ),
-        const PopupMenuDivider(),
-        const PopupMenuItem<String>(
-          value: '__manage__',
-          child: Row(
-            children: [
-              Icon(Icons.tune_rounded),
-              SizedBox(width: 12),
-              Text('Настроить панель'),
-            ],
-          ),
-        ),
-      ],
+          ],
       icon: Text(active.emoji, style: const TextStyle(fontSize: 18)),
     );
   }
@@ -4043,19 +4006,22 @@ class _CitationPickerDialogState extends State<_CitationPickerDialog> {
   @override
   Widget build(BuildContext context) {
     final normalized = query.trim().toLowerCase();
-    final sources = widget.sources.where((source) {
-      if (normalized.isEmpty) return true;
-      return [
-        source.citationKey,
-        source.title,
-        source.authors.join(' '),
-        source.containerTitle,
-        source.doi,
-      ].join(' ').toLowerCase().contains(normalized);
-    }).toList()
-      ..sort((left, right) => left.citationKey.toLowerCase().compareTo(
-        right.citationKey.toLowerCase(),
-      ));
+    final sources =
+        widget.sources.where((source) {
+            if (normalized.isEmpty) return true;
+            return [
+              source.citationKey,
+              source.title,
+              source.authors.join(' '),
+              source.containerTitle,
+              source.doi,
+            ].join(' ').toLowerCase().contains(normalized);
+          }).toList()
+          ..sort(
+            (left, right) => left.citationKey.toLowerCase().compareTo(
+              right.citationKey.toLowerCase(),
+            ),
+          );
 
     return AlertDialog(
       title: const Text('Вставить цитату'),
@@ -4071,36 +4037,37 @@ class _CitationPickerDialogState extends State<_CitationPickerDialog> {
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: sources.isEmpty
-                  ? const Center(child: Text('Источники не найдены'))
-                  : ListView.builder(
-                      itemCount: sources.length,
-                      itemBuilder: (context, index) {
-                        final source = sources[index];
-                        final selected = selectedIds.contains(source.id);
-                        final subtitleParts = <String>[
-                          '@${source.citationKey}',
-                          if (source.year != null) source.year.toString(),
-                          if (source.authors.isNotEmpty) source.authors.first,
-                        ];
-                        return CheckboxListTile(
-                          value: selected,
-                          onChanged: (value) {
-                            setState(() {
-                              if (value == true) {
-                                selectedIds.add(source.id);
-                              } else {
-                                selectedIds.remove(source.id);
-                              }
-                            });
-                          },
-                          title: Text(source.title),
-                          subtitle: Text(subtitleParts.join(' · ')),
-                          secondary: const Icon(Icons.article_outlined),
-                          controlAffinity: ListTileControlAffinity.trailing,
-                        );
-                      },
-                    ),
+              child:
+                  sources.isEmpty
+                      ? const Center(child: Text('Источники не найдены'))
+                      : ListView.builder(
+                        itemCount: sources.length,
+                        itemBuilder: (context, index) {
+                          final source = sources[index];
+                          final selected = selectedIds.contains(source.id);
+                          final subtitleParts = <String>[
+                            '@${source.citationKey}',
+                            if (source.year != null) source.year.toString(),
+                            if (source.authors.isNotEmpty) source.authors.first,
+                          ];
+                          return CheckboxListTile(
+                            value: selected,
+                            onChanged: (value) {
+                              setState(() {
+                                if (value == true) {
+                                  selectedIds.add(source.id);
+                                } else {
+                                  selectedIds.remove(source.id);
+                                }
+                              });
+                            },
+                            title: Text(source.title),
+                            subtitle: Text(subtitleParts.join(' · ')),
+                            secondary: const Icon(Icons.article_outlined),
+                            controlAffinity: ListTileControlAffinity.trailing,
+                          );
+                        },
+                      ),
             ),
           ],
         ),
@@ -4111,15 +4078,13 @@ class _CitationPickerDialogState extends State<_CitationPickerDialog> {
           child: const Text('Отмена'),
         ),
         FilledButton.icon(
-          onPressed: selectedIds.isEmpty
-              ? null
-              : () => Navigator.pop(
-                    context,
-                    [
-                      for (final source in widget.sources)
-                        if (selectedIds.contains(source.id)) source,
-                    ],
-                  ),
+          onPressed:
+              selectedIds.isEmpty
+                  ? null
+                  : () => Navigator.pop(context, [
+                    for (final source in widget.sources)
+                      if (selectedIds.contains(source.id)) source,
+                  ]),
           icon: const Icon(Icons.format_quote_rounded),
           label: Text(
             selectedIds.length <= 1
@@ -4165,23 +4130,25 @@ class _WikiLinkSuggestionsBar extends StatelessWidget {
         }
 
         final normalized = query.query.toLowerCase();
-        final candidates = store.data.notes
-            .where((note) => note.id != currentNoteId)
-            .where((note) {
+        final candidates =
+            store.data.notes.where((note) => note.id != currentNoteId).where((
+              note,
+            ) {
               if (normalized.isEmpty) return true;
               final project = store.projectById(note.projectId);
-              final searchable = [
-                note.title,
-                note.folderPath,
-                project?.title ?? '',
-              ].join(' ').toLowerCase();
+              final searchable =
+                  [
+                    note.title,
+                    note.folderPath,
+                    project?.title ?? '',
+                  ].join(' ').toLowerCase();
               return searchable.contains(normalized);
-            })
-            .toList();
+            }).toList();
         candidates.sort((left, right) {
           int rank(Note note) {
             final title = note.title.toLowerCase();
-            final prefix = normalized.isNotEmpty && title.startsWith(normalized);
+            final prefix =
+                normalized.isNotEmpty && title.startsWith(normalized);
             if (note.projectId == sourceProjectId &&
                 note.folderPath.trim() == sourceFolderPath.trim()) {
               return prefix ? 0 : 1;
@@ -4211,7 +4178,8 @@ class _WikiLinkSuggestionsBar extends StatelessWidget {
               itemBuilder: (context, index) {
                 final note = visible[index];
                 final project = store.projectById(note.projectId);
-                final duplicateTitle = store.notesByTitle(note.title).length > 1;
+                final duplicateTitle =
+                    store.notesByTitle(note.title).length > 1;
                 final label =
                     duplicateTitle && project != null
                         ? '${note.title} · ${project.title}'
@@ -4295,11 +4263,7 @@ class _LinkSection extends StatelessWidget {
       child:
           links.isEmpty
               ? Text(emptyText)
-              : Column(
-                children: [
-                  for (final link in links) _buildLink(link),
-                ],
-              ),
+              : Column(children: [for (final link in links) _buildLink(link)]),
     );
   }
 
@@ -4312,17 +4276,11 @@ class _LinkSection extends StatelessWidget {
       leading: Icon(
         note == null ? Icons.link_off_rounded : Icons.description_outlined,
       ),
-      title: Text(
-        note?.title ?? _wikiTargetDisplayName(link.targetTitle),
-      ),
+      title: Text(note?.title ?? _wikiTargetDisplayName(link.targetTitle)),
       subtitle:
           detail == null || detail.trim().isEmpty
               ? null
-              : Text(
-                detail,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
+              : Text(detail, maxLines: 3, overflow: TextOverflow.ellipsis),
       trailing:
           note == null && onMissing != null
               ? TextButton(
@@ -4670,7 +4628,6 @@ class _NoteMetadata {
   final bool pinned;
 }
 
-
 enum _WikiRenameDecision { cancel, renameOnly, updateLinks }
 
 class _WikiRenamePreviewDialog extends StatelessWidget {
@@ -4691,9 +4648,9 @@ class _WikiRenamePreviewDialog extends StatelessWidget {
             children: [
               Text(
                 '«${plan.oldTitle}» → «${plan.newTitle}»',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 10),
               Text(
@@ -4720,9 +4677,7 @@ class _WikiRenamePreviewDialog extends StatelessWidget {
                   childrenPadding: const EdgeInsets.only(bottom: 8),
                   leading: const Icon(Icons.description_outlined),
                   title: Text(change.sourceTitle),
-                  subtitle: Text(
-                    'Ссылок: ${change.occurrenceCount}',
-                  ),
+                  subtitle: Text('Ссылок: ${change.occurrenceCount}'),
                   children: [
                     for (final occurrence in change.occurrences.take(3))
                       ListTile(
@@ -4750,27 +4705,20 @@ class _WikiRenamePreviewDialog extends StatelessWidget {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(
-            context,
-            _WikiRenameDecision.cancel,
-          ),
+          onPressed: () => Navigator.pop(context, _WikiRenameDecision.cancel),
           child: const Text('Отмена'),
         ),
         TextButton(
-          onPressed: () => Navigator.pop(
-            context,
-            _WikiRenameDecision.renameOnly,
-          ),
+          onPressed:
+              () => Navigator.pop(context, _WikiRenameDecision.renameOnly),
           child: const Text('Только название'),
         ),
         FilledButton.icon(
           onPressed:
               plan.skippedAmbiguousOccurrences > 0
                   ? null
-                  : () => Navigator.pop(
-                    context,
-                    _WikiRenameDecision.updateLinks,
-                  ),
+                  : () =>
+                      Navigator.pop(context, _WikiRenameDecision.updateLinks),
           icon: const Icon(Icons.link_rounded),
           label: Text(
             plan.skippedAmbiguousOccurrences > 0
@@ -4784,10 +4732,7 @@ class _WikiRenamePreviewDialog extends StatelessWidget {
 }
 
 class _LinkHealthSelection {
-  const _LinkHealthSelection({
-    required this.issue,
-    required this.repair,
-  });
+  const _LinkHealthSelection({required this.issue, required this.repair});
 
   final NoteWikiLinkIssue issue;
   final bool repair;
@@ -4801,13 +4746,15 @@ class _LinkHealthDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final missing = issues
-        .where((issue) => issue.kind == NoteWikiLinkIssueKind.missing)
-        .length;
+    final missing =
+        issues
+            .where((issue) => issue.kind == NoteWikiLinkIssueKind.missing)
+            .length;
     final ambiguous = issues.length - missing;
-    final dialogHeight = (MediaQuery.sizeOf(context).height * 0.62)
-        .clamp(300.0, 520.0)
-        .toDouble();
+    final dialogHeight =
+        (MediaQuery.sizeOf(context).height * 0.62)
+            .clamp(300.0, 520.0)
+            .toDouble();
     return AlertDialog(
       title: const Text('Проверка связей'),
       content: SizedBox(
@@ -4864,13 +4811,14 @@ class _LinkHealthDialog extends StatelessWidget {
                               maxLines: 4,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            onTap: () => Navigator.pop(
-                              context,
-                              _LinkHealthSelection(
-                                issue: issue,
-                                repair: false,
-                              ),
-                            ),
+                            onTap:
+                                () => Navigator.pop(
+                                  context,
+                                  _LinkHealthSelection(
+                                    issue: issue,
+                                    repair: false,
+                                  ),
+                                ),
                             trailing:
                                 exactMissing
                                     ? const Tooltip(
@@ -4881,13 +4829,14 @@ class _LinkHealthDialog extends StatelessWidget {
                                       child: Icon(Icons.info_outline_rounded),
                                     )
                                     : TextButton(
-                                      onPressed: () => Navigator.pop(
-                                        context,
-                                        _LinkHealthSelection(
-                                          issue: issue,
-                                          repair: true,
-                                        ),
-                                      ),
+                                      onPressed:
+                                          () => Navigator.pop(
+                                            context,
+                                            _LinkHealthSelection(
+                                              issue: issue,
+                                              repair: true,
+                                            ),
+                                          ),
                                       child: Text(
                                         issue.kind ==
                                                 NoteWikiLinkIssueKind.missing
@@ -4913,10 +4862,7 @@ class _LinkHealthDialog extends StatelessWidget {
 }
 
 class _NewNoteSheet extends StatefulWidget {
-  const _NewNoteSheet({
-    required this.store,
-    this.initialTemplateId,
-  });
+  const _NewNoteSheet({required this.store, this.initialTemplateId});
 
   final AppStore store;
   final String? initialTemplateId;
@@ -4931,10 +4877,9 @@ class _NewNoteSheet extends StatefulWidget {
       isScrollControlled: true,
       showDragHandle: true,
       constraints: const BoxConstraints(maxWidth: 700),
-      builder: (_) => _NewNoteSheet(
-        store: store,
-        initialTemplateId: initialTemplateId,
-      ),
+      builder:
+          (_) =>
+              _NewNoteSheet(store: store, initialTemplateId: initialTemplateId),
     );
   }
 
@@ -4971,9 +4916,10 @@ class _NewNoteSheetState extends State<_NewNoteSheet> {
   Future<void> _manageTemplates() async {
     await _showCustomNoteTemplateManager(context, widget.store);
     if (!mounted) return;
-    final availableIds = widget.store.availableNoteTemplates
-        .map((template) => template.id)
-        .toSet();
+    final availableIds =
+        widget.store.availableNoteTemplates
+            .map((template) => template.id)
+            .toSet();
     setState(() {
       if (!availableIds.contains(templateId)) templateId = 'blank';
     });

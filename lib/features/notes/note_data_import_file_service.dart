@@ -22,9 +22,7 @@ Future<List<NoteDataImportFile>?> pickNoteDataImportFiles() async {
   }
   for (final file in result.files) {
     if (file.size > NoteDataImport.maxFileBytes) {
-      throw FormatException(
-        'Файл «${file.name}» больше 100 МБ.',
-      );
+      throw FormatException('Файл «${file.name}» больше 100 МБ.');
     }
   }
   final declaredTotal = result.files.fold<int>(
@@ -32,9 +30,7 @@ Future<List<NoteDataImportFile>?> pickNoteDataImportFiles() async {
     (sum, file) => sum + file.size,
   );
   if (declaredTotal > NoteDataImport.maxTotalBytes) {
-    throw const FormatException(
-      'Общий размер выбранных файлов больше 120 МБ.',
-    );
+    throw const FormatException('Общий размер выбранных файлов больше 120 МБ.');
   }
 
   final files = <NoteDataImportFile>[];
@@ -42,9 +38,7 @@ Future<List<NoteDataImportFile>?> pickNoteDataImportFiles() async {
   for (final file in result.files) {
     final bytes = await file.readAsBytes();
     if (bytes.length > NoteDataImport.maxFileBytes) {
-      throw FormatException(
-        'Файл «${file.name}» больше 100 МБ.',
-      );
+      throw FormatException('Файл «${file.name}» больше 100 МБ.');
     }
     actualTotal += bytes.length;
     if (actualTotal > NoteDataImport.maxTotalBytes) {

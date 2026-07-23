@@ -8,10 +8,7 @@ import 'note_table_syntax.dart';
 import 'scientific_reference_syntax.dart';
 
 class NoteDataImportFile {
-  const NoteDataImportFile({
-    required this.name,
-    required this.bytes,
-  });
+  const NoteDataImportFile({required this.name, required this.bytes});
 
   final String name;
   final Uint8List bytes;
@@ -92,9 +89,10 @@ class NoteDataImport {
     if (!file.isTabular) {
       return const ClipboardTableData(rows: <List<String>>[]);
     }
-    final bytes = file.bytes.length > maxTableTextBytes
-        ? Uint8List.sublistView(file.bytes, 0, maxTableTextBytes)
-        : file.bytes;
+    final bytes =
+        file.bytes.length > maxTableTextBytes
+            ? Uint8List.sublistView(file.bytes, 0, maxTableTextBytes)
+            : file.bytes;
     return NoteTableSyntax.parseClipboard(decodeText(bytes));
   }
 
@@ -123,9 +121,10 @@ class NoteDataImport {
       );
     }
     final headers = parsed.rows.first;
-    final rows = parsed.rows.length > 1
-        ? parsed.rows.skip(1).toList()
-        : <List<String>>[List<String>.filled(headers.length, '')];
+    final rows =
+        parsed.rows.length > 1
+            ? parsed.rows.skip(1).toList()
+            : <List<String>>[List<String>.filled(headers.length, '')];
     final rawBase = p.basenameWithoutExtension(file.name);
     final normalizedBase = ScientificReferenceSyntax.normalizeId(rawBase);
     var candidate = normalizedBase;
@@ -135,9 +134,10 @@ class NoteDataImport {
     )) {
       final suffixText = '-$suffix';
       final baseLength = 80 - suffixText.length;
-      final prefix = normalizedBase.length > baseLength
-          ? normalizedBase.substring(0, baseLength)
-          : normalizedBase;
+      final prefix =
+          normalizedBase.length > baseLength
+              ? normalizedBase.substring(0, baseLength)
+              : normalizedBase;
       candidate = '$prefix$suffixText';
       suffix += 1;
     }
@@ -178,9 +178,7 @@ class NoteDataImport {
         files.add(attachment);
       }
     }
-    final lines = <String>[
-      if (safeTitle.isNotEmpty) '## $safeTitle',
-    ];
+    final lines = <String>[if (safeTitle.isNotEmpty) '## $safeTitle'];
     if (images.isNotEmpty) {
       if (lines.isNotEmpty) {
         lines.add('');

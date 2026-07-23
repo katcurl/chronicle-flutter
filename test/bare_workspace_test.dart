@@ -20,7 +20,9 @@ void main() {
     expect(store.data.tasks, isEmpty);
     expect(store.data.entries, isEmpty);
     expect(store.customNoteTemplates, isEmpty);
-    expect(store.availableNoteTemplates.map((item) => item.id), <String>['blank']);
+    expect(store.availableNoteTemplates.map((item) => item.id), <String>[
+      'blank',
+    ]);
     expect(store.applicableNoteTemplates, isEmpty);
   });
 }

@@ -85,12 +85,8 @@ class NoteBlockSyntax {
     r'^[ \t]*<!--\s*/chronicle-columns\s*-->[ \t]*$',
   );
   static final RegExp _heading = RegExp(r'^\s{0,3}#{1,6}(?:\s+|$)');
-  static final RegExp _checklist = RegExp(
-    r'^\s{0,3}[-*+]\s+\[[ xX]\]\s+',
-  );
-  static final RegExp _list = RegExp(
-    r'^\s{0,3}(?:[-*+]\s+|\d+[.)]\s+)',
-  );
+  static final RegExp _checklist = RegExp(r'^\s{0,3}[-*+]\s+\[[ xX]\]\s+');
+  static final RegExp _list = RegExp(r'^\s{0,3}(?:[-*+]\s+|\d+[.)]\s+)');
   static final RegExp _quote = RegExp(r'^\s{0,3}>');
   static final RegExp _divider = RegExp(
     r'^\s{0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$',
@@ -545,10 +541,7 @@ class NoteBlockSyntax {
     return raw.split('\n').map((line) {
       var value = line.trimRight().trimLeft();
       value = value.replaceFirst(RegExp(r'^#{1,6}\s+'), '');
-      value = value.replaceFirst(
-        RegExp(r'^[-*+]\s+\[[ xX]\]\s+'),
-        '',
-      );
+      value = value.replaceFirst(RegExp(r'^[-*+]\s+\[[ xX]\]\s+'), '');
       value = value.replaceFirst(RegExp(r'^(?:[-*+]\s+|\d+[.)]\s+)'), '');
       value = value.replaceFirst(RegExp(r'^>\s?'), '');
       return value;

@@ -60,9 +60,7 @@ class _NoteExportDialogState extends State<NoteExportDialog> {
                       ? 'Один читаемый документ с задачами и всеми заметками.'
                       : 'Обычный UTF-8 Markdown; ссылки на Vault сохраняются.',
               onTap:
-                  () => setState(
-                    () => format = ChronicleExportFormat.markdown,
-                  ),
+                  () => setState(() => format = ChronicleExportFormat.markdown),
             ),
             _ExportChoice(
               selected: format == ChronicleExportFormat.html,
@@ -71,25 +69,27 @@ class _NoteExportDialogState extends State<NoteExportDialog> {
               subtitle:
                   'Один файл для браузера; использованные изображения '
                   'встраиваются внутрь.',
-              onTap:
-                  () => setState(() => format = ChronicleExportFormat.html),
+              onTap: () => setState(() => format = ChronicleExportFormat.html),
             ),
             if (!widget.isProject)
               _ExportChoice(
-              selected: format == ChronicleExportFormat.docx,
-              icon: Icons.article_outlined,
-              title: 'DOCX',
-              subtitle: 'Редактируемый документ для Microsoft Word и LibreOffice.',
-              onTap: () => setState(() => format = ChronicleExportFormat.docx),
-            ),
+                selected: format == ChronicleExportFormat.docx,
+                icon: Icons.article_outlined,
+                title: 'DOCX',
+                subtitle:
+                    'Редактируемый документ для Microsoft Word и LibreOffice.',
+                onTap:
+                    () => setState(() => format = ChronicleExportFormat.docx),
+              ),
             if (!widget.isProject)
               _ExportChoice(
-              selected: format == ChronicleExportFormat.pdf,
-              icon: Icons.picture_as_pdf_outlined,
-              title: 'PDF',
-              subtitle: 'Готовый документ с фиксированной вёрсткой для чтения и печати.',
-              onTap: () => setState(() => format = ChronicleExportFormat.pdf),
-            ),
+                selected: format == ChronicleExportFormat.pdf,
+                icon: Icons.picture_as_pdf_outlined,
+                title: 'PDF',
+                subtitle:
+                    'Готовый документ с фиксированной вёрсткой для чтения и печати.',
+                onTap: () => setState(() => format = ChronicleExportFormat.pdf),
+              ),
             _ExportChoice(
               selected: format == ChronicleExportFormat.portableArchive,
               icon: Icons.folder_zip_outlined,

@@ -2,7 +2,8 @@ enum NoteHomeSection {
   continueWork(
     id: 'continue_work',
     label: 'Продолжить работу',
-    description: 'Активная заметка и записи, связанные с незавершёнными задачами.',
+    description:
+        'Активная заметка и записи, связанные с незавершёнными задачами.',
   ),
   pinned(
     id: 'pinned',
@@ -79,9 +80,10 @@ class NoteHomePreferences {
     );
   }
 
-  List<NoteHomeSection> get orderedSections => List<NoteHomeSection>.unmodifiable(
-    sectionIds.map(NoteHomeSection.fromId).whereType<NoteHomeSection>(),
-  );
+  List<NoteHomeSection> get orderedSections =>
+      List<NoteHomeSection>.unmodifiable(
+        sectionIds.map(NoteHomeSection.fromId).whereType<NoteHomeSection>(),
+      );
 
   bool isVisible(NoteHomeSection section) {
     return !hiddenSectionIds.contains(section.id);
@@ -148,12 +150,14 @@ class NoteHomePreferences {
     final rawSections = json['sectionIds'];
     final rawHidden = json['hiddenSectionIds'];
     return NoteHomePreferences.normalized(
-      sectionIds: rawSections is List
-          ? rawSections.map((value) => value.toString())
-          : const <String>[],
-      hiddenSectionIds: rawHidden is List
-          ? rawHidden.map((value) => value.toString())
-          : const <String>[],
+      sectionIds:
+          rawSections is List
+              ? rawSections.map((value) => value.toString())
+              : const <String>[],
+      hiddenSectionIds:
+          rawHidden is List
+              ? rawHidden.map((value) => value.toString())
+              : const <String>[],
       itemLimit: _readInt(json['itemLimit'], fallback: 4),
       compactCards: _readBool(json['compactCards']),
       openOnHome: _readBool(json['openOnHome'], fallback: true),

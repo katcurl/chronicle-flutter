@@ -33,8 +33,7 @@ class NoteImageEditorDialog extends StatefulWidget {
   }
 
   @override
-  State<NoteImageEditorDialog> createState() =>
-      _NoteImageEditorDialogState();
+  State<NoteImageEditorDialog> createState() => _NoteImageEditorDialogState();
 }
 
 class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
@@ -79,9 +78,7 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                widget.imageLabel.isEmpty
-                    ? 'Изображение'
-                    : widget.imageLabel,
+                widget.imageLabel.isEmpty ? 'Изображение' : widget.imageLabel,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
@@ -107,8 +104,8 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
                 max: NoteImageSyntax.maxWidthPercent.toDouble(),
                 divisions:
                     (NoteImageSyntax.maxWidthPercent -
-                            NoteImageSyntax.minWidthPercent) ~/
-                        NoteImageSyntax.widthStepPercent,
+                        NoteImageSyntax.minWidthPercent) ~/
+                    NoteImageSyntax.widthStepPercent,
                 label: '$roundedWidth%',
                 onChanged: (value) => setState(() => widthPercent = value),
               ),
@@ -121,9 +118,8 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
                       label: Text('$value%'),
                       selected: roundedWidth == value,
                       onSelected:
-                          (_) => setState(
-                            () => widthPercent = value.toDouble(),
-                          ),
+                          (_) =>
+                              setState(() => widthPercent = value.toDouble()),
                     ),
                 ],
               ),
@@ -200,7 +196,8 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
                     hintText: 'orf9b-rmsd',
                     prefixIcon: const Icon(Icons.tag_rounded),
                     errorText: figureIdError,
-                    helperText: 'Латинские буквы, цифры, точка, дефис и подчёркивание.',
+                    helperText:
+                        'Латинские буквы, цифры, точка, дефис и подчёркивание.',
                   ),
                 ),
               ],
@@ -235,9 +232,10 @@ class _NoteImageEditorDialogState extends State<NoteImageEditorDialog> {
         FilledButton(
           onPressed: () {
             final rawFigureId = figureIdController.text.trim();
-            final normalizedFigureId = numberedFigure
-                ? ScientificReferenceSyntax.normalizeId(rawFigureId)
-                : '';
+            final normalizedFigureId =
+                numberedFigure
+                    ? ScientificReferenceSyntax.normalizeId(rawFigureId)
+                    : '';
             if (numberedFigure && rawFigureId.isEmpty) {
               setState(() {
                 figureIdError = 'ID рисунка не может быть пустым.';

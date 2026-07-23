@@ -18,8 +18,7 @@ class ReleaseReadinessDialog extends StatefulWidget {
   }
 
   @override
-  State<ReleaseReadinessDialog> createState() =>
-      _ReleaseReadinessDialogState();
+  State<ReleaseReadinessDialog> createState() => _ReleaseReadinessDialogState();
 }
 
 class _ReleaseReadinessDialogState extends State<ReleaseReadinessDialog> {
@@ -105,144 +104,144 @@ class _ReleaseReadinessDialogState extends State<ReleaseReadinessDialog> {
         width: 760,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 650),
-          child: _busy && _report == null
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null && _report == null
-              ? _ErrorState(error: _error!, onRetry: _run)
-              : ListView(
-                  shrinkWrap: true,
-                  children: [
-                    _OverviewBanner(report: _report!),
-                    const SizedBox(height: 12),
-                    _CheckCard(
-                      icon: Icons.account_tree_outlined,
-                      title: 'Целостность данных',
-                      passed: _report!.integrity.clean,
-                      subtitle:
-                          '${_report!.integrity.projectCount} проектов · '
-                          '${_report!.integrity.noteCount} заметок · '
-                          '${_report!.integrity.taskCount} задач · '
-                          '${_report!.integrity.errorCount} ошибок · '
-                          '${_report!.integrity.warningCount} предупреждений',
-                      child: _report!.integrity.issues.isEmpty
-                          ? const Text(
-                              'Повреждённых идентификаторов и обязательных '
-                              'связей не найдено.',
-                            )
-                          : Column(
-                              children: [
-                                for (final issue
-                                    in _report!.integrity.issues.take(12))
-                                  _IntegrityIssueTile(issue: issue),
-                              ],
-                            ),
-                    ),
-                    const SizedBox(height: 10),
-                    _CheckCard(
-                      icon: Icons.import_export_rounded,
-                      title: 'Обратимый импорт и экспорт',
-                      passed: _report!.backupRoundTrip.valid,
-                      subtitle:
-                          'JSON v${_report!.backupRoundTrip.formatVersion} · '
-                          '${_report!.backupRoundTrip.noteCount} заметок',
-                      child: Text(_report!.backupRoundTrip.message),
-                    ),
-                    const SizedBox(height: 10),
-                    _CheckCard(
-                      icon: Icons.folder_copy_outlined,
-                      title: 'Стабильный Markdown Vault',
-                      passed: !_report!.vaultStatus.readOnly,
-                      subtitle: vaultReadinessSummary(_report!.vaultStatus),
-                      child: Text(
-                        _report!.vaultStatus.rootPath.isEmpty
-                            ? 'Выбор Vault необязателен: основная база остаётся '
-                                'локальной. После выбора Chronicle сохраняет '
-                                'открытый Markdown и неизвестные поля frontmatter.'
-                            : _report!.vaultStatus.rootPath,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _CheckCard(
-                      icon: Icons.merge_type_rounded,
-                      title: 'Конфликты и восстановление',
-                      passed:
-                          _report!.vaultStatus.pendingChangeCount == 0 &&
-                          _report!.pendingConflictCount == 0 &&
-                          _report!.automaticBackupCount > 0,
-                      subtitle: _report!.pendingConflictCount > 0
-                          ? 'Конфликтов ожидают решения: '
-                              '${_report!.pendingConflictCount}.'
-                          : _report!.vaultStatus.pendingChangeCount > 0
-                          ? 'Изменений Vault ожидают просмотра: '
-                              '${_report!.vaultStatus.pendingChangeCount}.'
-                          : 'Непросмотренных изменений и конфликтов Vault нет.',
-                      child: Text(
-                        'Проверенных автоматических копий: '
-                        '${_report!.automaticBackupCount}. '
-                        'Перед опасным применением Vault и восстановлением '
-                        'Chronicle создаёт аварийную копию.',
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _CheckCard(
-                      icon: Icons.undo_rounded,
-                      title: 'Отмена основных операций',
-                      passed: true,
-                      subtitle:
-                          'В текущем undo-журнале: ${_report!.undoDepth}.',
-                      child: const Text(
-                        'Ctrl+Z / Cmd+Z вне текстового редактора отменяет '
-                        'удаление заметки или задачи, удаление источника и '
-                        'архивирование проекта. Редактор сохраняет собственную '
-                        'историю текста и версии заметки.',
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Card(
-                      child: ExpansionTile(
-                        leading: Icon(Icons.health_and_safety_outlined),
-                        title: Text('Как восстановиться после ошибки'),
-                        childrenPadding: EdgeInsets.fromLTRB(
-                          18,
-                          0,
-                          18,
-                          18,
-                        ),
-                        children: [
-                          _RecoveryStep(
-                            number: 1,
-                            text:
-                                'Не удаляй текущую папку Vault и не запускай '
-                                'повторную синхронизацию.',
-                          ),
-                          _RecoveryStep(
-                            number: 2,
-                            text:
-                                'Открой «Устройства и синхронизация» и проверь '
-                                'диагностический журнал и каталог копий.',
-                          ),
-                          _RecoveryStep(
-                            number: 3,
-                            text:
-                                'Выбери последнюю копию с подтверждёнными '
-                                'контрольными суммами и просмотри её состав.',
-                          ),
-                          _RecoveryStep(
-                            number: 4,
-                            text:
-                                'Восстановление сначала создаст аварийный '
-                                'снимок, а при ошибке автоматически откатится.',
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (_busy) ...[
+          child:
+              _busy && _report == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null && _report == null
+                  ? _ErrorState(error: _error!, onRetry: _run)
+                  : ListView(
+                    shrinkWrap: true,
+                    children: [
+                      _OverviewBanner(report: _report!),
                       const SizedBox(height: 12),
-                      LinearProgressIndicator(color: colors.primary),
+                      _CheckCard(
+                        icon: Icons.account_tree_outlined,
+                        title: 'Целостность данных',
+                        passed: _report!.integrity.clean,
+                        subtitle:
+                            '${_report!.integrity.projectCount} проектов · '
+                            '${_report!.integrity.noteCount} заметок · '
+                            '${_report!.integrity.taskCount} задач · '
+                            '${_report!.integrity.errorCount} ошибок · '
+                            '${_report!.integrity.warningCount} предупреждений',
+                        child:
+                            _report!.integrity.issues.isEmpty
+                                ? const Text(
+                                  'Повреждённых идентификаторов и обязательных '
+                                  'связей не найдено.',
+                                )
+                                : Column(
+                                  children: [
+                                    for (final issue in _report!
+                                        .integrity
+                                        .issues
+                                        .take(12))
+                                      _IntegrityIssueTile(issue: issue),
+                                  ],
+                                ),
+                      ),
+                      const SizedBox(height: 10),
+                      _CheckCard(
+                        icon: Icons.import_export_rounded,
+                        title: 'Обратимый импорт и экспорт',
+                        passed: _report!.backupRoundTrip.valid,
+                        subtitle:
+                            'JSON v${_report!.backupRoundTrip.formatVersion} · '
+                            '${_report!.backupRoundTrip.noteCount} заметок',
+                        child: Text(_report!.backupRoundTrip.message),
+                      ),
+                      const SizedBox(height: 10),
+                      _CheckCard(
+                        icon: Icons.folder_copy_outlined,
+                        title: 'Стабильный Markdown Vault',
+                        passed: !_report!.vaultStatus.readOnly,
+                        subtitle: vaultReadinessSummary(_report!.vaultStatus),
+                        child: Text(
+                          _report!.vaultStatus.rootPath.isEmpty
+                              ? 'Выбор Vault необязателен: основная база остаётся '
+                                  'локальной. После выбора Chronicle сохраняет '
+                                  'открытый Markdown и неизвестные поля frontmatter.'
+                              : _report!.vaultStatus.rootPath,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _CheckCard(
+                        icon: Icons.merge_type_rounded,
+                        title: 'Конфликты и восстановление',
+                        passed:
+                            _report!.vaultStatus.pendingChangeCount == 0 &&
+                            _report!.pendingConflictCount == 0 &&
+                            _report!.automaticBackupCount > 0,
+                        subtitle:
+                            _report!.pendingConflictCount > 0
+                                ? 'Конфликтов ожидают решения: '
+                                    '${_report!.pendingConflictCount}.'
+                                : _report!.vaultStatus.pendingChangeCount > 0
+                                ? 'Изменений Vault ожидают просмотра: '
+                                    '${_report!.vaultStatus.pendingChangeCount}.'
+                                : 'Непросмотренных изменений и конфликтов Vault нет.',
+                        child: Text(
+                          'Проверенных автоматических копий: '
+                          '${_report!.automaticBackupCount}. '
+                          'Перед опасным применением Vault и восстановлением '
+                          'Chronicle создаёт аварийную копию.',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _CheckCard(
+                        icon: Icons.undo_rounded,
+                        title: 'Отмена основных операций',
+                        passed: true,
+                        subtitle:
+                            'В текущем undo-журнале: ${_report!.undoDepth}.',
+                        child: const Text(
+                          'Ctrl+Z / Cmd+Z вне текстового редактора отменяет '
+                          'удаление заметки или задачи, удаление источника и '
+                          'архивирование проекта. Редактор сохраняет собственную '
+                          'историю текста и версии заметки.',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Card(
+                        child: ExpansionTile(
+                          leading: Icon(Icons.health_and_safety_outlined),
+                          title: Text('Как восстановиться после ошибки'),
+                          childrenPadding: EdgeInsets.fromLTRB(18, 0, 18, 18),
+                          children: [
+                            _RecoveryStep(
+                              number: 1,
+                              text:
+                                  'Не удаляй текущую папку Vault и не запускай '
+                                  'повторную синхронизацию.',
+                            ),
+                            _RecoveryStep(
+                              number: 2,
+                              text:
+                                  'Открой «Устройства и синхронизация» и проверь '
+                                  'диагностический журнал и каталог копий.',
+                            ),
+                            _RecoveryStep(
+                              number: 3,
+                              text:
+                                  'Выбери последнюю копию с подтверждёнными '
+                                  'контрольными суммами и просмотри её состав.',
+                            ),
+                            _RecoveryStep(
+                              number: 4,
+                              text:
+                                  'Восстановление сначала создаст аварийный '
+                                  'снимок, а при ошибке автоматически откатится.',
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_busy) ...[
+                        const SizedBox(height: 12),
+                        LinearProgressIndicator(color: colors.primary),
+                      ],
                     ],
-                  ],
-                ),
+                  ),
         ),
       ),
       actions: [
@@ -253,12 +252,13 @@ class _ReleaseReadinessDialogState extends State<ReleaseReadinessDialog> {
         ),
         FilledButton.tonalIcon(
           onPressed: _backupBusy || _busy ? null : _createBackup,
-          icon: _backupBusy
-              ? const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.backup_outlined),
+          icon:
+              _backupBusy
+                  ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Icon(Icons.backup_outlined),
           label: const Text('Создать копию'),
         ),
         FilledButton(
@@ -290,7 +290,8 @@ class _OverviewBanner extends StatelessWidget {
         children: [
           Icon(
             ready ? Icons.verified_rounded : Icons.warning_amber_rounded,
-            color: ready ? colors.onPrimaryContainer : colors.onTertiaryContainer,
+            color:
+                ready ? colors.onPrimaryContainer : colors.onTertiaryContainer,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -302,8 +303,8 @@ class _OverviewBanner extends StatelessWidget {
                       ? 'Основные гарантии 1.0 выполняются'
                       : 'Некоторые гарантии требуют внимания',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -358,15 +359,15 @@ class _CheckCard extends StatelessWidget {
                       Text(
                         title,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       const SizedBox(height: 3),
                       Text(
                         subtitle,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colors.onSurfaceVariant,
-                            ),
+                          color: colors.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -410,11 +411,12 @@ class _IntegrityIssueTile extends StatelessWidget {
                 ? Icons.info_outline_rounded
                 : Icons.warning_amber_rounded,
             size: 18,
-            color: isError
-                ? colors.error
-                : isInfo
-                ? colors.primary
-                : colors.tertiary,
+            color:
+                isError
+                    ? colors.error
+                    : isInfo
+                    ? colors.primary
+                    : colors.tertiary,
           ),
           const SizedBox(width: 8),
           Expanded(

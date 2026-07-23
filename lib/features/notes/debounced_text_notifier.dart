@@ -5,10 +5,7 @@ import 'package:flutter/foundation.dart';
 /// A text notifier that coalesces rapid editor changes before rebuilding
 /// expensive listeners such as Markdown preview and note statistics.
 class DebouncedTextNotifier extends ValueNotifier<String> {
-  DebouncedTextNotifier(
-    super.value, {
-    required this.delay,
-  });
+  DebouncedTextNotifier(super.value, {required this.delay});
 
   final Duration delay;
 

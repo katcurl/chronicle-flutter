@@ -108,79 +108,80 @@ void main() {
     expect((await phoneRepository.load()).projects, hasLength(1));
   });
 
-  test('trusted LAN exchange transfers attachments in both directions', () async {
-    final desktopRepository = InMemoryAppRepository();
-    final phoneRepository = InMemoryAppRepository();
-    final desktopPairing = PairingService(repository: desktopRepository);
-    final phonePairing = PairingService(repository: phoneRepository);
-    final desktopIdentity = await desktopPairing.ensureLocalIdentity();
-    final phoneIdentity = await phonePairing.ensureLocalIdentity();
+  test(
+    'trusted LAN exchange transfers attachments in both directions',
+    () async {
+      final desktopRepository = InMemoryAppRepository();
+      final phoneRepository = InMemoryAppRepository();
+      final desktopPairing = PairingService(repository: desktopRepository);
+      final phonePairing = PairingService(repository: phoneRepository);
+      final desktopIdentity = await desktopPairing.ensureLocalIdentity();
+      final phoneIdentity = await phonePairing.ensureLocalIdentity();
 
-    await desktopPairing.trustPeer(phoneIdentity.peer);
-    await phonePairing.trustPeer(desktopIdentity.peer);
+      await desktopPairing.trustPeer(phoneIdentity.peer);
+      await phonePairing.trustPeer(desktopIdentity.peer);
 
-    final desktopStore = _MemoryAttachmentStore();
-    final phoneStore = _MemoryAttachmentStore();
-    final desktopBytes = Uint8List.fromList(<int>[1, 2, 3, 4]);
-    final phoneBytes = Uint8List.fromList(<int>[5, 6, 7]);
-    final oldBytes = Uint8List.fromList(<int>[8, 9]);
-    final desktopEntry = desktopStore.add(
-      path: 'Attachments/desktop--a.bin',
-      name: 'desktop.bin',
-      bytes: desktopBytes,
-    );
-    final phoneEntry = phoneStore.add(
-      path: 'Attachments/phone--b.bin',
-      name: 'phone.bin',
-      bytes: phoneBytes,
-    );
-    final oldEntry = desktopStore.add(
-      path: 'Attachments/old--c.bin',
-      name: 'old.bin',
-      bytes: oldBytes,
-    );
-    phoneStore.addTombstone(oldEntry);
+      final desktopStore = _MemoryAttachmentStore();
+      final phoneStore = _MemoryAttachmentStore();
+      final desktopBytes = Uint8List.fromList(<int>[1, 2, 3, 4]);
+      final phoneBytes = Uint8List.fromList(<int>[5, 6, 7]);
+      final oldBytes = Uint8List.fromList(<int>[8, 9]);
+      final desktopEntry = desktopStore.add(
+        path: 'Attachments/desktop--a.bin',
+        name: 'desktop.bin',
+        bytes: desktopBytes,
+      );
+      final phoneEntry = phoneStore.add(
+        path: 'Attachments/phone--b.bin',
+        name: 'phone.bin',
+        bytes: phoneBytes,
+      );
+      final oldEntry = desktopStore.add(
+        path: 'Attachments/old--c.bin',
+        name: 'old.bin',
+        bytes: oldBytes,
+      );
+      phoneStore.addTombstone(oldEntry);
 
-    final desktopSync = LanSyncService(
-      repository: desktopRepository,
-      buildAttachmentManifest: desktopStore.buildManifest,
-      readAttachment: desktopStore.read,
-      storeAttachment: desktopStore.store,
-      applyAttachmentRecord: desktopStore.applyRecord,
-      applyAttachmentTombstone: desktopStore.applyTombstone,
-    );
-    final phoneSync = LanSyncService(
-      repository: phoneRepository,
-      buildAttachmentManifest: phoneStore.buildManifest,
-      readAttachment: phoneStore.read,
-      storeAttachment: phoneStore.store,
-      applyAttachmentRecord: phoneStore.applyRecord,
-      applyAttachmentTombstone: phoneStore.applyTombstone,
-    );
-    final host = await desktopSync.startHost(
-      peerDeviceId: phoneIdentity.peer.deviceId,
-    );
-    addTearDown(host.close);
+      final desktopSync = LanSyncService(
+        repository: desktopRepository,
+        buildAttachmentManifest: desktopStore.buildManifest,
+        readAttachment: desktopStore.read,
+        storeAttachment: desktopStore.store,
+        applyAttachmentRecord: desktopStore.applyRecord,
+        applyAttachmentTombstone: desktopStore.applyTombstone,
+      );
+      final phoneSync = LanSyncService(
+        repository: phoneRepository,
+        buildAttachmentManifest: phoneStore.buildManifest,
+        readAttachment: phoneStore.read,
+        storeAttachment: phoneStore.store,
+        applyAttachmentRecord: phoneStore.applyRecord,
+        applyAttachmentTombstone: phoneStore.applyTombstone,
+      );
+      final host = await desktopSync.startHost(
+        peerDeviceId: phoneIdentity.peer.deviceId,
+      );
+      addTearDown(host.close);
 
-    final report = await phoneSync.syncFromOffer(
-      host.offerFor('127.0.0.1').encode(),
-      expectedPeerDeviceId: desktopIdentity.peer.deviceId,
-    );
+      final report = await phoneSync.syncFromOffer(
+        host.offerFor('127.0.0.1').encode(),
+        expectedPeerDeviceId: desktopIdentity.peer.deviceId,
+      );
 
-    expect(phoneStore.bytes[desktopEntry.relativePath], desktopBytes);
-    expect(desktopStore.bytes[phoneEntry.relativePath], phoneBytes);
-    expect(desktopStore.bytes.containsKey(oldEntry.relativePath), isFalse);
-    expect(desktopStore.entries[oldEntry.relativePath]!.isDeleted, isTrue);
-    expect(report.attachmentFilesReceived, 1);
-    expect(report.attachmentFilesSent, 1);
-    expect(report.attachmentBytesReceived, desktopBytes.length);
-    expect(report.attachmentBytesSent, phoneBytes.length);
-    expect(report.attachmentConflictCount, 0);
-    expect(report.hasPendingAttachmentWork, isFalse);
-  });
-
+      expect(phoneStore.bytes[desktopEntry.relativePath], desktopBytes);
+      expect(desktopStore.bytes[phoneEntry.relativePath], phoneBytes);
+      expect(desktopStore.bytes.containsKey(oldEntry.relativePath), isFalse);
+      expect(desktopStore.entries[oldEntry.relativePath]!.isDeleted, isTrue);
+      expect(report.attachmentFilesReceived, 1);
+      expect(report.attachmentFilesSent, 1);
+      expect(report.attachmentBytesReceived, desktopBytes.length);
+      expect(report.attachmentBytesSent, phoneBytes.length);
+      expect(report.attachmentConflictCount, 0);
+      expect(report.hasPendingAttachmentWork, isFalse);
+    },
+  );
 }
-
 
 class _MemoryAttachmentStore {
   final Map<String, AttachmentSyncEntry> entries =
@@ -219,8 +220,10 @@ class _MemoryAttachmentStore {
   }
 
   Future<AttachmentSyncManifest> buildManifest() async {
-    final sorted = entries.values.toList()
-      ..sort((left, right) => left.relativePath.compareTo(right.relativePath));
+    final sorted =
+        entries.values.toList()..sort(
+          (left, right) => left.relativePath.compareTo(right.relativePath),
+        );
     return AttachmentSyncManifest(
       generatedAt: DateTime.now().toUtc(),
       entries: sorted,
@@ -238,10 +241,7 @@ class _MemoryAttachmentStore {
   ) async {
     entries[entry.relativePath] = entry;
     bytes[entry.relativePath] = Uint8List.fromList(value);
-    return AttachmentSyncApplyResult(
-      changed: true,
-      byteLength: value.length,
-    );
+    return AttachmentSyncApplyResult(changed: true, byteLength: value.length);
   }
 
   Future<AttachmentSyncApplyResult> applyRecord(

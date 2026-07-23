@@ -180,7 +180,6 @@ Future<AttachmentSyncManifest> _emptyAttachmentManifest() async {
   return AttachmentSyncManifest(generatedAt: DateTime.now().toUtc());
 }
 
-
 Future<Uint8List?> _missingAttachment(AttachmentSyncEntry entry) async => null;
 
 Future<AttachmentSyncApplyResult> _unsupportedStoreAttachment(

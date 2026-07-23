@@ -25,8 +25,9 @@ void main() {
     notifier.dispose();
   });
 
-  testWidgets('paused notifier waits until preview scrolling ends',
-      (tester) async {
+  testWidgets('paused notifier waits until preview scrolling ends', (
+    tester,
+  ) async {
     final notifier = DebouncedTextNotifier(
       'before',
       delay: const Duration(milliseconds: 80),
@@ -47,8 +48,9 @@ void main() {
     notifier.dispose();
   });
 
-  testWidgets('immediate synchronization cancels pending refresh',
-      (tester) async {
+  testWidgets('immediate synchronization cancels pending refresh', (
+    tester,
+  ) async {
     final notifier = DebouncedTextNotifier(
       'old',
       delay: const Duration(milliseconds: 100),

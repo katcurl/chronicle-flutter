@@ -32,10 +32,9 @@ class ResearchCanvasBoardDialog extends StatefulWidget {
   }) {
     return showDialog<ResearchCanvasBoardDraft>(
       context: context,
-      builder: (context) => ResearchCanvasBoardDialog(
-        projects: projects,
-        initial: initial,
-      ),
+      builder:
+          (context) =>
+              ResearchCanvasBoardDialog(projects: projects, initial: initial),
     );
   }
 
@@ -44,8 +43,7 @@ class ResearchCanvasBoardDialog extends StatefulWidget {
       _ResearchCanvasBoardDialogState();
 }
 
-class _ResearchCanvasBoardDialogState
-    extends State<ResearchCanvasBoardDialog> {
+class _ResearchCanvasBoardDialogState extends State<ResearchCanvasBoardDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _emojiController;
   String? _projectId;
@@ -109,7 +107,8 @@ class _ResearchCanvasBoardDialogState
               initialValue: _projectId,
               decoration: const InputDecoration(
                 labelText: 'Проект по умолчанию',
-                helperText: 'Используется как фильтр в окне добавления заметок.',
+                helperText:
+                    'Используется как фильтр в окне добавления заметок.',
               ),
               items: <DropdownMenuItem<String?>>[
                 const DropdownMenuItem<String?>(
@@ -132,10 +131,7 @@ class _ResearchCanvasBoardDialogState
           onPressed: () => Navigator.pop(context),
           child: const Text('Отмена'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Сохранить'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Сохранить')),
       ],
     );
   }
@@ -147,9 +143,10 @@ class _ResearchCanvasBoardDialogState
       context,
       ResearchCanvasBoardDraft(
         name: name,
-        emoji: _emojiController.text.trim().isEmpty
-            ? '🧭'
-            : _emojiController.text.trim(),
+        emoji:
+            _emojiController.text.trim().isEmpty
+                ? '🧭'
+                : _emojiController.text.trim(),
         projectId: _projectId,
       ),
     );
@@ -169,11 +166,7 @@ class ResearchCanvasItemDraft {
 }
 
 class ResearchCanvasItemDialog extends StatefulWidget {
-  const ResearchCanvasItemDialog({
-    super.key,
-    required this.type,
-    this.initial,
-  });
+  const ResearchCanvasItemDialog({super.key, required this.type, this.initial});
 
   final ResearchCanvasItemType type;
   final ResearchCanvasItem? initial;
@@ -185,10 +178,8 @@ class ResearchCanvasItemDialog extends StatefulWidget {
   }) {
     return showDialog<ResearchCanvasItemDraft>(
       context: context,
-      builder: (context) => ResearchCanvasItemDialog(
-        type: type,
-        initial: initial,
-      ),
+      builder:
+          (context) => ResearchCanvasItemDialog(type: type, initial: initial),
     );
   }
 
@@ -215,7 +206,8 @@ class _ResearchCanvasItemDialogState extends State<ResearchCanvasItemDialog> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(
-      text: widget.initial?.title ??
+      text:
+          widget.initial?.title ??
           (widget.type == ResearchCanvasItemType.group
               ? 'Смысловая область'
               : 'Гипотеза'),
@@ -285,10 +277,7 @@ class _ResearchCanvasItemDialogState extends State<ResearchCanvasItemDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Отмена'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Сохранить'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Сохранить')),
       ],
     );
   }
@@ -330,12 +319,13 @@ class ResearchCanvasNotePickerDialog extends StatefulWidget {
   }) {
     return showDialog<List<Note>>(
       context: context,
-      builder: (context) => ResearchCanvasNotePickerDialog(
-        notes: notes,
-        projects: projects,
-        excludedNoteIds: excludedNoteIds,
-        initialProjectId: initialProjectId,
-      ),
+      builder:
+          (context) => ResearchCanvasNotePickerDialog(
+            notes: notes,
+            projects: projects,
+            excludedNoteIds: excludedNoteIds,
+            initialProjectId: initialProjectId,
+          ),
     );
   }
 
@@ -362,18 +352,23 @@ class _ResearchCanvasNotePickerDialogState
       for (final project in widget.projects) project.id: project,
     };
     final normalized = _query.trim().toLowerCase();
-    final visible = widget.notes.where((note) {
-      if (widget.excludedNoteIds.contains(note.id)) return false;
-      if (_projectId != null && note.projectId != _projectId) return false;
-      if (normalized.isEmpty) return true;
-      final project = projectsById[note.projectId];
-      return note.title.toLowerCase().contains(normalized) ||
-          note.folderPath.toLowerCase().contains(normalized) ||
-          note.noteType.toLowerCase().contains(normalized) ||
-          note.tags.any((tag) => tag.toLowerCase().contains(normalized)) ||
-          (project?.title.toLowerCase().contains(normalized) ?? false);
-    }).toList()
-      ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
+    final visible =
+        widget.notes.where((note) {
+            if (widget.excludedNoteIds.contains(note.id)) return false;
+            if (_projectId != null && note.projectId != _projectId) {
+              return false;
+            }
+            if (normalized.isEmpty) return true;
+            final project = projectsById[note.projectId];
+            return note.title.toLowerCase().contains(normalized) ||
+                note.folderPath.toLowerCase().contains(normalized) ||
+                note.noteType.toLowerCase().contains(normalized) ||
+                note.tags.any(
+                  (tag) => tag.toLowerCase().contains(normalized),
+                ) ||
+                (project?.title.toLowerCase().contains(normalized) ?? false);
+          }).toList()
+          ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
 
     return AlertDialog(
       title: const Text('Добавить заметки на карту'),
@@ -417,41 +412,42 @@ class _ResearchCanvasNotePickerDialogState
             ),
             const SizedBox(height: 8),
             Expanded(
-              child: visible.isEmpty
-                  ? const Center(child: Text('Подходящих заметок нет.'))
-                  : ListView.builder(
-                      itemCount: visible.length,
-                      itemBuilder: (context, index) {
-                        final note = visible[index];
-                        final project = projectsById[note.projectId];
-                        return CheckboxListTile(
-                          dense: true,
-                          value: _selectedIds.contains(note.id),
-                          title: Text(note.title),
-                          subtitle: Text(
-                            <String>[
-                              if (project != null)
-                                '${project.emoji} ${project.title}',
-                              if (note.folderPath.trim().isNotEmpty)
-                                note.folderPath.trim(),
-                              if (note.tags.isNotEmpty)
-                                note.tags.map((tag) => '#$tag').join(' '),
-                            ].join(' · '),
-                          ),
-                          secondary: const Icon(Icons.description_outlined),
-                          onChanged: (selected) {
-                            setState(() {
-                              if (selected == true &&
-                                  _selectedIds.length < 24) {
-                                _selectedIds.add(note.id);
-                              } else {
-                                _selectedIds.remove(note.id);
-                              }
-                            });
-                          },
-                        );
-                      },
-                    ),
+              child:
+                  visible.isEmpty
+                      ? const Center(child: Text('Подходящих заметок нет.'))
+                      : ListView.builder(
+                        itemCount: visible.length,
+                        itemBuilder: (context, index) {
+                          final note = visible[index];
+                          final project = projectsById[note.projectId];
+                          return CheckboxListTile(
+                            dense: true,
+                            value: _selectedIds.contains(note.id),
+                            title: Text(note.title),
+                            subtitle: Text(
+                              <String>[
+                                if (project != null)
+                                  '${project.emoji} ${project.title}',
+                                if (note.folderPath.trim().isNotEmpty)
+                                  note.folderPath.trim(),
+                                if (note.tags.isNotEmpty)
+                                  note.tags.map((tag) => '#$tag').join(' '),
+                              ].join(' · '),
+                            ),
+                            secondary: const Icon(Icons.description_outlined),
+                            onChanged: (selected) {
+                              setState(() {
+                                if (selected == true &&
+                                    _selectedIds.length < 24) {
+                                  _selectedIds.add(note.id);
+                                } else {
+                                  _selectedIds.remove(note.id);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
             ),
           ],
         ),
@@ -462,15 +458,16 @@ class _ResearchCanvasNotePickerDialogState
           child: const Text('Отмена'),
         ),
         FilledButton.icon(
-          onPressed: _selectedIds.isEmpty
-              ? null
-              : () {
-                  final selected = <Note>[
-                    for (final note in widget.notes)
-                      if (_selectedIds.contains(note.id)) note,
-                  ];
-                  Navigator.pop(context, selected);
-                },
+          onPressed:
+              _selectedIds.isEmpty
+                  ? null
+                  : () {
+                    final selected = <Note>[
+                      for (final note in widget.notes)
+                        if (_selectedIds.contains(note.id)) note,
+                    ];
+                    Navigator.pop(context, selected);
+                  },
           icon: const Icon(Icons.add_rounded),
           label: const Text('Добавить'),
         ),

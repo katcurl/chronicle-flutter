@@ -71,8 +71,7 @@ class NoteWikiRenamePlan {
     (total, change) => total + change.occurrenceCount,
   );
   bool get hasChanges => sourceChanges.isNotEmpty;
-  bool get requiresReview =>
-      hasChanges || skippedAmbiguousOccurrences > 0;
+  bool get requiresReview => hasChanges || skippedAmbiguousOccurrences > 0;
 }
 
 class NoteWikiSnapshot {
@@ -212,10 +211,7 @@ class NoteWikiRenamePlanner {
             sourceNoteId: source.id,
             sourceTitle: source.title,
             rawTarget: reference.target,
-            snippet: NoteWikiLinkSyntax.snippetForReference(
-              content,
-              reference,
-            ),
+            snippet: NoteWikiLinkSyntax.snippetForReference(content, reference),
             kind:
                 candidates.isEmpty
                     ? NoteWikiLinkIssueKind.missing
