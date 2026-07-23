@@ -436,7 +436,9 @@ class _PublicationWorkspaceScreenState
     try {
       final payload = switch (format) {
         ChronicleExportFormat.docx || ChronicleExportFormat.pdf =>
-          await const PublicationDocumentExporter().export(
+          await PublicationDocumentExporter(
+            readAttachment: widget.store.readManagedAttachment,
+          ).export(
             format: format,
             title: title,
             markdown: assembly.markdown,

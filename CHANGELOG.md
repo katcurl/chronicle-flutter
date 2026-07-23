@@ -1,3 +1,13 @@
+## 1.0.4+104 — Complete Markdown DOCX/PDF export
+
+- Rebuilt DOCX and PDF export around parsed GitHub-Flavored Markdown instead of flattened plain paragraphs.
+- Preserved headings, emphasis, strike-through, inline and fenced code, links, block quotes, ordered and unordered lists, task markers, tables and horizontal rules.
+- Embedded managed PNG, JPEG, GIF, WebP, SVG and BMP images directly into generated DOCX/PDF files.
+- Preserved Chronicle image width, alignment and caption metadata in both formats.
+- Added visible placeholders and explicit reporting for missing or unsupported images.
+- Added page numbering to PDF while keeping DOCX editable in Word and LibreOffice.
+- Added regression coverage for rich DOCX structure, embedded media, PDF output and missing-image handling.
+
 ## 1.0.3+103 — Public release polish: clean workspace
 
 - Removed the “Готова начать?” onboarding phrase from the Today screen and disabled focus start until a project exists.

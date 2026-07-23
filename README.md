@@ -12,13 +12,15 @@ The 1.0 release marks a stability contract rather than the end of development. C
 - tasks, subtasks and time tracking linked to projects and notes;
 - bibliography, citation keys and project source libraries;
 - article/report/presentation assembly from live note fragments;
-- Markdown, HTML, portable ZIP, DOCX and PDF export;
+- Markdown, HTML and portable ZIP export, plus Markdown-aware DOCX/PDF with embedded local images;
 - fully local TF-IDF search, related-note suggestions, sourced answers, term extraction and contradiction candidates;
 - per-workspace and per-project appearance, wallpapers and image/GIF project icons.
 
 ## Clean first launch
 
 A new Chronicle installation starts as an empty workspace. It does not create sample projects, notes, tasks, time entries or bundled working templates. The user creates the first project and can later build personal note templates from their own workflow. Updating an existing installation does not clear or replace its database, Vault or custom templates.
+
+DOCX and PDF export parses the assembled Markdown structure and embeds managed local images. Missing images remain visible as placeholders and are reported instead of being silently discarded.
 
 ## Chronicle 1.0 guarantees
 
@@ -95,4 +97,5 @@ flutter build windows --release
 - [`docs/75-v1-stability-contract.md`](docs/75-v1-stability-contract.md) — 1.0 compatibility and reliability guarantees;
 - [`docs/76-recovery-guide.md`](docs/76-recovery-guide.md) — recovery procedures;
 - [`docs/77-public-release-polish.md`](docs/77-public-release-polish.md) — clean first launch and public-release polish;
+- [`docs/78-complete-document-export.md`](docs/78-complete-document-export.md) — complete Markdown-aware DOCX/PDF export;
 - [`docs/08-roadmap.md`](docs/08-roadmap.md) — post-1.0 direction.

@@ -2537,7 +2537,9 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
       final markdown = NoteDocument.parse(draft.body).content;
       final payload = switch (format) {
         ChronicleExportFormat.docx || ChronicleExportFormat.pdf =>
-          await const PublicationDocumentExporter().export(
+          await PublicationDocumentExporter(
+            readAttachment: widget.store.readManagedAttachment,
+          ).export(
             format: format,
             title: draft.title,
             markdown: markdown,
