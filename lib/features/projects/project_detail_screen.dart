@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import '../../models/app_models.dart';
 import '../../services/app_store.dart';
 import '../../widgets/common.dart';
+import '../appearance/app_appearance.dart';
 import '../notes/note_export.dart';
 import '../notes/note_export_dialog.dart';
 import '../notes/note_export_file_service.dart';
 import '../tasks/task_editor_sheet.dart';
 import '../tasks/task_metadata.dart';
+import 'project_appearance_store.dart';
+import 'project_appearance_widgets.dart';
 import 'project_editor_sheet.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
@@ -15,10 +18,14 @@ class ProjectDetailScreen extends StatefulWidget {
     super.key,
     required this.store,
     required this.projectId,
+    required this.appearanceController,
+    required this.globalAppearance,
   });
 
   final AppStore store;
   final String projectId;
+  final ProjectAppearanceController appearanceController;
+  final AppAppearancePreferences globalAppearance;
 
   @override
   State<ProjectDetailScreen> createState() => _ProjectDetailScreenState();
@@ -57,146 +64,163 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     final done = tasks.where((task) => task.status == 'done').length;
     final progress = tasks.isEmpty ? 0.0 : done / tasks.length;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(project.title),
-        actions: [
-          IconButton(
-            tooltip: 'Редактировать',
-            onPressed: () => _editProject(project),
-            icon: const Icon(Icons.edit_outlined),
+    return ProjectAppearanceScope(
+      projectId: project.id,
+      controller: widget.appearanceController,
+      globalAppearance: widget.globalAppearance,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Row(
+            children: [
+              ProjectAvatar(
+                project: project,
+                controller: widget.appearanceController,
+                size: 30,
+                borderRadius: 8,
+                emojiFontSize: 19,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(project.title, overflow: TextOverflow.ellipsis),
+              ),
+            ],
           ),
-          PopupMenuButton<String>(
-            onSelected: (value) async {
-              if (value == 'export') {
-                await _exportProject(project, notes, tasks);
-                return;
-              }
-              if (value == 'archive') {
-                widget.store.setProjectArchived(project, !project.archived);
-                setState(() {});
-              }
-            },
-            itemBuilder:
-                (_) => [
-                  const PopupMenuItem<String>(
-                    value: 'export',
-                    child: ListTile(
-                      leading: Icon(Icons.download_outlined),
-                      title: Text('Экспортировать проект'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+          actions: [
+            IconButton(
+              tooltip: 'Редактировать',
+              onPressed: () => _editProject(project),
+              icon: const Icon(Icons.edit_outlined),
+            ),
+            PopupMenuButton<String>(
+              onSelected: (value) async {
+                if (value == 'export') {
+                  await _exportProject(project, notes, tasks);
+                  return;
+                }
+                if (value == 'archive') {
+                  widget.store.setProjectArchived(project, !project.archived);
+                  setState(() {});
+                }
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem<String>(
+                  value: 'export',
+                  child: ListTile(
+                    leading: Icon(Icons.download_outlined),
+                    title: Text('Экспортировать проект'),
+                    contentPadding: EdgeInsets.zero,
                   ),
-                  const PopupMenuDivider(),
-                  PopupMenuItem<String>(
-                    value: 'archive',
-                    child: Text(
-                      project.archived ? 'Вернуть из архива' : 'Архивировать',
-                    ),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem<String>(
+                  value: 'archive',
+                  child: Text(
+                    project.archived ? 'Вернуть из архива' : 'Архивировать',
                   ),
-                ],
-          ),
-        ],
-      ),
-      floatingActionButton:
-          project.archived
-              ? null
-              : FloatingActionButton.extended(
+                ),
+              ],
+            ),
+          ],
+        ),
+        floatingActionButton: project.archived
+            ? null
+            : FloatingActionButton.extended(
                 onPressed: () => _addTask(project),
                 icon: const Icon(Icons.add_task_rounded),
                 label: const Text('Задача'),
               ),
-      body: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            sliver: SliverToBoxAdapter(
-              child: _ProjectHero(
-                project: project,
-                progress: progress,
-                done: done,
-                total: tasks.length,
-                seconds: seconds,
-              ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverToBoxAdapter(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: MetricCard(
-                      icon: Icons.checklist_rounded,
-                      label: 'Задачи',
-                      value: '$done / ${tasks.length}',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: MetricCard(
-                      icon: Icons.menu_book_rounded,
-                      label: 'Заметки',
-                      value: '${notes.length}',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 22)),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverToBoxAdapter(
-              child: SectionTitle(
-                'Задачи проекта',
-                trailing: Text('${tasks.length}'),
-              ),
-            ),
-          ),
-          if (rootTasks.isEmpty)
-            const SliverPadding(
-              padding: EdgeInsets.fromLTRB(16, 6, 16, 120),
-              sliver: SliverToBoxAdapter(child: _EmptyProjectTasks()),
-            )
-          else
+        body: CustomScrollView(
+          slivers: [
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate((context, rawIndex) {
-                  if (rawIndex.isOdd) return const SizedBox(height: 10);
-                  final index = rawIndex ~/ 2;
-                  final task = rootTasks[index];
-                  final children =
-                      tasks
-                          .where((item) => item.parentTaskId == task.id)
-                          .toList();
-                  return _ProjectTaskCard(
-                    task: task,
-                    children: children,
-                    onToggle: (value) {
-                      widget.store.updateTaskStatus(
-                        task,
-                        value ? 'done' : 'next',
-                      );
-                      setState(() {});
-                    },
-                    onEdit: () => _editTask(task),
-                    onAddSubtask: () => _addSubtask(task),
-                    onDelete: () => _deleteTask(task),
-                    onChildToggle: (child, value) {
-                      widget.store.updateTaskStatus(
-                        child,
-                        value ? 'done' : 'next',
-                      );
-                      setState(() {});
-                    },
-                    onChildEdit: _editTask,
-                  );
-                }, childCount: rootTasks.length * 2 - 1),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              sliver: SliverToBoxAdapter(
+                child: _ProjectHero(
+                  project: project,
+                  appearanceController: widget.appearanceController,
+                  progress: progress,
+                  done: done,
+                  total: tasks.length,
+                  seconds: seconds,
+                ),
               ),
             ),
-        ],
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverToBoxAdapter(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: MetricCard(
+                        icon: Icons.checklist_rounded,
+                        label: 'Задачи',
+                        value: '$done / ${tasks.length}',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: MetricCard(
+                        icon: Icons.menu_book_rounded,
+                        label: 'Заметки',
+                        value: '${notes.length}',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 22)),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverToBoxAdapter(
+                child: SectionTitle(
+                  'Задачи проекта',
+                  trailing: Text('${tasks.length}'),
+                ),
+              ),
+            ),
+            if (rootTasks.isEmpty)
+              const SliverPadding(
+                padding: EdgeInsets.fromLTRB(16, 6, 16, 120),
+                sliver: SliverToBoxAdapter(child: _EmptyProjectTasks()),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate((context, rawIndex) {
+                    if (rawIndex.isOdd) return const SizedBox(height: 10);
+                    final index = rawIndex ~/ 2;
+                    final task = rootTasks[index];
+                    final children = tasks
+                        .where((item) => item.parentTaskId == task.id)
+                        .toList();
+                    return _ProjectTaskCard(
+                      task: task,
+                      children: children,
+                      onToggle: (value) {
+                        widget.store.updateTaskStatus(
+                          task,
+                          value ? 'done' : 'next',
+                        );
+                        setState(() {});
+                      },
+                      onEdit: () => _editTask(task),
+                      onAddSubtask: () => _addSubtask(task),
+                      onDelete: () => _deleteTask(task),
+                      onChildToggle: (child, value) {
+                        widget.store.updateTaskStatus(
+                          child,
+                          value ? 'done' : 'next',
+                        );
+                        setState(() {});
+                      },
+                      onChildEdit: _editTask,
+                    );
+                  }, childCount: rootTasks.length * 2 - 1),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -252,10 +276,28 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Future<void> _editProject(Project project) async {
-    final edited = await ProjectEditorSheet.show(context, project: project);
-    if (edited == null) return;
-    widget.store.updateProject(edited);
-    setState(() {});
+    final result = await ProjectEditorSheet.show(
+      context,
+      project: project,
+      appearanceController: widget.appearanceController,
+      globalAppearance: widget.globalAppearance,
+    );
+    if (result == null) return;
+    widget.store.updateProject(result.project);
+    try {
+      await widget.appearanceController.saveProjectAppearance(
+        result.project.id,
+        result.appearance,
+        icon: result.icon,
+        removeIcon: result.removeIcon,
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось сохранить оформление: $error')),
+      );
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _addTask(Project project) async {
@@ -327,6 +369,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 class _ProjectHero extends StatelessWidget {
   const _ProjectHero({
     required this.project,
+    required this.appearanceController,
     required this.progress,
     required this.done,
     required this.total,
@@ -334,6 +377,7 @@ class _ProjectHero extends StatelessWidget {
   });
 
   final Project project;
+  final ProjectAppearanceController appearanceController;
   final double progress;
   final int done;
   final int total;
@@ -349,8 +393,9 @@ class _ProjectHero extends StatelessWidget {
             ? null
             : (spentMinutes / budget).clamp(0.0, 1.0);
 
-    return Card(
-      color: color.withValues(alpha: 0.18),
+    return ProjectSurface(
+      emphasized: true,
+      tint: color.withValues(alpha: 0.14),
       child: Padding(
         padding: const EdgeInsets.all(22),
         child: Column(
@@ -358,18 +403,13 @@ class _ProjectHero extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  width: 58,
-                  height: 58,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Text(
-                    project.emoji,
-                    style: const TextStyle(fontSize: 30),
-                  ),
+                ProjectAvatar(
+                  project: project,
+                  controller: appearanceController,
+                  size: 58,
+                  borderRadius: 18,
+                  backgroundColor: color,
+                  emojiFontSize: 30,
                 ),
                 const SizedBox(width: 16),
                 Expanded(

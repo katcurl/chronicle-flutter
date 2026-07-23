@@ -2,19 +2,54 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/app_models.dart';
+import '../appearance/app_appearance.dart';
+import '../appearance/app_appearance_theme.dart';
+import 'project_appearance.dart';
+import 'project_appearance_store.dart';
+import 'project_appearance_widgets.dart';
+
+class ProjectEditorResult {
+  const ProjectEditorResult({
+    required this.project,
+    required this.appearance,
+    this.icon,
+    this.removeIcon = false,
+  });
+
+  final Project project;
+  final ProjectAppearancePreferences appearance;
+  final ProjectIconSelection? icon;
+  final bool removeIcon;
+}
 
 class ProjectEditorSheet extends StatefulWidget {
-  const ProjectEditorSheet({super.key, this.project});
+  const ProjectEditorSheet({
+    super.key,
+    this.project,
+    required this.appearanceController,
+    required this.globalAppearance,
+  });
 
   final Project? project;
+  final ProjectAppearanceController appearanceController;
+  final AppAppearancePreferences globalAppearance;
 
-  static Future<Project?> show(BuildContext context, {Project? project}) {
-    return showModalBottomSheet<Project>(
+  static Future<ProjectEditorResult?> show(
+    BuildContext context, {
+    Project? project,
+    required ProjectAppearanceController appearanceController,
+    required AppAppearancePreferences globalAppearance,
+  }) {
+    return showModalBottomSheet<ProjectEditorResult>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      constraints: const BoxConstraints(maxWidth: 640),
-      builder: (_) => ProjectEditorSheet(project: project),
+      constraints: const BoxConstraints(maxWidth: 720),
+      builder: (_) => ProjectEditorSheet(
+        project: project,
+        appearanceController: appearanceController,
+        globalAppearance: globalAppearance,
+      ),
     );
   }
 
@@ -32,36 +67,46 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
     0xFF405D91,
   ];
 
+  late final String projectId;
   late final TextEditingController titleController;
   late final TextEditingController descriptionController;
   late final TextEditingController emojiController;
   late final TextEditingController budgetController;
+  late ProjectAppearancePreferences projectAppearance;
   late int colorValue;
   DateTime? dueAt;
+  ProjectIconSelection? pendingIcon;
+  bool removeIcon = false;
+  bool pickingIcon = false;
 
   @override
   void initState() {
     super.initState();
     final project = widget.project;
+    projectId = project?.id ?? const Uuid().v4();
     titleController = TextEditingController(text: project?.title ?? '');
     descriptionController = TextEditingController(
       text: project?.description ?? '',
     );
     emojiController = TextEditingController(text: project?.emoji ?? '📁');
     budgetController = TextEditingController(
-      text:
-          project?.budgetMinutes == null
-              ? ''
-              : (project!.budgetMinutes! / 60).toStringAsFixed(1),
+      text: project?.budgetMinutes == null
+          ? ''
+          : (project!.budgetMinutes! / 60).toStringAsFixed(1),
     );
     colorValue = project?.colorValue ?? colors.first;
     dueAt = project?.dueAt;
+    projectAppearance = project == null
+        ? ProjectAppearancePreferences.fromAppearance(widget.globalAppearance)
+        : widget.appearanceController.preferencesFor(project.id);
+    emojiController.addListener(_refreshEmojiPreview);
   }
 
   @override
   void dispose() {
     titleController.dispose();
     descriptionController.dispose();
+    emojiController.removeListener(_refreshEmojiPreview);
     emojiController.dispose();
     budgetController.dispose();
     super.dispose();
@@ -91,31 +136,7 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
                 ),
               ),
               const SizedBox(height: 18),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 82,
-                    child: TextField(
-                      controller: emojiController,
-                      textAlign: TextAlign.center,
-                      maxLength: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Значок',
-                        counterText: '',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: titleController,
-                      autofocus: widget.project == null,
-                      decoration: const InputDecoration(labelText: 'Название'),
-                    ),
-                  ),
-                ],
-              ),
+              _identityFields(),
               const SizedBox(height: 12),
               TextField(
                 controller: descriptionController,
@@ -124,43 +145,16 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
                 decoration: const InputDecoration(labelText: 'Описание'),
               ),
               const SizedBox(height: 18),
-              Text('Цвет', style: Theme.of(context).textTheme.labelLarge),
+              Text('Цвет проекта', style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 10,
-                children:
-                    colors.map((value) {
-                      final selected = value == colorValue;
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(99),
-                        onTap: () => setState(() => colorValue = value),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 160),
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: Color(value),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color:
-                                  selected
-                                      ? Theme.of(context).colorScheme.onSurface
-                                      : Colors.transparent,
-                              width: 3,
-                            ),
-                          ),
-                          child:
-                              selected
-                                  ? const Icon(
-                                    Icons.check_rounded,
-                                    color: Colors.white,
-                                  )
-                                  : null,
-                        ),
-                      );
-                    }).toList(),
+                runSpacing: 10,
+                children: colors.map(_projectColorButton).toList(),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 24),
+              _appearanceSection(),
+              const SizedBox(height: 24),
               Row(
                 children: [
                   Expanded(
@@ -212,6 +206,394 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
     );
   }
 
+  Widget _identityFields() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _iconPreview(),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 82,
+          child: TextField(
+            controller: emojiController,
+            textAlign: TextAlign.center,
+            maxLength: 2,
+            decoration: const InputDecoration(
+              labelText: 'Эмодзи',
+              counterText: '',
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: TextField(
+            controller: titleController,
+            autofocus: widget.project == null,
+            decoration: const InputDecoration(labelText: 'Название'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _iconPreview() {
+    final existingProject = widget.project;
+    Widget visual;
+    if (pendingIcon != null) {
+      visual = Image.memory(
+        pendingIcon!.bytes,
+        width: 64,
+        height: 64,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => _emojiVisual(),
+      );
+    } else if (!removeIcon && existingProject != null) {
+      visual = ProjectAvatar(
+        project: existingProject,
+        controller: widget.appearanceController,
+        size: 64,
+        borderRadius: 19,
+        emojiFontSize: 32,
+        fallbackEmoji: emojiController.text.trim().isEmpty
+            ? '📁'
+            : emojiController.text,
+      );
+    } else {
+      visual = _emojiVisual();
+    }
+
+    return Column(
+      children: [
+        ClipRRect(borderRadius: BorderRadius.circular(19), child: visual),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Загрузить PNG, JPEG, WebP или GIF',
+              onPressed: pickingIcon ? null : _pickIcon,
+              icon: pickingIcon
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_photo_alternate_outlined),
+            ),
+            if (pendingIcon != null ||
+                (!removeIcon &&
+                    widget.appearanceController.iconFileFor(projectId) != null))
+              IconButton(
+                tooltip: 'Вернуть эмодзи',
+                onPressed: () {
+                  setState(() {
+                    pendingIcon = null;
+                    removeIcon = true;
+                  });
+                },
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _emojiVisual() {
+    return Container(
+      width: 64,
+      height: 64,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Color(colorValue).withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(19),
+      ),
+      child: Text(
+        emojiController.text.trim().isEmpty ? '📁' : emojiController.text,
+        style: const TextStyle(fontSize: 32),
+      ),
+    );
+  }
+
+  Widget _projectColorButton(int value) {
+    final selected = value == colorValue;
+    return InkWell(
+      borderRadius: BorderRadius.circular(99),
+      onTap: () => setState(() => colorValue = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: Color(value),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected
+                ? Theme.of(context).colorScheme.onSurface
+                : Colors.transparent,
+            width: 3,
+          ),
+        ),
+        child: selected
+            ? const Icon(Icons.check_rounded, color: Colors.white)
+            : null,
+      ),
+    );
+  }
+
+  Widget _paletteSelector({
+    required String title,
+    required ChroniclePalette selected,
+    required ValueChanged<ChroniclePalette> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+              ),
+              Text(selected.label, style: Theme.of(context).textTheme.labelSmall),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final palette in ChroniclePalette.values)
+                Tooltip(
+                  message: palette.label,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => onChanged(palette),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      width: 30,
+                      height: 30,
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected == palette
+                              ? Theme.of(context).colorScheme.onSurface
+                              : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: palette.seed,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _appearanceSection() {
+    final colors = Theme.of(context).colorScheme;
+    final effective = projectAppearance.effectiveAppearance(
+      widget.globalAppearance,
+    );
+    final brightness = Theme.of(context).brightness;
+    final previewLabel = projectAppearance.inheritsGlobal
+        ? 'Глобальное оформление Chronicle'
+        : '${projectAppearance.usesCoordinatedPalette ? projectAppearance.accentPalette.label : 'Собственная палитра'} · ${projectAppearance.surfaceStyle.label}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Оформление проекта',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Оно применяется к карточкам, странице проекта и связанным заметкам. Данные не изменяются.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Наследовать оформление Chronicle'),
+          subtitle: const Text('Использовать глобальные цвета и поверхности'),
+          value: projectAppearance.inheritsGlobal,
+          onChanged: (value) {
+            setState(() {
+              projectAppearance = projectAppearance.copyWith(
+                inheritsGlobal: value,
+              );
+            });
+          },
+        ),
+        if (!projectAppearance.inheritsGlobal) ...[
+          const SizedBox(height: 8),
+          Text('Цветовая тема', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 9,
+            runSpacing: 9,
+            children: [
+              for (final palette in ChroniclePalette.values)
+                ChoiceChip(
+                  avatar: CircleAvatar(backgroundColor: palette.seed),
+                  label: Text(palette.label),
+                  selected: projectAppearance.usesCoordinatedPalette &&
+                      projectAppearance.accentPalette == palette,
+                  onSelected: (_) {
+                    setState(() {
+                      projectAppearance = projectAppearance.withPreset(palette);
+                    });
+                  },
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _paletteSelector(
+            title: 'Акцент и кнопки',
+            selected: projectAppearance.accentPalette,
+            onChanged: (palette) {
+              setState(() {
+                projectAppearance = projectAppearance.copyWith(
+                  accentPalette: palette,
+                );
+              });
+            },
+          ),
+          _paletteSelector(
+            title: 'Активные иконки',
+            selected: projectAppearance.iconPalette,
+            onChanged: (palette) {
+              setState(() {
+                projectAppearance = projectAppearance.copyWith(
+                  iconPalette: palette,
+                );
+              });
+            },
+          ),
+          _paletteSelector(
+            title: 'Фон проекта',
+            selected: projectAppearance.backgroundPalette,
+            onChanged: (palette) {
+              setState(() {
+                projectAppearance = projectAppearance.copyWith(
+                  backgroundPalette: palette,
+                );
+              });
+            },
+          ),
+          _paletteSelector(
+            title: 'Панели и карточки',
+            selected: projectAppearance.panelPalette,
+            onChanged: (palette) {
+              setState(() {
+                projectAppearance = projectAppearance.copyWith(
+                  panelPalette: palette,
+                );
+              });
+            },
+          ),
+          const SizedBox(height: 4),
+          Text('Поверхность', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final style in ChronicleSurfaceStyle.values)
+                ChoiceChip(
+                  avatar: Icon(
+                    switch (style) {
+                      ChronicleSurfaceStyle.matte => Icons.crop_square_rounded,
+                      ChronicleSurfaceStyle.glossy => Icons.gradient_rounded,
+                      ChronicleSurfaceStyle.shiny => Icons.auto_awesome_rounded,
+                    },
+                    size: 18,
+                  ),
+                  label: Text(style.label),
+                  selected: projectAppearance.surfaceStyle == style,
+                  onSelected: (_) {
+                    setState(() {
+                      projectAppearance = projectAppearance.copyWith(
+                        surfaceStyle: style,
+                      );
+                    });
+                  },
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 14),
+        Theme(
+          data: buildChronicleTheme(brightness, effective),
+          child: Builder(
+            builder: (previewContext) => ChroniclePanelSurface(
+              emphasized: true,
+              borderRadius: BorderRadius.circular(18),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.folder_special_rounded,
+                      color: Theme.of(previewContext)
+                          .extension<ChronicleAppearanceTheme>()
+                          ?.iconAccent,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        previewLabel,
+                        style: Theme.of(previewContext).textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const Icon(Icons.auto_awesome_rounded, size: 18),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickIcon() async {
+    setState(() => pickingIcon = true);
+    try {
+      final selected = await pickProjectIcon();
+      if (!mounted || selected == null) return;
+      setState(() {
+        pendingIcon = selected;
+        removeIcon = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось загрузить иконку: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => pickingIcon = false);
+    }
+  }
+
   Future<void> _pickDueDate() async {
     final now = DateTime.now();
     final selected = await showDatePicker(
@@ -220,7 +602,12 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 10),
     );
-    if (selected != null) setState(() => dueAt = selected);
+    if (!mounted || selected == null) return;
+    setState(() => dueAt = selected);
+  }
+
+  void _refreshEmojiPreview() {
+    if (mounted) setState(() {});
   }
 
   void _save() {
@@ -234,23 +621,26 @@ class _ProjectEditorSheetState extends State<ProjectEditorSheet> {
 
     Navigator.pop(
       context,
-      Project(
-        id: existing?.id ?? const Uuid().v4(),
-        title: title,
-        emoji:
-            emojiController.text.trim().isEmpty
-                ? '📁'
-                : emojiController.text.trim(),
-        description: descriptionController.text.trim(),
-        colorValue: colorValue,
-        dueAt: dueAt,
-        budgetMinutes:
-            budgetHours == null
-                ? null
-                : (budgetHours * 60).round().clamp(1, 1000000).toInt(),
-        archived: existing?.archived ?? false,
-        createdAt: existing?.createdAt ?? now,
-        updatedAt: now,
+      ProjectEditorResult(
+        project: Project(
+          id: projectId,
+          title: title,
+          emoji: emojiController.text.trim().isEmpty
+              ? '📁'
+              : emojiController.text.trim(),
+          description: descriptionController.text.trim(),
+          colorValue: colorValue,
+          dueAt: dueAt,
+          budgetMinutes: budgetHours == null
+              ? null
+              : (budgetHours * 60).round().clamp(1, 1000000).toInt(),
+          archived: existing?.archived ?? false,
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now,
+        ),
+        appearance: projectAppearance,
+        icon: pendingIcon,
+        removeIcon: removeIcon,
       ),
     );
   }

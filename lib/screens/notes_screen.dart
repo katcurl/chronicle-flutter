@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
+import '../features/appearance/app_appearance.dart';
 import '../features/notes/custom_note_template_dialog.dart';
 import '../features/notes/debounced_text_notifier.dart';
 import '../features/notes/note_block_reorder_dialog.dart';
@@ -44,6 +45,8 @@ import '../features/notes/note_wiki_rename.dart';
 import '../features/notes/scientific_object_dialogs.dart';
 import '../features/notes/scientific_table_editor_dialog.dart';
 import '../features/notes/scientific_reference_syntax.dart';
+import '../features/projects/project_appearance_store.dart';
+import '../features/projects/project_appearance_widgets.dart';
 import '../features/references/citation_syntax.dart';
 import '../features/tasks/task_editor_sheet.dart';
 import '../models/app_models.dart';
@@ -86,9 +89,16 @@ Future<void> _showCustomNoteTemplateManager(
 }
 
 class NotesScreen extends StatefulWidget {
-  const NotesScreen({super.key, required this.store});
+  const NotesScreen({
+    super.key,
+    required this.store,
+    required this.appearanceController,
+    required this.globalAppearance,
+  });
 
   final AppStore store;
+  final ProjectAppearanceController appearanceController;
+  final AppAppearancePreferences globalAppearance;
 
   @override
   State<NotesScreen> createState() => _NotesScreenState();
@@ -207,6 +217,8 @@ class _NotesScreenState extends State<NotesScreen> {
           ? NoteHomePage(
               store: widget.store,
               preferences: _homePreferences,
+              appearanceController: widget.appearanceController,
+              globalAppearance: widget.globalAppearance,
               onOpenNote: _open,
               onOpenProject: (projectId) {
                 setState(() {
@@ -257,7 +269,20 @@ class _NotesScreenState extends State<NotesScreen> {
                           ...widget.store.activeProjects.map(
                             (project) => DropdownMenuItem<String?>(
                               value: project.id,
-                              child: Text('${project.emoji} ${project.title}'),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ProjectAvatar(
+                                    project: project,
+                                    controller: widget.appearanceController,
+                                    size: 22,
+                                    borderRadius: 6,
+                                    emojiFontSize: 15,
+                                  ),
+                                  const SizedBox(width: 7),
+                                  Text(project.title),
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -315,6 +340,7 @@ class _NotesScreenState extends State<NotesScreen> {
                               itemBuilder: (_, index) => _NoteCard(
                                 store: widget.store,
                                 note: notes[index],
+                                appearanceController: widget.appearanceController,
                                 onOpen: () => _open(notes[index]),
                               ),
                             );
@@ -550,7 +576,12 @@ class _NotesScreenState extends State<NotesScreen> {
   Future<void> _open(Note note) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => NoteWorkspaceScreen(store: widget.store, note: note),
+        builder: (_) => NoteWorkspaceScreen(
+          store: widget.store,
+          note: note,
+          appearanceController: widget.appearanceController,
+          globalAppearance: widget.globalAppearance,
+        ),
       ),
     );
     if (mounted) setState(() {});
@@ -561,11 +592,13 @@ class _NoteCard extends StatelessWidget {
   const _NoteCard({
     required this.store,
     required this.note,
+    required this.appearanceController,
     required this.onOpen,
   });
 
   final AppStore store;
   final Note note;
+  final ProjectAppearanceController appearanceController;
   final VoidCallback onOpen;
 
   @override
@@ -634,7 +667,16 @@ class _NoteCard extends StatelessWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Text(project?.emoji ?? '📁'),
+                  if (project == null)
+                    const Text('📁')
+                  else
+                    ProjectAvatar(
+                      project: project,
+                      controller: appearanceController,
+                      size: 20,
+                      borderRadius: 6,
+                      emojiFontSize: 14,
+                    ),
                   const SizedBox(width: 5),
                   Expanded(
                     child: Text(
@@ -692,10 +734,14 @@ class NoteWorkspaceScreen extends StatefulWidget {
     super.key,
     required this.store,
     required this.note,
+    required this.appearanceController,
+    required this.globalAppearance,
   });
 
   final AppStore store;
   final Note note;
+  final ProjectAppearanceController appearanceController;
+  final AppAppearancePreferences globalAppearance;
 
   @override
   State<NoteWorkspaceScreen> createState() => _NoteWorkspaceScreenState();
@@ -868,12 +914,16 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     final versions = widget.store.versionsFor(widget.note.id);
     final editorProfile = _editorPreferences.activeProfile;
 
-    return PopScope(
-      onPopInvokedWithResult: (_, __) {
-        if (dirty) _save(createVersion: false);
-      },
-      child: LayoutBuilder(
-        builder: (context, constraints) {
+    return ProjectAppearanceScope(
+      projectId: projectId,
+      controller: widget.appearanceController,
+      globalAppearance: widget.globalAppearance,
+      child: PopScope(
+        onPopInvokedWithResult: (_, __) {
+          if (dirty) _save(createVersion: false);
+        },
+        child: LayoutBuilder(
+          builder: (context, constraints) {
           final showPanel =
               constraints.maxWidth >= 860 && editorProfile.showContextPanel;
           final split = constraints.maxWidth >= 1180;
@@ -1047,7 +1097,8 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
               ],
             ),
           );
-        },
+          },
+        ),
       ),
     );
   }
@@ -3319,7 +3370,12 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
     _save(createVersion: false);
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => NoteWorkspaceScreen(store: widget.store, note: note),
+        builder: (_) => NoteWorkspaceScreen(
+          store: widget.store,
+          note: note,
+          appearanceController: widget.appearanceController,
+          globalAppearance: widget.globalAppearance,
+        ),
       ),
     );
     if (mounted) setState(() {});

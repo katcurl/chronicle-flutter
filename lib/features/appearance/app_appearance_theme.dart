@@ -290,17 +290,106 @@ class ChroniclePanelSurface extends StatelessWidget {
       context,
     ).extension<ChronicleAppearanceTheme>();
     if (appearance == null) return child;
+    final radius = borderRadius ?? BorderRadius.zero;
     return DecoratedBox(
       decoration: appearance.decoration(
-        borderRadius: borderRadius,
+        borderRadius: radius,
         emphasized: emphasized,
       ),
       child: ClipRRect(
-        borderRadius: borderRadius ?? BorderRadius.zero,
+        borderRadius: radius,
         clipBehavior: clipBehavior,
-        child: child,
+        child: Stack(
+          fit: StackFit.passthrough,
+          children: <Widget>[
+            child,
+            if (appearance.style == ChronicleSurfaceStyle.shiny)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _ChronicleGlitterPainter(
+                      sparkleColor: appearance.panelHighlight,
+                      accentColor: appearance.iconAccent,
+                      emphasized: emphasized,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
+  }
+}
+
+class _ChronicleGlitterPainter extends CustomPainter {
+  const _ChronicleGlitterPainter({
+    required this.sparkleColor,
+    required this.accentColor,
+    required this.emphasized,
+  });
+
+  final Color sparkleColor;
+  final Color accentColor;
+  final bool emphasized;
+
+  static const List<Offset> _points = <Offset>[
+    Offset(0.07, 0.18),
+    Offset(0.16, 0.72),
+    Offset(0.24, 0.34),
+    Offset(0.33, 0.84),
+    Offset(0.42, 0.13),
+    Offset(0.51, 0.58),
+    Offset(0.61, 0.27),
+    Offset(0.69, 0.77),
+    Offset(0.78, 0.42),
+    Offset(0.88, 0.16),
+    Offset(0.94, 0.67),
+    Offset(0.13, 0.44),
+    Offset(0.37, 0.49),
+    Offset(0.57, 0.89),
+    Offset(0.83, 0.88),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dotPaint = Paint()
+      ..color = sparkleColor.withValues(alpha: emphasized ? 0.52 : 0.34)
+      ..style = PaintingStyle.fill;
+    final accentPaint = Paint()
+      ..color = accentColor.withValues(alpha: emphasized ? 0.42 : 0.26)
+      ..strokeWidth = emphasized ? 1.2 : 0.9
+      ..strokeCap = StrokeCap.round;
+
+    for (var index = 0; index < _points.length; index++) {
+      final normalized = _points[index];
+      final center = Offset(
+        normalized.dx * size.width,
+        normalized.dy * size.height,
+      );
+      final radius = index % 3 == 0 ? 1.45 : 0.8;
+      canvas.drawCircle(center, radius, dotPaint);
+      if (index % 4 == 0) {
+        final arm = emphasized ? 4.0 : 3.0;
+        canvas.drawLine(
+          center.translate(-arm, 0),
+          center.translate(arm, 0),
+          accentPaint,
+        );
+        canvas.drawLine(
+          center.translate(0, -arm),
+          center.translate(0, arm),
+          accentPaint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ChronicleGlitterPainter oldDelegate) {
+    return sparkleColor != oldDelegate.sparkleColor ||
+        accentColor != oldDelegate.accentColor ||
+        emphasized != oldDelegate.emphasized;
   }
 }
 

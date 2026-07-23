@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../features/appearance/app_appearance.dart';
 import '../features/appearance/app_appearance_dialog.dart';
 import '../features/appearance/app_appearance_theme.dart';
+import '../features/projects/project_appearance_store.dart';
 import '../features/workspaces/workspace_manager_dialog.dart';
 import '../features/workspaces/workspace_preferences_store.dart';
 import '../features/workspaces/workspace_profile.dart';
@@ -39,6 +40,8 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   final WorkspacePreferencesStore _workspaceStore =
       WorkspacePreferencesStore();
+  final ProjectAppearanceController _projectAppearanceController =
+      ProjectAppearanceController();
   WorkspacePreferences _workspacePreferences = WorkspacePreferences.defaults();
   AppSection section = AppSection.today;
 
@@ -49,6 +52,13 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     unawaited(_loadWorkspacePreferences());
+    unawaited(_projectAppearanceController.load());
+  }
+
+  @override
+  void dispose() {
+    _projectAppearanceController.dispose();
+    super.dispose();
   }
 
   int get index => section.index;
@@ -268,9 +278,17 @@ class _HomeShellState extends State<HomeShell> {
         onOpenTask: (_) => _select(AppSection.tasks),
         onStart: _start,
       ),
-      ProjectsScreen(store: widget.store),
+      ProjectsScreen(
+        store: widget.store,
+        appearanceController: _projectAppearanceController,
+        globalAppearance: widget.appearance,
+      ),
       TasksScreen(store: widget.store),
-      NotesScreen(store: widget.store),
+      NotesScreen(
+        store: widget.store,
+        appearanceController: _projectAppearanceController,
+        globalAppearance: widget.appearance,
+      ),
       InsightsScreen(store: widget.store),
     ];
 

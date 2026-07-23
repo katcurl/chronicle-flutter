@@ -121,7 +121,7 @@ enum ChronicleSurfaceStyle {
   shiny(
     id: 'shiny',
     label: 'Shiny',
-    description: 'Выраженный блик, насыщенность и более заметная глубина.',
+    description: 'Мелкие блёстки, сияющие точки и выразительный объём.',
   );
 
   const ChronicleSurfaceStyle({

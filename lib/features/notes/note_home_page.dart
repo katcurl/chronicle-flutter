@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../models/app_models.dart';
 import '../../services/app_store.dart';
+import '../appearance/app_appearance.dart';
+import '../projects/project_appearance_store.dart';
+import '../projects/project_appearance_widgets.dart';
 import 'note_document.dart';
 import 'note_home_preferences.dart';
 import 'note_templates.dart';
@@ -11,6 +14,8 @@ class NoteHomePage extends StatelessWidget {
     super.key,
     required this.store,
     required this.preferences,
+    required this.appearanceController,
+    required this.globalAppearance,
     required this.onOpenNote,
     required this.onOpenProject,
     required this.onOpenFolder,
@@ -21,6 +26,8 @@ class NoteHomePage extends StatelessWidget {
 
   final AppStore store;
   final NoteHomePreferences preferences;
+  final ProjectAppearanceController appearanceController;
+  final AppAppearancePreferences globalAppearance;
   final ValueChanged<Note> onOpenNote;
   final ValueChanged<String> onOpenProject;
   final ValueChanged<String> onOpenFolder;
@@ -139,6 +146,7 @@ class NoteHomePage extends StatelessWidget {
                   child: _HomeNoteCard(
                     store: store,
                     note: items[index],
+                    appearanceController: appearanceController,
                     compact: preferences.compactCards,
                     onTap: () => onOpenNote(items[index]),
                   ),
@@ -202,44 +210,60 @@ class NoteHomePage extends StatelessWidget {
                   );
                   return SizedBox(
                     width: preferences.compactCards ? 210 : 250,
-                    child: Card(
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => onOpenProject(project.id),
-                        child: Padding(
-                          padding: EdgeInsets.all(
-                            preferences.compactCards ? 14 : 18,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
+                    child: ProjectAppearanceScope(
+                      projectId: project.id,
+                      controller: appearanceController,
+                      globalAppearance: globalAppearance,
+                      child: Builder(
+                        builder: (projectContext) => ProjectSurface(
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                            onTap: () => onOpenProject(project.id),
+                            child: Padding(
+                              padding: EdgeInsets.all(
+                                preferences.compactCards ? 14 : 18,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    project.emoji,
-                                    style: const TextStyle(fontSize: 24),
+                                  Row(
+                                    children: [
+                                      ProjectAvatar(
+                                        project: project,
+                                        controller: appearanceController,
+                                        size: 34,
+                                        borderRadius: 10,
+                                        emojiFontSize: 22,
+                                      ),
+                                      const Spacer(),
+                                      Text('${projectNotes.length} заметок'),
+                                    ],
                                   ),
                                   const Spacer(),
-                                  Text('${projectNotes.length} заметок'),
+                                  Text(
+                                    project.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(projectContext)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                  ),
+                                  if (!preferences.compactCards &&
+                                      projectNotes.isNotEmpty)
+                                    Text(
+                                      projectNotes.first.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(
+                                        projectContext,
+                                      ).textTheme.bodySmall,
+                                    ),
                                 ],
                               ),
-                              const Spacer(),
-                              Text(
-                                project.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w800),
-                              ),
-                              if (!preferences.compactCards &&
-                                  projectNotes.isNotEmpty)
-                                Text(
-                                  projectNotes.first.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                            ],
+                            ),
+                          ),
                           ),
                         ),
                       ),
@@ -475,12 +499,14 @@ class _HomeNoteCard extends StatelessWidget {
   const _HomeNoteCard({
     required this.store,
     required this.note,
+    required this.appearanceController,
     required this.compact,
     required this.onTap,
   });
 
   final AppStore store;
   final Note note;
+  final ProjectAppearanceController appearanceController;
   final bool compact;
   final VoidCallback onTap;
 
@@ -502,11 +528,19 @@ class _HomeNoteCard extends StatelessWidget {
                 children: [
                   Text(noteTypeIcon(note.noteType)),
                   const SizedBox(width: 7),
+                  if (project != null) ...[
+                    ProjectAvatar(
+                      project: project,
+                      controller: appearanceController,
+                      size: 20,
+                      borderRadius: 6,
+                      emojiFontSize: 14,
+                    ),
+                    const SizedBox(width: 6),
+                  ],
                   Expanded(
                     child: Text(
-                      project == null
-                          ? 'Без проекта'
-                          : '${project.emoji} ${project.title}',
+                      project?.title ?? 'Без проекта',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium,

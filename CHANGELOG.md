@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.27.5+79
+
+- Added per-project appearance that can inherit the global Chronicle theme or use its own coordinated or mixed accent, icon, background and panel colors with a Matte, Glossy or Shiny surface style.
+- Applied project appearance to project cards, project detail screens, note overview project cards and note workspaces belonging to the project.
+- Added managed PNG, JPEG, WebP and animated GIF project icons with content-signature validation and a 10 MB limit.
+- Kept an emoji fallback and allowed returning to it while safely removing the previously managed icon file.
+- Changed Shiny panels from a stronger gloss into a glitter surface with deterministic reflective dots and star-shaped sparkles.
+- Stored project visual metadata in SharedPreferences and icon files in the application-support directory without changing the database, Vault format, Markdown or synchronization payloads.
+- Added deterministic tests for inheritance, custom palette resolution, icon metadata round-tripping, GIF detection and unsupported-file rejection.
+
 ## 0.27.4+78
 
 - Added a local appearance system with coordinated violet, orange, yellow, red, pink, blue, green and graphite themes.

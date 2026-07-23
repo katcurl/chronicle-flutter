@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../features/appearance/app_appearance.dart';
+import '../features/projects/project_appearance_store.dart';
+import '../features/projects/project_appearance_widgets.dart';
 import '../features/projects/project_detail_screen.dart';
 import '../features/projects/project_editor_sheet.dart';
 import '../features/tasks/task_metadata.dart';
@@ -8,9 +11,16 @@ import '../services/app_store.dart';
 import '../widgets/common.dart';
 
 class ProjectsScreen extends StatefulWidget {
-  const ProjectsScreen({super.key, required this.store});
+  const ProjectsScreen({
+    super.key,
+    required this.store,
+    required this.appearanceController,
+    required this.globalAppearance,
+  });
 
   final AppStore store;
+  final ProjectAppearanceController appearanceController;
+  final AppAppearancePreferences globalAppearance;
 
   @override
   State<ProjectsScreen> createState() => _ProjectsScreenState();
@@ -73,6 +83,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                         (_, index) => _ProjectCard(
                           project: projects[index],
                           store: widget.store,
+                          appearanceController: widget.appearanceController,
+                          globalAppearance: widget.globalAppearance,
                           onOpen: () => _open(projects[index]),
                           onEdit: () => _edit(projects[index]),
                           onArchive: () {
@@ -90,21 +102,44 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   Future<void> _add() async {
-    final project = await ProjectEditorSheet.show(context);
-    if (project == null) return;
-    widget.store.addProject(project);
-    setState(() {});
+    final result = await ProjectEditorSheet.show(
+      context,
+      appearanceController: widget.appearanceController,
+      globalAppearance: widget.globalAppearance,
+    );
+    if (result == null) return;
+    widget.store.addProject(result.project);
+    await _saveAppearance(result);
+    if (mounted) setState(() {});
   }
 
   Future<void> _edit(Project project) async {
-    final edited = await ProjectEditorSheet.show(context, project: project);
-    if (edited == null) return;
-    final index = widget.store.data.projects.indexWhere(
-      (item) => item.id == project.id,
+    final result = await ProjectEditorSheet.show(
+      context,
+      project: project,
+      appearanceController: widget.appearanceController,
+      globalAppearance: widget.globalAppearance,
     );
-    if (index >= 0) widget.store.data.projects[index] = edited;
-    widget.store.updateProject(edited);
-    setState(() {});
+    if (result == null) return;
+    widget.store.updateProject(result.project);
+    await _saveAppearance(result);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _saveAppearance(ProjectEditorResult result) async {
+    try {
+      await widget.appearanceController.saveProjectAppearance(
+        result.project.id,
+        result.appearance,
+        icon: result.icon,
+        removeIcon: result.removeIcon,
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось сохранить оформление: $error')),
+      );
+    }
   }
 
   Future<void> _open(Project project) async {
@@ -112,10 +147,15 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       MaterialPageRoute(
         builder:
             (_) =>
-                ProjectDetailScreen(store: widget.store, projectId: project.id),
+                ProjectDetailScreen(
+                  store: widget.store,
+                  projectId: project.id,
+                  appearanceController: widget.appearanceController,
+                  globalAppearance: widget.globalAppearance,
+                ),
       ),
     );
-    setState(() {});
+    if (mounted) setState(() {});
   }
 }
 
@@ -123,6 +163,8 @@ class _ProjectCard extends StatelessWidget {
   const _ProjectCard({
     required this.project,
     required this.store,
+    required this.appearanceController,
+    required this.globalAppearance,
     required this.onOpen,
     required this.onEdit,
     required this.onArchive,
@@ -130,6 +172,8 @@ class _ProjectCard extends StatelessWidget {
 
   final Project project;
   final AppStore store;
+  final ProjectAppearanceController appearanceController;
+  final AppAppearancePreferences globalAppearance;
   final VoidCallback onOpen;
   final VoidCallback onEdit;
   final VoidCallback onArchive;
@@ -145,38 +189,38 @@ class _ProjectCard extends StatelessWidget {
     final progress = tasks.isEmpty ? 0.0 : done / tasks.length;
     final color = Color(project.colorValue);
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    return ProjectAppearanceScope(
+      projectId: project.id,
+      controller: appearanceController,
+      globalAppearance: globalAppearance,
+      child: Builder(
+        builder: (projectContext) => ProjectSurface(
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onOpen,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: Text(
-                      project.emoji,
-                      style: const TextStyle(fontSize: 26),
-                    ),
-                  ),
-                  const Spacer(),
-                  PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'edit') onEdit();
-                      if (value == 'archive') onArchive();
-                    },
-                    itemBuilder:
-                        (_) => [
+                  Row(
+                    children: [
+                      ProjectAvatar(
+                        project: project,
+                        controller: appearanceController,
+                        size: 48,
+                        borderRadius: 15,
+                        backgroundColor: color.withValues(alpha: 0.22),
+                        emojiFontSize: 26,
+                      ),
+                      const Spacer(),
+                      PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'edit') onEdit();
+                          if (value == 'archive') onArchive();
+                        },
+                        itemBuilder: (_) => [
                           const PopupMenuItem(
                             value: 'edit',
                             child: Text('Редактировать'),
@@ -190,57 +234,58 @@ class _ProjectCard extends StatelessWidget {
                             ),
                           ),
                         ],
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(
-                project.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              if (project.description.isNotEmpty)
-                Text(
-                  project.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              const Spacer(),
-              LinearProgressIndicator(
-                value: progress,
-                borderRadius: BorderRadius.circular(99),
-                color: color,
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text('$done / ${tasks.length} задач'),
-                  const Spacer(),
-                  Text(formatDuration(seconds)),
-                ],
-              ),
-              if (project.dueAt != null) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.event_rounded,
-                      size: 17,
-                      color:
-                          isOverdue(project.dueAt)
-                              ? Theme.of(context).colorScheme.error
-                              : null,
+                  const SizedBox(height: 14),
+                  Text(
+                    project.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(projectContext).textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  if (project.description.isNotEmpty)
+                    Text(
+                      project.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(projectContext).textTheme.bodySmall,
                     ),
-                    const SizedBox(width: 6),
-                    Text('До ${shortDate(project.dueAt)}'),
+                  const Spacer(),
+                  LinearProgressIndicator(
+                    value: progress,
+                    borderRadius: BorderRadius.circular(99),
+                    color: color,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text('$done / ${tasks.length} задач'),
+                      const Spacer(),
+                      Text(formatDuration(seconds)),
+                    ],
+                  ),
+                  if (project.dueAt != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.event_rounded,
+                          size: 17,
+                          color: isOverdue(project.dueAt)
+                              ? Theme.of(projectContext).colorScheme.error
+                              : null,
+                        ),
+                        const SizedBox(width: 6),
+                        Text('До ${shortDate(project.dueAt)}'),
+                      ],
+                    ),
                   ],
-                ),
-              ],
-            ],
+                ],
+              ),
+            ),
+          ),
           ),
         ),
       ),
