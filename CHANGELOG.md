@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.31.3+87
+
+- Replaced publication abbreviation extraction with a two-stage parser that first identifies the parenthesized abbreviation and then resolves its definition from the preceding text.
+- Preferred the shortest preceding word sequence whose initials match the abbreviation, avoiding accidental sentence prefixes such as “The analysis used”.
+- Added regression coverage for definitions located outside the selected live heading and for sentence-prefixed definitions.
+
 ## 0.31.2+86
 
 - Fixed publication abbreviation assembly when a term is defined elsewhere in a linked source note rather than inside the selected live heading.

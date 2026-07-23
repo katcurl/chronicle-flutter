@@ -170,13 +170,51 @@ This paragraph must not be included.
       ),
     );
     expect(assembly.markdown, contains('**Таблица 1.**'));
+    expect(assembly.abbreviations, containsPair('MD', 'Molecular dynamics'));
     expect(assembly.markdown, contains('## Список сокращений'));
     expect(assembly.markdown, contains('**MD**'));
-    expect(assembly.abbreviations['MD'], 'Molecular dynamics');
     expect(assembly.markdown, contains('## Литература'));
     expect(assembly.markdown, contains('Smith, 2024'));
     expect(assembly.figureCount, 1);
     expect(assembly.tableCount, 1);
+  });
+
+  test('abbreviation parser ignores sentence prefixes', () {
+    final source = sourceNote(
+      id: 'source-1',
+      title: 'Methods note',
+      content:
+          '## Methods\n\nThe analysis used molecular dynamics (MD) for 500 ns.',
+    );
+    final workspace = PublicationWorkspace(
+      kind: PublicationKind.article,
+      sections: <PublicationSection>[
+        PublicationSection(
+          id: 'section-1',
+          title: 'Methods',
+          fragments: <PublicationFragment>[
+            PublicationFragment(
+              id: 'fragment-1',
+              noteId: source.id,
+              heading: 'Methods',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final assembly = assemblePublication(
+      title: 'Methods manuscript',
+      workspace: workspace,
+      notes: <Note>[source],
+      sources: const <CitationSource>[],
+    );
+
+    expect(assembly.abbreviations, containsPair('MD', 'molecular dynamics'));
+    expect(
+      assembly.markdown,
+      contains('- **MD** — molecular dynamics'),
+    );
   });
 
   test('unrelated notes do not add abbreviations to a publication', () {

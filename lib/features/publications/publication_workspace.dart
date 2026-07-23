@@ -653,16 +653,84 @@ _NumberingResult _numberTables(String markdown, {required bool enabled}) {
 
 Map<String, String> _extractAbbreviations(String markdown) {
   final result = <String, String>{};
-  final pattern = RegExp(
-    r'([A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9 ,\-/]{3,90}?)\s*\(([A-ZА-ЯЁ][A-ZА-ЯЁ0-9-]{1,11})\)',
+  final abbreviationPattern = RegExp(
+    r'\(([A-ZА-ЯЁ][A-ZА-ЯЁ0-9-]{1,11})\)',
   );
-  for (final match in pattern.allMatches(markdown)) {
-    final expansion = match.group(1)!.trim().replaceAll(RegExp(r'\s+'), ' ');
-    final abbreviation = match.group(2)!.trim();
-    if (expansion.length < 4 || expansion.length > 90) continue;
+
+  for (final match in abbreviationPattern.allMatches(markdown)) {
+    final abbreviation = match.group(1)!.trim();
+    final newlineIndex = match.start == 0
+        ? -1
+        : markdown.lastIndexOf('\n', match.start - 1);
+    final rawPrefix = markdown.substring(newlineIndex + 1, match.start);
+    final expansion = _abbreviationExpansionFromPrefix(
+      rawPrefix,
+      abbreviation,
+    );
+    if (expansion == null) continue;
     result.putIfAbsent(abbreviation, () => expansion);
   }
+
   final ordered = result.entries.toList()
     ..sort((left, right) => left.key.compareTo(right.key));
   return <String, String>{for (final entry in ordered) entry.key: entry.value};
+}
+
+String? _abbreviationExpansionFromPrefix(
+  String rawPrefix,
+  String abbreviation,
+) {
+  var prefix = rawPrefix
+      .trimRight()
+      .replaceFirst(
+        RegExp(r'^\s{0,3}(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)'),
+        '',
+      )
+      .replaceAll(RegExp(r'[*_`~]'), '');
+  if (prefix.isEmpty) return null;
+
+  final boundaryMatches = RegExp(r'(?:[.!?;:]\s+|[—–]\s+)').allMatches(prefix);
+  if (boundaryMatches.isNotEmpty) {
+    prefix = prefix.substring(boundaryMatches.last.end).trimLeft();
+  }
+
+  final words = <String>[
+    for (final rawWord in prefix.split(RegExp(r'\s+')))
+      if (_cleanAbbreviationWord(rawWord).isNotEmpty)
+        _cleanAbbreviationWord(rawWord),
+  ];
+  if (words.isEmpty) return null;
+
+  final normalizedAbbreviation = abbreviation
+      .replaceAll('-', '')
+      .toUpperCase();
+  final maximumWords = words.length < 12 ? words.length : 12;
+  for (var count = 1; count <= maximumWords; count += 1) {
+    final candidate = words.sublist(words.length - count);
+    final initials = candidate
+        .map(_abbreviationInitial)
+        .where((value) => value.isNotEmpty)
+        .join()
+        .toUpperCase();
+    if (initials == normalizedAbbreviation) {
+      final expansion = candidate.join(' ');
+      if (expansion.length >= 4 && expansion.length <= 90) return expansion;
+    }
+  }
+
+  final fallbackStart = words.length > 8 ? words.length - 8 : 0;
+  final fallback = words.sublist(fallbackStart).join(' ');
+  if (fallback.length < 4 || fallback.length > 90) return null;
+  return fallback;
+}
+
+String _cleanAbbreviationWord(String value) {
+  return value
+      .replaceFirst(RegExp(r'^[^A-Za-zА-Яа-яЁё0-9]+'), '')
+      .replaceFirst(RegExp(r'[^A-Za-zА-Яа-яЁё0-9-]+$'), '');
+}
+
+String _abbreviationInitial(String value) {
+  final match = RegExp(r'[A-Za-zА-Яа-яЁё0-9]').firstMatch(value);
+  return match?.group(0) ?? '';
 }
