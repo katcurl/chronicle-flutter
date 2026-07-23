@@ -470,6 +470,14 @@ class _MarkdownParser {
               !(title ?? '').trim().startsWith(NoteImageSyntax.metadataPrefix)) {
             presentation = presentation.copyWith(caption: title!.trim());
           }
+          presentation = presentation.copyWith(
+            caption: NoteImageSyntax.decodeMetadataValue(
+              presentation.caption,
+            ),
+            figureId: NoteImageSyntax.decodeMetadataValue(
+              presentation.figureId,
+            ),
+          );
           result.add(
             _Inline.image(
               _MarkdownImage(
@@ -482,7 +490,7 @@ class _MarkdownParser {
           break;
         case 'input':
           final checked = node.attributes.containsKey('checked');
-          result.add(_Inline.text(checked ? '☒ ' : '☐ ', style: style));
+          result.add(_Inline.text(checked ? '[x] ' : '[ ] ', style: style));
           break;
         default:
           result.addAll(_inlineNodes(node.children, style: style));

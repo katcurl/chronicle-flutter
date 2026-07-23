@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 enum NoteImageAlignment { left, center, right }
 
 class NoteImagePresentation {
@@ -85,18 +87,10 @@ class NoteImagePresentation {
           );
           break;
         case 'caption':
-          try {
-            caption = Uri.decodeComponent(raw);
-          } on Object {
-            caption = raw;
-          }
+          caption = NoteImageSyntax.decodeMetadataValue(raw);
           break;
         case 'figure':
-          try {
-            figureId = Uri.decodeComponent(raw);
-          } on Object {
-            figureId = raw;
-          }
+          figureId = NoteImageSyntax.decodeMetadataValue(raw);
           break;
       }
     }
@@ -152,6 +146,45 @@ class NoteImageReference {
 
 class NoteImageSyntax {
   const NoteImageSyntax._();
+
+  /// Decodes percent-encoded metadata without rejecting raw Unicode that may
+  /// appear beside encoded bytes in older or manually edited notes.
+  static String decodeMetadataValue(String value) {
+    if (!value.contains('%')) {
+      return value;
+    }
+
+    final output = StringBuffer();
+    final encodedBytes = <int>[];
+
+    void flushEncodedBytes() {
+      if (encodedBytes.isEmpty) {
+        return;
+      }
+      output.write(utf8.decode(encodedBytes, allowMalformed: true));
+      encodedBytes.clear();
+    }
+
+    var index = 0;
+    while (index < value.length) {
+      if (value.codeUnitAt(index) == 0x25 && index + 2 < value.length) {
+        final byte = int.tryParse(
+          value.substring(index + 1, index + 3),
+          radix: 16,
+        );
+        if (byte != null) {
+          encodedBytes.add(byte);
+          index += 3;
+          continue;
+        }
+      }
+      flushEncodedBytes();
+      output.writeCharCode(value.codeUnitAt(index));
+      index += 1;
+    }
+    flushEncodedBytes();
+    return output.toString();
+  }
 
   static const String metadataPrefix = 'chronicle-image';
   static const int minWidthPercent = 20;

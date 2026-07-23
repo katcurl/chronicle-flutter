@@ -104,6 +104,23 @@ void main() {
     expect(restored.presentation.caption, 'Кадр после МД');
   });
 
+  test('mixed Unicode and percent-encoded image metadata is decoded', () {
+    final presentation = NoteImagePresentation.fromMarkdownTitle(
+      'chronicle-image width=75 align=center '
+      'caption=Рисунок%201.%20RMSD%20trajectory '
+      'figure=figure%201',
+    );
+
+    expect(presentation.caption, 'Рисунок 1. RMSD trajectory');
+    expect(presentation.figureId, 'figure 1');
+    expect(
+      NoteImageSyntax.decodeMetadataValue(
+        '%D0%A0%D0%B8%D1%81%D1%83%D0%BD%D0%BE%D0%BA%202',
+      ),
+      'Рисунок 2',
+    );
+  });
+
   test('width is restricted to the supported responsive range', () {
     final tooSmall = NoteImagePresentation.fromMarkdownTitle(
       'chronicle-image width=1 align=left',

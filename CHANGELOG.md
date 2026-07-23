@@ -1,3 +1,10 @@
+## 1.0.5+105 — Correct exported captions and task markers
+
+- Fixed DOCX/PDF captions that retained URL-encoded spaces such as `%20`.
+- Added safe decoding for mixed raw Unicode and percent-encoded image metadata.
+- Exported task-list markers now use `[x]` and `[ ]`, preserving Markdown semantics without unsupported PDF glyph warnings.
+- Added regression coverage for decoded captions, figure identifiers and exported task markers.
+
 ## 1.0.4+104 — Complete Markdown DOCX/PDF export
 
 - Rebuilt DOCX and PDF export around parsed GitHub-Flavored Markdown instead of flattened plain paragraphs.
