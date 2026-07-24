@@ -50,6 +50,8 @@ abstract class AppRepository implements DomainMutationRepository {
 
   Future<void> saveDeviceKeyMaterial(DeviceKeyMaterial material);
 
+  Future<void> deleteDeviceKeyMaterial();
+
   Future<List<TrustedDevice>> loadTrustedDevices({bool includeRevoked = false});
 
   Future<void> saveTrustedDevice(TrustedDevice device);

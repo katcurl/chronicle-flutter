@@ -29,6 +29,7 @@ dependencies:
   crypto: ^3.0.7
   file_picker: 12.0.0-beta.7
   cryptography: ^2.9.0
+  flutter_secure_storage: 10.3.1
   mobile_scanner: 7.2.0
   qr_flutter: ^4.1.0
   chronicle_lan_android:

@@ -21,6 +21,8 @@ import '../reliability/release_readiness.dart';
 import '../reliability/reliability_models.dart';
 import '../reliability/reliability_service.dart';
 import '../reliability/undo_journal.dart';
+import '../security/device_key_store.dart';
+import '../security/device_key_store_secure.dart';
 import '../sync/lan_auto_sync_models.dart';
 import '../sync/lan_auto_sync_service.dart';
 import '../sync/lan_auto_sync_transport.dart';
@@ -40,6 +42,8 @@ class AppStore extends ChangeNotifier {
     VaultService? vaultService,
     PairingService? pairingService,
     LanSyncService? lanSyncService,
+    DeviceKeyStore? deviceKeyStore,
+    bool migrateDeviceKeyOnStartup = false,
     ReliabilityService? reliabilityService,
     CustomNoteTemplateStore? customNoteTemplateStore,
     bool enableAutomaticLanSync = false,
@@ -51,14 +55,21 @@ class AppStore extends ChangeNotifier {
        _reliabilityService = reliabilityService ?? ReliabilityService(),
        _customNoteTemplateStore = customNoteTemplateStore,
        _restoreCutPoint = restoreCutPoint,
-       pairingService =
-           pairingService ?? PairingService(repository: repository),
+       _migrateDeviceKeyOnStartup = migrateDeviceKeyOnStartup,
        _automaticLanSyncEnabled = enableAutomaticLanSync,
        _reliabilityFeaturesEnabled = enableReliabilityFeatures {
+    final effectiveDeviceKeyStore = deviceKeyStore ?? SecureDeviceKeyStore();
+    this.pairingService =
+        pairingService ??
+        PairingService(
+          repository: repository,
+          deviceKeyStore: effectiveDeviceKeyStore,
+        );
     this.lanSyncService =
         lanSyncService ??
         LanSyncService(
           repository: repository,
+          deviceKeyStore: effectiveDeviceKeyStore,
           buildAttachmentManifest: _vaultService.buildAttachmentSyncManifest,
           readAttachment: _vaultService.readAttachmentForSync,
           storeAttachment: _vaultService.storeAttachmentFromSync,
@@ -76,6 +87,7 @@ class AppStore extends ChangeNotifier {
     repository: DriftAppRepository(),
     legacyImporter: LegacyPreferencesImporter(),
     customNoteTemplateStore: CustomNoteTemplateStore(),
+    migrateDeviceKeyOnStartup: true,
     enableAutomaticLanSync: true,
     enableReliabilityFeatures: true,
   );
@@ -86,7 +98,8 @@ class AppStore extends ChangeNotifier {
   final ReliabilityService _reliabilityService;
   final CustomNoteTemplateStore? _customNoteTemplateStore;
   final RestoreCutPointCallback? _restoreCutPoint;
-  final PairingService pairingService;
+  final bool _migrateDeviceKeyOnStartup;
+  late final PairingService pairingService;
   late final LanSyncService lanSyncService;
   final bool _automaticLanSyncEnabled;
   final bool _reliabilityFeaturesEnabled;
@@ -191,6 +204,22 @@ class AppStore extends ChangeNotifier {
           currentGeneration,
         );
         data = await _repository.load();
+      }
+
+      if (_migrateDeviceKeyOnStartup) {
+        try {
+          await pairingService.ensureLocalIdentity();
+        } on Object catch (error) {
+          lanAutoSyncError =
+              'Ключ синхронизации не удалось перенести в защищённое хранилище.';
+          await _recordReliability(
+            stage: ReliabilityStage.startup,
+            level: ReliabilityLevel.warning,
+            message: 'Миграция ключа синхронизации не выполнена.',
+            details: <String, Object?>{'error': error.toString()},
+            notify: false,
+          );
+        }
       }
 
       await _loadCustomNoteTemplates();

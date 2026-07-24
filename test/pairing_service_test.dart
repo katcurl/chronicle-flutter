@@ -3,10 +3,15 @@ import 'package:chronicle/sync/pairing_models.dart';
 import 'package:chronicle/sync/pairing_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/memory_device_key_store.dart';
+
 void main() {
   test('local pairing identity remains stable', () async {
     final repository = InMemoryAppRepository();
-    final service = PairingService(repository: repository);
+    final service = PairingService(
+      repository: repository,
+      deviceKeyStore: MemoryDeviceKeyStore(),
+    );
 
     final first = await service.ensureLocalIdentity();
     final second = await service.ensureLocalIdentity();
@@ -21,7 +26,10 @@ void main() {
 
   test('trusted peer is persisted without a cloud account', () async {
     final repository = InMemoryAppRepository();
-    final service = PairingService(repository: repository);
+    final service = PairingService(
+      repository: repository,
+      deviceKeyStore: MemoryDeviceKeyStore(),
+    );
     const peer = PairingPeer(
       deviceId: 'phone-1',
       displayName: 'Телефон',

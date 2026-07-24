@@ -575,6 +575,11 @@ class DriftAppRepository implements AppRepository {
   }
 
   @override
+  Future<void> deleteDeviceKeyMaterial() {
+    return _deleteState(_deviceKeyMaterialKey);
+  }
+
+  @override
   Future<List<TrustedDevice>> loadTrustedDevices({
     bool includeRevoked = false,
   }) async {
@@ -1041,6 +1046,12 @@ class DriftAppRepository implements AppRepository {
       'ON CONFLICT(key) DO UPDATE SET value = excluded.value',
       [key, value],
     );
+  }
+
+  Future<void> _deleteState(String key) async {
+    await _database.customStatement('DELETE FROM app_state WHERE key = ?', [
+      key,
+    ]);
   }
 
   Future<void> _upsert(String table, Map<String, Object?> values) async {

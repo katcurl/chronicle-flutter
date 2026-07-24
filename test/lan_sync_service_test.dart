@@ -8,14 +8,24 @@ import 'package:chronicle/sync/pairing_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/memory_device_key_store.dart';
+
 void main() {
   test(
     'trusted LAN exchange synchronizes both repositories and cursors',
     () async {
       final desktopRepository = InMemoryAppRepository();
       final phoneRepository = InMemoryAppRepository();
-      final desktopPairing = PairingService(repository: desktopRepository);
-      final phonePairing = PairingService(repository: phoneRepository);
+      final desktopKeys = MemoryDeviceKeyStore();
+      final phoneKeys = MemoryDeviceKeyStore();
+      final desktopPairing = PairingService(
+        repository: desktopRepository,
+        deviceKeyStore: desktopKeys,
+      );
+      final phonePairing = PairingService(
+        repository: phoneRepository,
+        deviceKeyStore: phoneKeys,
+      );
       final desktopIdentity = await desktopPairing.ensureLocalIdentity();
       final phoneIdentity = await phonePairing.ensureLocalIdentity();
 
@@ -29,8 +39,14 @@ void main() {
         Project(id: 'phone-project', title: 'Phone project', emoji: '📱'),
       );
 
-      final desktopSync = LanSyncService(repository: desktopRepository);
-      final phoneSync = LanSyncService(repository: phoneRepository);
+      final desktopSync = LanSyncService(
+        repository: desktopRepository,
+        deviceKeyStore: desktopKeys,
+      );
+      final phoneSync = LanSyncService(
+        repository: phoneRepository,
+        deviceKeyStore: phoneKeys,
+      );
       final host = await desktopSync.startHost(
         peerDeviceId: phoneIdentity.peer.deviceId,
       );
@@ -70,8 +86,16 @@ void main() {
   test('second trusted exchange is idempotent', () async {
     final desktopRepository = InMemoryAppRepository();
     final phoneRepository = InMemoryAppRepository();
-    final desktopPairing = PairingService(repository: desktopRepository);
-    final phonePairing = PairingService(repository: phoneRepository);
+    final desktopKeys = MemoryDeviceKeyStore();
+    final phoneKeys = MemoryDeviceKeyStore();
+    final desktopPairing = PairingService(
+      repository: desktopRepository,
+      deviceKeyStore: desktopKeys,
+    );
+    final phonePairing = PairingService(
+      repository: phoneRepository,
+      deviceKeyStore: phoneKeys,
+    );
     final desktopIdentity = await desktopPairing.ensureLocalIdentity();
     final phoneIdentity = await phonePairing.ensureLocalIdentity();
 
@@ -81,8 +105,14 @@ void main() {
       Project(id: 'shared-project', title: 'Shared', emoji: '🔄'),
     );
 
-    final desktopSync = LanSyncService(repository: desktopRepository);
-    final phoneSync = LanSyncService(repository: phoneRepository);
+    final desktopSync = LanSyncService(
+      repository: desktopRepository,
+      deviceKeyStore: desktopKeys,
+    );
+    final phoneSync = LanSyncService(
+      repository: phoneRepository,
+      deviceKeyStore: phoneKeys,
+    );
 
     final firstHost = await desktopSync.startHost(
       peerDeviceId: phoneIdentity.peer.deviceId,
@@ -113,8 +143,16 @@ void main() {
     () async {
       final desktopRepository = InMemoryAppRepository();
       final phoneRepository = InMemoryAppRepository();
-      final desktopPairing = PairingService(repository: desktopRepository);
-      final phonePairing = PairingService(repository: phoneRepository);
+      final desktopKeys = MemoryDeviceKeyStore();
+      final phoneKeys = MemoryDeviceKeyStore();
+      final desktopPairing = PairingService(
+        repository: desktopRepository,
+        deviceKeyStore: desktopKeys,
+      );
+      final phonePairing = PairingService(
+        repository: phoneRepository,
+        deviceKeyStore: phoneKeys,
+      );
       final desktopIdentity = await desktopPairing.ensureLocalIdentity();
       final phoneIdentity = await phonePairing.ensureLocalIdentity();
 
@@ -145,6 +183,7 @@ void main() {
 
       final desktopSync = LanSyncService(
         repository: desktopRepository,
+        deviceKeyStore: desktopKeys,
         buildAttachmentManifest: desktopStore.buildManifest,
         readAttachment: desktopStore.read,
         storeAttachment: desktopStore.store,
@@ -153,6 +192,7 @@ void main() {
       );
       final phoneSync = LanSyncService(
         repository: phoneRepository,
+        deviceKeyStore: phoneKeys,
         buildAttachmentManifest: phoneStore.buildManifest,
         readAttachment: phoneStore.read,
         storeAttachment: phoneStore.store,

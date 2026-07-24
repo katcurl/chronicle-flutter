@@ -369,6 +369,11 @@ class InMemoryAppRepository implements AppRepository {
   }
 
   @override
+  Future<void> deleteDeviceKeyMaterial() async {
+    _deviceKeyMaterial = null;
+  }
+
+  @override
   Future<List<TrustedDevice>> loadTrustedDevices({
     bool includeRevoked = false,
   }) async {

@@ -1,24 +1,31 @@
 import '../data/repositories/app_repository.dart';
+import '../security/device_key_store.dart';
 import 'pairing_crypto.dart';
 import 'pairing_models.dart';
 import 'pairing_transport.dart';
 import 'sync_models.dart';
 
 class PairingService {
-  PairingService({required AppRepository repository, PairingCrypto? crypto})
-    : _repository = repository,
-      crypto = crypto ?? PairingCrypto();
+  PairingService({
+    required AppRepository repository,
+    required DeviceKeyStore deviceKeyStore,
+    PairingCrypto? crypto,
+  }) : _repository = repository,
+       _deviceKeyStore = deviceKeyStore,
+       crypto = crypto ?? PairingCrypto();
 
   final AppRepository _repository;
+  final DeviceKeyStore _deviceKeyStore;
   final PairingCrypto crypto;
 
   Future<LocalPairingIdentity> ensureLocalIdentity() async {
     final identity = await _repository.ensureDeviceIdentity();
-    var keyMaterial = await _repository.loadDeviceKeyMaterial();
-    if (keyMaterial == null) {
-      keyMaterial = await crypto.generateKeyMaterial();
-      await _repository.saveDeviceKeyMaterial(keyMaterial);
-    }
+    final keyMaterial =
+        await DeviceKeyManager(
+          repository: _repository,
+          secureStore: _deviceKeyStore,
+          crypto: crypto,
+        ).ensure();
     return LocalPairingIdentity(
       peer: PairingPeer.local(identity, keyMaterial),
       keyMaterial: keyMaterial,

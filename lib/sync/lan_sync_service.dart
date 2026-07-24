@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../data/repositories/app_repository.dart';
+import '../security/device_key_store.dart';
 import 'attachment_sync_models.dart';
 import 'lan_sync_models.dart';
 import 'lan_sync_resilience.dart';
@@ -12,6 +13,7 @@ import 'sync_models.dart';
 class LanSyncService {
   LanSyncService({
     required AppRepository repository,
+    required DeviceKeyStore deviceKeyStore,
     PairingCrypto? crypto,
     BuildAttachmentSyncManifest? buildAttachmentManifest,
     ReadAttachmentForSync? readAttachment,
@@ -19,6 +21,7 @@ class LanSyncService {
     ApplyAttachmentRecordFromSync? applyAttachmentRecord,
     ApplyAttachmentTombstoneFromSync? applyAttachmentTombstone,
   }) : _repository = repository,
+       _deviceKeyStore = deviceKeyStore,
        crypto = crypto ?? PairingCrypto(),
        _buildAttachmentManifest =
            buildAttachmentManifest ?? _emptyAttachmentManifest,
@@ -30,6 +33,7 @@ class LanSyncService {
            applyAttachmentTombstone ?? _unsupportedAttachmentTombstone;
 
   final AppRepository _repository;
+  final DeviceKeyStore _deviceKeyStore;
   final PairingCrypto crypto;
   final BuildAttachmentSyncManifest _buildAttachmentManifest;
   final ReadAttachmentForSync _readAttachment;
@@ -116,11 +120,12 @@ class LanSyncService {
 
   Future<LocalPairingIdentity> _ensureLocalIdentity() async {
     final identity = await _repository.ensureDeviceIdentity();
-    var keyMaterial = await _repository.loadDeviceKeyMaterial();
-    if (keyMaterial == null) {
-      keyMaterial = await crypto.generateKeyMaterial();
-      await _repository.saveDeviceKeyMaterial(keyMaterial);
-    }
+    final keyMaterial =
+        await DeviceKeyManager(
+          repository: _repository,
+          secureStore: _deviceKeyStore,
+          crypto: crypto,
+        ).ensure();
     return LocalPairingIdentity(
       peer: PairingPeer.local(identity, keyMaterial),
       keyMaterial: keyMaterial,
