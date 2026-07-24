@@ -7,6 +7,7 @@ import 'pairing_models.dart';
 typedef TrustedPeerLookup = Future<PairingPeer?> Function(String deviceId);
 typedef StartLanSyncHost =
     Future<LanSyncHostSession> Function(String peerDeviceId);
+typedef AllowIncomingLanSync = Future<bool> Function(String peerDeviceId);
 
 class LanAutoSyncNode {
   LanAutoSyncNode._();
@@ -16,6 +17,8 @@ class LanAutoSyncNode {
     required PairingCrypto crypto,
     required TrustedPeerLookup lookupTrustedPeer,
     required StartLanSyncHost startHost,
+    required AllowIncomingLanSync allowIncomingSync,
+    bool localNetworkOnly = true,
   }) {
     throw UnsupportedError(
       'Автоматическая LAN-синхронизация доступна в нативных сборках.',

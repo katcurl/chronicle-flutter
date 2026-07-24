@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:uuid/uuid.dart';
 
+import 'bounded_http_io.dart';
 import 'lan_address_selector.dart';
 import 'pairing_crypto.dart';
 import 'pairing_models.dart';
@@ -25,15 +25,25 @@ class PairingHostSession {
     required LocalPairingIdentity local,
     required PairingCrypto crypto,
     required Future<void> Function(PairingPeer peer) onTrust,
+    bool localNetworkOnly = true,
   }) async {
-    final server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
-    final addresses = await localLanIpv4Addresses();
-    if (addresses.isEmpty) {
-      await server.close(force: true);
+    final availableAddresses = await localLanIpv4Addresses(
+      localNetworkOnly: localNetworkOnly,
+    );
+    if (availableAddresses.isEmpty) {
       throw StateError(
         'Не найден локальный IPv4-адрес. Подключи компьютер к Wi‑Fi или LAN.',
       );
     }
+    final addresses =
+        localNetworkOnly
+            ? <String>[availableAddresses.first]
+            : availableAddresses;
+    final bindAddress =
+        localNetworkOnly
+            ? InternetAddress(addresses.first)
+            : InternetAddress.anyIPv4;
+    final server = await HttpServer.bind(bindAddress, 0);
     final session = PairingHostSession._(
       server: server,
       addresses: addresses,
@@ -63,6 +73,9 @@ class PairingHostSession {
   final StreamController<PairingIncomingRequest> _requestController =
       StreamController<PairingIncomingRequest>.broadcast();
   final Map<String, _PendingHostRequest> _pending = {};
+  final HttpConcurrencyGate _requestGate = HttpConcurrencyGate(
+    maxConcurrent: lanMaxUnauthenticatedRequests,
+  );
 
   StreamSubscription<HttpRequest>? _subscription;
   Timer? _expiryTimer;
@@ -127,6 +140,20 @@ class PairingHostSession {
   }
 
   Future<void> _handleRequest(HttpRequest request) async {
+    if (!_requestGate.tryAcquire()) {
+      await _jsonResponse(request.response, HttpStatus.serviceUnavailable, {
+        'error': 'too_many_requests',
+      });
+      return;
+    }
+    try {
+      await _handleRequestWithinLimit(request);
+    } finally {
+      _requestGate.release();
+    }
+  }
+
+  Future<void> _handleRequestWithinLimit(HttpRequest request) async {
     try {
       _applyCors(request.response);
       if (request.method == 'OPTIONS') {
@@ -287,9 +314,15 @@ class PairingClientSession {
     required PairingOffer offer,
     required LocalPairingIdentity local,
     required PairingCrypto crypto,
+    bool localNetworkOnly = true,
   }) async {
     if (offer.isExpired) {
       throw StateError('Срок действия QR-кода истёк.');
+    }
+    if (localNetworkOnly && !isLocalOnlyIpv4(offer.host)) {
+      throw StateError(
+        'Адрес устройства не относится к разрешённой локальной сети.',
+      );
     }
     final unsigned = PairingRequestPayload(
       sessionId: offer.sessionId,
@@ -436,7 +469,7 @@ Future<_JsonHttpResponse> _postJson(
     Uri.parse('http://${offer.host}:${offer.port}$path'),
   );
   request.headers.contentType = ContentType.json;
-  request.write(jsonEncode(body));
+  addJsonBody(request, body);
   return _readHttpResponse(await request.close());
 }
 
@@ -452,24 +485,15 @@ Future<_JsonHttpResponse> _getJson(
 }
 
 Future<_JsonHttpResponse> _readHttpResponse(HttpClientResponse response) async {
-  final raw = await utf8.decoder.bind(response).join();
-  Map<String, dynamic> json = {};
-  if (raw.isNotEmpty) {
-    final decoded = jsonDecode(raw);
-    if (decoded is Map) {
-      json = Map<String, dynamic>.from(decoded);
-    }
-  }
+  final json = await readBoundedJsonResponse(
+    response,
+    maxBytes: lanHandshakeMaxBytes,
+  );
   return _JsonHttpResponse(response.statusCode, json);
 }
 
 Future<Map<String, dynamic>> _readJson(HttpRequest request) async {
-  final raw = await utf8.decoder.bind(request).join();
-  final decoded = jsonDecode(raw);
-  if (decoded is! Map) {
-    throw const FormatException('Expected a JSON object.');
-  }
-  return Map<String, dynamic>.from(decoded);
+  return readBoundedJson(request, maxBytes: lanHandshakeMaxBytes);
 }
 
 Future<void> _jsonResponse(
@@ -478,10 +502,7 @@ Future<void> _jsonResponse(
   Map<String, dynamic> body,
 ) async {
   _applyCors(response);
-  response.statusCode = statusCode;
-  response.headers.contentType = ContentType.json;
-  response.write(jsonEncode(body));
-  await response.close();
+  await writeJsonResponse(response, statusCode, body);
 }
 
 void _applyCors(HttpResponse response) {

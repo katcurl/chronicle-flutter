@@ -19,4 +19,17 @@ void main() {
 
     expect(ordered, <String>['192.168.1.5']);
   });
+
+  test(
+    'local-only policy accepts RFC1918 and link-local but not public IPs',
+    () {
+      expect(isLocalOnlyIpv4('10.2.3.4'), isTrue);
+      expect(isLocalOnlyIpv4('172.16.0.1'), isTrue);
+      expect(isLocalOnlyIpv4('172.31.255.254'), isTrue);
+      expect(isLocalOnlyIpv4('192.168.20.3'), isTrue);
+      expect(isLocalOnlyIpv4('169.254.2.3'), isTrue);
+      expect(isLocalOnlyIpv4('172.32.0.1'), isFalse);
+      expect(isLocalOnlyIpv4('8.8.8.8'), isFalse);
+    },
+  );
 }

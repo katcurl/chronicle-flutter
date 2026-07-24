@@ -1618,6 +1618,8 @@ class AppStore extends ChangeNotifier {
     );
     try {
       final node = await autoSyncService.start(
+        incomingAutoSyncEnabled: () async => syncPreferences.autoSyncEnabled,
+        localNetworkOnly: syncPreferences.localNetworkOnly,
         onRemoteApplied: (_) => refreshAfterLanSync(),
       );
       _autoSyncNode = node;
@@ -1871,7 +1873,8 @@ class AppStore extends ChangeNotifier {
   Future<void> updateSyncPreferences(SyncPreferences preferences) async {
     final discoveryChanged =
         syncPreferences.discoverOnLocalNetwork !=
-        preferences.discoverOnLocalNetwork;
+            preferences.discoverOnLocalNetwork ||
+        syncPreferences.localNetworkOnly != preferences.localNetworkOnly;
     syncPreferences = preferences;
     await _repository.saveSyncPreferences(preferences);
     notifyListeners();

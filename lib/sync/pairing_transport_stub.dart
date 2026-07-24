@@ -8,6 +8,7 @@ class PairingHostSession {
     required LocalPairingIdentity local,
     required PairingCrypto crypto,
     required Future<void> Function(PairingPeer peer) onTrust,
+    bool localNetworkOnly = true,
   }) {
     throw UnsupportedError(
       'QR-сопряжение доступно в нативных Android и desktop-сборках.',
@@ -29,6 +30,7 @@ class PairingClientSession {
     required PairingOffer offer,
     required LocalPairingIdentity local,
     required PairingCrypto crypto,
+    bool localNetworkOnly = true,
   }) {
     throw UnsupportedError('QR-сопряжение доступно в нативной Android-сборке.');
   }

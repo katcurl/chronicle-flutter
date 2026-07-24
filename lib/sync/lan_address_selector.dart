@@ -7,16 +7,23 @@ class LanIpv4Candidate {
   final String interfaceName;
 }
 
-Future<List<String>> localLanIpv4Addresses() async {
+Future<List<String>> localLanIpv4Addresses({
+  bool localNetworkOnly = true,
+}) async {
   final interfaces = await NetworkInterface.list(
     type: InternetAddressType.IPv4,
     includeLoopback: false,
-    includeLinkLocal: false,
+    includeLinkLocal: true,
   );
   final candidates = <LanIpv4Candidate>[];
   for (final interface in interfaces) {
+    if (localNetworkOnly && _interfaceRank(interface.name) >= 4) {
+      continue;
+    }
     for (final address in interface.addresses) {
-      if (!address.isLoopback && address.type == InternetAddressType.IPv4) {
+      if (!address.isLoopback &&
+          address.type == InternetAddressType.IPv4 &&
+          (!localNetworkOnly || isLocalOnlyIpv4(address.address))) {
         candidates.add(
           LanIpv4Candidate(
             address: address.address,
@@ -27,6 +34,20 @@ Future<List<String>> localLanIpv4Addresses() async {
     }
   }
   return orderLanIpv4Candidates(candidates);
+}
+
+bool isLocalOnlyIpv4(String value) {
+  if (value.startsWith('10.') ||
+      value.startsWith('192.168.') ||
+      value.startsWith('169.254.')) {
+    return true;
+  }
+  final parts = value.split('.');
+  if (parts.length != 4 || parts.first != '172') {
+    return false;
+  }
+  final second = int.tryParse(parts[1]);
+  return second != null && second >= 16 && second <= 31;
 }
 
 List<String> orderLanIpv4Candidates(Iterable<LanIpv4Candidate> candidates) {

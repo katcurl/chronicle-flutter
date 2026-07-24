@@ -116,6 +116,7 @@ void main() {
               (_) async => const AttachmentSyncApplyResult.unchanged(),
           applyAttachmentTombstone:
               (_) async => const AttachmentSyncApplyResult.unchanged(),
+          localNetworkOnly: false,
         ),
         throwsA(isA<StateError>()),
       );

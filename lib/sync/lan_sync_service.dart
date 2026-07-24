@@ -57,6 +57,7 @@ class LanSyncService {
   }) async {
     final local = await _ensureLocalIdentity();
     final trusted = await _trustedDevice(peerDeviceId);
+    final preferences = await _repository.loadSyncPreferences();
     final targetPeer = _peerFromTrusted(trusted);
     return LanSyncHostSession.start(
       local: local,
@@ -72,6 +73,7 @@ class LanSyncService {
       storeAttachment: _storeAttachment,
       applyAttachmentRecord: _applyAttachmentRecord,
       applyAttachmentTombstone: _applyAttachmentTombstone,
+      localNetworkOnly: preferences.localNetworkOnly,
       onRemoteApplied: onRemoteApplied,
     );
   }
@@ -89,6 +91,7 @@ class LanSyncService {
     }
     final local = await _ensureLocalIdentity();
     final trusted = await _trustedDevice(expectedPeerDeviceId);
+    final preferences = await _repository.loadSyncPreferences();
     return LanSyncClient.sync(
       offer: offer,
       local: local,
@@ -104,6 +107,7 @@ class LanSyncService {
       storeAttachment: _storeAttachment,
       applyAttachmentRecord: _applyAttachmentRecord,
       applyAttachmentTombstone: _applyAttachmentTombstone,
+      localNetworkOnly: preferences.localNetworkOnly,
       onRemoteApplied: onRemoteApplied,
       onProgress: onProgress,
       cancellationToken: cancellationToken,

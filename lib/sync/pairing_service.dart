@@ -27,20 +27,24 @@ class PairingService {
 
   Future<PairingHostSession> startHost() async {
     final local = await ensureLocalIdentity();
+    final preferences = await _repository.loadSyncPreferences();
     return PairingHostSession.start(
       local: local,
       crypto: crypto,
       onTrust: trustPeer,
+      localNetworkOnly: preferences.localNetworkOnly,
     );
   }
 
   Future<PairingClientSession> startClient(String rawOffer) async {
     final offer = PairingOffer.decode(rawOffer);
     final local = await ensureLocalIdentity();
+    final preferences = await _repository.loadSyncPreferences();
     return PairingClientSession.start(
       offer: offer,
       local: local,
       crypto: crypto,
+      localNetworkOnly: preferences.localNetworkOnly,
     );
   }
 

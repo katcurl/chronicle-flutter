@@ -36,6 +36,7 @@ class LanSyncHostSession {
     required StoreAttachmentFromSync storeAttachment,
     required ApplyAttachmentRecordFromSync applyAttachmentRecord,
     required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
+    bool localNetworkOnly = true,
     RemoteAppliedCallback? onRemoteApplied,
   }) {
     throw UnsupportedError(
@@ -71,6 +72,7 @@ class LanSyncClient {
     required StoreAttachmentFromSync storeAttachment,
     required ApplyAttachmentRecordFromSync applyAttachmentRecord,
     required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
+    bool localNetworkOnly = true,
     RemoteAppliedCallback? onRemoteApplied,
     LanSyncProgressCallback? onProgress,
     LanSyncCancellationToken? cancellationToken,

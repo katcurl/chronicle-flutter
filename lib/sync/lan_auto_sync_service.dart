@@ -5,6 +5,24 @@ import 'lan_sync_models.dart';
 import 'lan_sync_service.dart';
 import 'sync_models.dart';
 
+class IncomingAutoSyncPolicy {
+  const IncomingAutoSyncPolicy({
+    required Future<bool> Function() globallyEnabled,
+    required Future<bool> Function(String peerDeviceId) peerEnabled,
+  }) : _globallyEnabled = globallyEnabled,
+       _peerEnabled = peerEnabled;
+
+  final Future<bool> Function() _globallyEnabled;
+  final Future<bool> Function(String peerDeviceId) _peerEnabled;
+
+  Future<bool> allows(String peerDeviceId) async {
+    if (!await _globallyEnabled()) {
+      return false;
+    }
+    return _peerEnabled(peerDeviceId);
+  }
+}
+
 class LanAutoSyncService {
   LanAutoSyncService({
     required AppRepository repository,
@@ -16,13 +34,21 @@ class LanAutoSyncService {
   final LanSyncService _lanSyncService;
 
   Future<LanAutoSyncNode> start({
+    required Future<bool> Function() incomingAutoSyncEnabled,
+    required bool localNetworkOnly,
     Future<void> Function(SyncApplyResult result)? onRemoteApplied,
   }) async {
     final local = await _lanSyncService.ensureLocalIdentity();
+    final policy = IncomingAutoSyncPolicy(
+      globallyEnabled: incomingAutoSyncEnabled,
+      peerEnabled: deviceAllowsAutoSync,
+    );
     return LanAutoSyncNode.start(
       local: local,
       crypto: _lanSyncService.crypto,
       lookupTrustedPeer: _lanSyncService.trustedPeerOrNull,
+      allowIncomingSync: policy.allows,
+      localNetworkOnly: localNetworkOnly,
       startHost:
           (peerDeviceId) => _lanSyncService.startHost(
             peerDeviceId: peerDeviceId,

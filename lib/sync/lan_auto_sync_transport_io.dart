@@ -4,7 +4,9 @@ import 'dart:io';
 
 import 'package:uuid/uuid.dart';
 
+import 'bounded_http_io.dart';
 import 'lan_auto_sync_models.dart';
+import 'lan_address_selector.dart';
 import 'lan_sync_models.dart';
 import 'lan_sync_transport.dart';
 import 'pairing_crypto.dart';
@@ -13,6 +15,7 @@ import 'pairing_models.dart';
 typedef TrustedPeerLookup = Future<PairingPeer?> Function(String deviceId);
 typedef StartLanSyncHost =
     Future<LanSyncHostSession> Function(String peerDeviceId);
+typedef AllowIncomingLanSync = Future<bool> Function(String peerDeviceId);
 
 class LanAutoSyncNode {
   LanAutoSyncNode._({
@@ -22,22 +25,39 @@ class LanAutoSyncNode {
     required this.crypto,
     required TrustedPeerLookup lookupTrustedPeer,
     required StartLanSyncHost startHost,
+    required AllowIncomingLanSync allowIncomingSync,
+    required this.localNetworkOnly,
   }) : _server = server,
        _discoverySocket = discoverySocket,
        _lookupTrustedPeer = lookupTrustedPeer,
-       _startHost = startHost;
+       _startHost = startHost,
+       _allowIncomingSync = allowIncomingSync;
 
   static Future<LanAutoSyncNode> start({
     required LocalPairingIdentity local,
     required PairingCrypto crypto,
     required TrustedPeerLookup lookupTrustedPeer,
     required StartLanSyncHost startHost,
+    required AllowIncomingLanSync allowIncomingSync,
+    bool localNetworkOnly = true,
   }) async {
-    final server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
+    final addresses = await localLanIpv4Addresses(
+      localNetworkOnly: localNetworkOnly,
+    );
+    if (addresses.isEmpty) {
+      throw StateError(
+        'Не найден безопасный локальный IPv4-адрес для синхронизации.',
+      );
+    }
+    final bindAddress = InternetAddress(addresses.first);
+    final server = await HttpServer.bind(
+      localNetworkOnly ? bindAddress : InternetAddress.anyIPv4,
+      0,
+    );
     RawDatagramSocket discoverySocket;
     try {
       discoverySocket = await RawDatagramSocket.bind(
-        InternetAddress.anyIPv4,
+        localNetworkOnly ? bindAddress : InternetAddress.anyIPv4,
         lanDiscoveryPort,
         reuseAddress: true,
       );
@@ -54,6 +74,8 @@ class LanAutoSyncNode {
       crypto: crypto,
       lookupTrustedPeer: lookupTrustedPeer,
       startHost: startHost,
+      allowIncomingSync: allowIncomingSync,
+      localNetworkOnly: localNetworkOnly,
     );
     node._httpSubscription = server.listen(node._handleHttpRequest);
     node._discoverySubscription = discoverySocket.listen(
@@ -71,14 +93,22 @@ class LanAutoSyncNode {
   final RawDatagramSocket _discoverySocket;
   final LocalPairingIdentity local;
   final PairingCrypto crypto;
+  final bool localNetworkOnly;
   final TrustedPeerLookup _lookupTrustedPeer;
   final StartLanSyncHost _startHost;
+  final AllowIncomingLanSync _allowIncomingSync;
   final StreamController<LanDiscoveredPeer> _peerController =
       StreamController<LanDiscoveredPeer>.broadcast();
   final StreamController<LanSyncReport> _reportController =
       StreamController<LanSyncReport>.broadcast();
   final Set<LanSyncHostSession> _activeSessions = {};
   final Map<String, DateTime> _acceptedRequests = {};
+  final HttpConcurrencyGate _requestGate = HttpConcurrencyGate(
+    maxConcurrent: lanMaxUnauthenticatedRequests,
+  );
+  final HttpConcurrencyGate _sessionGate = HttpConcurrencyGate(
+    maxConcurrent: lanMaxAuthenticatedSessions,
+  );
 
   StreamSubscription<HttpRequest>? _httpSubscription;
   StreamSubscription<RawSocketEvent>? _discoverySubscription;
@@ -115,7 +145,9 @@ class LanAutoSyncNode {
         signature: signature,
       );
       final bytes = utf8.encode(jsonEncode(announcement.toJson()));
-      final targets = await _broadcastTargets();
+      final targets = await _broadcastTargets(
+        localNetworkOnly: localNetworkOnly,
+      );
       for (final target in targets) {
         try {
           _discoverySocket.send(bytes, target, lanDiscoveryPort);
@@ -182,6 +214,20 @@ class LanAutoSyncNode {
   }
 
   Future<void> _handleHttpRequest(HttpRequest request) async {
+    if (!_requestGate.tryAcquire()) {
+      await _jsonResponse(request.response, HttpStatus.serviceUnavailable, {
+        'error': 'too_many_requests',
+      });
+      return;
+    }
+    try {
+      await _handleHttpRequestWithinLimit(request);
+    } finally {
+      _requestGate.release();
+    }
+  }
+
+  Future<void> _handleHttpRequestWithinLimit(HttpRequest request) async {
     try {
       _applyCors(request.response);
       if (request.method == 'OPTIONS') {
@@ -232,8 +278,26 @@ class LanAutoSyncNode {
         });
         return;
       }
+      if (!await _allowIncomingSync(payload.peer.deviceId)) {
+        await _jsonResponse(request.response, HttpStatus.forbidden, {
+          'error': 'auto_sync_disabled',
+        });
+        return;
+      }
+      if (!_sessionGate.tryAcquire()) {
+        await _jsonResponse(request.response, HttpStatus.serviceUnavailable, {
+          'error': 'too_many_sessions',
+        });
+        return;
+      }
 
-      final session = await _startHost(payload.peer.deviceId);
+      LanSyncHostSession session;
+      try {
+        session = await _startHost(payload.peer.deviceId);
+      } on Object {
+        _sessionGate.release();
+        rethrow;
+      }
       _activeSessions.add(session);
       unawaited(() async {
         try {
@@ -299,6 +363,11 @@ class LanAutoSyncNode {
         'Связанное устройство больше не видно в локальной сети.',
       );
     }
+    if (localNetworkOnly && !isLocalOnlyIpv4(discovered.host)) {
+      throw StateError(
+        'Адрес устройства не относится к разрешённой локальной сети.',
+      );
+    }
     final requestId = const Uuid().v4();
     final unsigned = LanAutoSyncOfferRequest(
       requestId: requestId,
@@ -327,17 +396,14 @@ class LanAutoSyncNode {
       final request = await client
           .postUrl(uri)
           .timeout(const Duration(seconds: 6));
-      request.headers.contentType = ContentType.json;
-      request.write(jsonEncode(payload.toJson()));
+      addJsonBody(request, payload.toJson());
       final response = await request.close().timeout(
         const Duration(seconds: 8),
       );
-      final raw = await utf8.decoder.bind(response).join();
-      final decoded = raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw);
-      final json =
-          decoded is Map
-              ? Map<String, dynamic>.from(decoded)
-              : <String, dynamic>{};
+      final json = await readBoundedJsonResponse(
+        response,
+        maxBytes: lanHandshakeMaxBytes,
+      );
       if (response.statusCode != HttpStatus.ok) {
         throw StateError(_friendlyOfferError(json));
       }
@@ -373,7 +439,9 @@ class LanAutoSyncNode {
   }
 
   Future<void> _closeSession(LanSyncHostSession session) async {
-    _activeSessions.remove(session);
+    if (_activeSessions.remove(session)) {
+      _sessionGate.release();
+    }
     await session.close();
   }
 
@@ -409,8 +477,12 @@ bool _isFresh(DateTime value, Duration tolerance) {
   return difference <= tolerance;
 }
 
-Future<Set<InternetAddress>> _broadcastTargets() async {
-  final targets = <InternetAddress>{InternetAddress('255.255.255.255')};
+Future<Set<InternetAddress>> _broadcastTargets({
+  required bool localNetworkOnly,
+}) async {
+  final targets = <InternetAddress>{
+    if (!localNetworkOnly) InternetAddress('255.255.255.255'),
+  };
   final interfaces = await NetworkInterface.list(
     type: InternetAddressType.IPv4,
     includeLoopback: false,
@@ -463,12 +535,7 @@ bool _isPrivateIpv4(List<String> parts) {
 }
 
 Future<Map<String, dynamic>> _readJson(HttpRequest request) async {
-  final raw = await utf8.decoder.bind(request).join();
-  final decoded = jsonDecode(raw);
-  if (decoded is! Map) {
-    throw const FormatException('Expected a JSON object.');
-  }
-  return Map<String, dynamic>.from(decoded);
+  return readBoundedJson(request, maxBytes: lanHandshakeMaxBytes);
 }
 
 Future<void> _jsonResponse(
@@ -477,10 +544,7 @@ Future<void> _jsonResponse(
   Map<String, dynamic> body,
 ) async {
   _applyCors(response);
-  response.statusCode = statusCode;
-  response.headers.contentType = ContentType.json;
-  response.write(jsonEncode(body));
-  await response.close();
+  await writeJsonResponse(response, statusCode, body);
 }
 
 void _applyCors(HttpResponse response) {

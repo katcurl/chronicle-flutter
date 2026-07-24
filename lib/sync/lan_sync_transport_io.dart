@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import 'package:uuid/uuid.dart';
 
 import 'attachment_sync_models.dart';
+import 'bounded_http_io.dart';
 import 'lan_address_selector.dart';
 import 'lan_secure_channel.dart';
 import 'lan_sync_models.dart';
@@ -78,16 +79,26 @@ class LanSyncHostSession {
     required StoreAttachmentFromSync storeAttachment,
     required ApplyAttachmentRecordFromSync applyAttachmentRecord,
     required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
+    bool localNetworkOnly = true,
     RemoteAppliedCallback? onRemoteApplied,
   }) async {
-    final server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
-    final addresses = await localLanIpv4Addresses();
-    if (addresses.isEmpty) {
-      await server.close(force: true);
+    final availableAddresses = await localLanIpv4Addresses(
+      localNetworkOnly: localNetworkOnly,
+    );
+    if (availableAddresses.isEmpty) {
       throw StateError(
         'Не найден локальный IPv4-адрес. Подключи устройство к Wi-Fi или LAN.',
       );
     }
+    final addresses =
+        localNetworkOnly
+            ? <String>[availableAddresses.first]
+            : availableAddresses;
+    final bindAddress =
+        localNetworkOnly
+            ? InternetAddress(addresses.first)
+            : InternetAddress.anyIPv4;
+    final server = await HttpServer.bind(bindAddress, 0);
     final hostEphemeral = await LanEphemeralKeyPair.generate();
     final session = LanSyncHostSession._(
       server: server,
@@ -143,6 +154,9 @@ class LanSyncHostSession {
       StreamController<LanSyncProgress>.broadcast();
   final Map<String, _PendingSyncRound> _pendingRounds = {};
   final Set<String> _completedAttachmentTransfers = <String>{};
+  final HttpConcurrencyGate _requestGate = HttpConcurrencyGate(
+    maxConcurrent: lanMaxUnauthenticatedRequests,
+  );
   int _attachmentFilesReceived = 0;
   int _attachmentFilesSent = 0;
   int _attachmentBytesReceived = 0;
@@ -191,6 +205,20 @@ class LanSyncHostSession {
   }
 
   Future<void> _handleRequest(HttpRequest request) async {
+    if (!_requestGate.tryAcquire()) {
+      await _jsonResponse(request.response, HttpStatus.serviceUnavailable, {
+        'error': 'too_many_requests',
+      });
+      return;
+    }
+    try {
+      await _handleRequestWithinLimit(request);
+    } finally {
+      _requestGate.release();
+    }
+  }
+
+  Future<void> _handleRequestWithinLimit(HttpRequest request) async {
     try {
       _applyCors(request.response);
       if (request.method == 'OPTIONS') {
@@ -777,6 +805,7 @@ class LanSyncClient {
     required StoreAttachmentFromSync storeAttachment,
     required ApplyAttachmentRecordFromSync applyAttachmentRecord,
     required ApplyAttachmentTombstoneFromSync applyAttachmentTombstone,
+    bool localNetworkOnly = true,
     RemoteAppliedCallback? onRemoteApplied,
     LanSyncProgressCallback? onProgress,
     LanSyncCancellationToken? cancellationToken,
@@ -791,6 +820,11 @@ class LanSyncClient {
     if (offer.hostPeer.deviceId != trustedHost.deviceId ||
         offer.hostPeer.publicKey != trustedHost.publicKey) {
       throw StateError('Устройство из кода не является доверенным.');
+    }
+    if (localNetworkOnly && !isLocalOnlyIpv4(offer.host)) {
+      throw StateError(
+        'Адрес устройства не относится к разрешённой локальной сети.',
+      );
     }
     final validOffer = await crypto.verify(
       message: offer.signingPayload,
@@ -1513,8 +1547,11 @@ Future<_JsonHttpResponse> _postPlainJson(
     Uri.parse('http://${offer.host}:${offer.port}$path'),
   );
   request.headers.contentType = ContentType.json;
-  request.write(jsonEncode(body));
-  return _readHttpResponse(await request.close());
+  addJsonBody(request, body);
+  return _readHttpResponse(
+    await request.close(),
+    maxBytes: _syncEndpointBudget(path),
+  );
 }
 
 Future<_JsonHttpResponse> _postEncryptedJson(
@@ -1563,25 +1600,29 @@ String _handshakeTranscript({
   });
 }
 
-Future<_JsonHttpResponse> _readHttpResponse(HttpClientResponse response) async {
-  final raw = await utf8.decoder.bind(response).join();
-  Map<String, dynamic> json = {};
-  if (raw.isNotEmpty) {
-    final decoded = jsonDecode(raw);
-    if (decoded is Map) {
-      json = Map<String, dynamic>.from(decoded);
-    }
-  }
+Future<_JsonHttpResponse> _readHttpResponse(
+  HttpClientResponse response, {
+  required int maxBytes,
+}) async {
+  final json = await readBoundedJsonResponse(response, maxBytes: maxBytes);
   return _JsonHttpResponse(response.statusCode, json);
 }
 
 Future<Map<String, dynamic>> _readJson(HttpRequest request) async {
-  final raw = await utf8.decoder.bind(request).join();
-  final decoded = jsonDecode(raw);
-  if (decoded is! Map) {
-    throw const FormatException('Expected a JSON object.');
-  }
-  return Map<String, dynamic>.from(decoded);
+  return readBoundedJson(
+    request,
+    maxBytes: _syncEndpointBudget(request.uri.path),
+  );
+}
+
+int _syncEndpointBudget(String path) {
+  return switch (path) {
+    '/v2/sync/handshake' => lanHandshakeMaxBytes,
+    '/v2/sync/exchange' => lanJournalEnvelopeMaxBytes,
+    '/v2/sync/attachment' => lanAttachmentEnvelopeMaxBytes,
+    '/v2/sync/ack' => lanHandshakeMaxBytes,
+    _ => lanHandshakeMaxBytes,
+  };
 }
 
 Future<void> _jsonResponse(
@@ -1590,10 +1631,7 @@ Future<void> _jsonResponse(
   Map<String, dynamic> body,
 ) async {
   _applyCors(response);
-  response.statusCode = statusCode;
-  response.headers.contentType = ContentType.json;
-  response.write(jsonEncode(body));
-  await response.close();
+  await writeJsonResponse(response, statusCode, body);
 }
 
 void _applyCors(HttpResponse response) {
