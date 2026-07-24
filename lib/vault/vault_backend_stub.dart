@@ -1,5 +1,8 @@
 import 'dart:typed_data';
 
+import 'atomic_file_writer.dart';
+import 'managed_path_resolver.dart';
+
 class PickedVaultFile {
   const PickedVaultFile({required this.name, required this.bytes});
 
@@ -22,6 +25,11 @@ class VaultBackupFileInfo {
 }
 
 class VaultBackend {
+  VaultBackend({
+    ManagedPathResolver? pathResolver,
+    AtomicFileWriter? atomicFileWriter,
+  });
+
   Future<String?> resolveRootPath() async => null;
 
   Future<String?> chooseRootPath() async => null;

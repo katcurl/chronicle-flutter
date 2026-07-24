@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -6,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'atomic_file_writer.dart';
 import 'managed_path_resolver.dart';
 
 class PickedVaultFile {
@@ -30,12 +32,16 @@ class VaultBackupFileInfo {
 }
 
 class VaultBackend {
-  VaultBackend({ManagedPathResolver? pathResolver})
-    : _pathResolver = pathResolver ?? createManagedPathResolver();
+  VaultBackend({
+    ManagedPathResolver? pathResolver,
+    AtomicFileWriter? atomicFileWriter,
+  }) : _pathResolver = pathResolver ?? createManagedPathResolver(),
+       _atomicFileWriter = atomicFileWriter ?? createAtomicFileWriter();
 
   static const _vaultPathKey = 'chronicle_vault_path';
 
   final ManagedPathResolver _pathResolver;
+  final AtomicFileWriter _atomicFileWriter;
 
   Future<String?> resolveRootPath() async {
     final preferences = await SharedPreferences.getInstance();
@@ -66,25 +72,25 @@ class VaultBackend {
   }) async {
     await Directory(rootPath).create(recursive: true);
 
+    final orderedEntries = files.entries.toList(growable: false)
+      ..sort((left, right) {
+        final priority = _writePriority(
+          left.key,
+        ).compareTo(_writePriority(right.key));
+        return priority != 0 ? priority : left.key.compareTo(right.key);
+      });
+    for (final entry in orderedEntries) {
+      final target = File(
+        await _pathResolver.resolveForWrite(rootPath, entry.key),
+      );
+      await _atomicFileWriter.replace(target.path, utf8.encode(entry.value));
+    }
+
     for (final relativePath in staleManagedPaths) {
       final target = await _resolveExistingOrNull(rootPath, relativePath);
       if (target != null) {
         await File(target).delete();
       }
-    }
-
-    for (final entry in files.entries) {
-      final target = File(
-        await _pathResolver.resolveForWrite(rootPath, entry.key),
-      );
-      final temporary = File(
-        await _pathResolver.resolveForWrite(rootPath, '${entry.key}.tmp'),
-      );
-      await temporary.writeAsString(entry.value, flush: true);
-      if (await target.exists()) {
-        await target.delete();
-      }
-      await temporary.rename(target.path);
     }
 
     await _createManagedDirectory(rootPath, 'Attachments');
@@ -108,14 +114,7 @@ class VaultBackend {
     final target = File(
       await _pathResolver.resolveForWrite(rootPath, relativePath),
     );
-    final temporary = File(
-      await _pathResolver.resolveForWrite(rootPath, '$relativePath.tmp'),
-    );
-    await temporary.writeAsString(content, flush: true);
-    if (await target.exists()) {
-      await target.delete();
-    }
-    await temporary.rename(target.path);
+    await _atomicFileWriter.replace(target.path, utf8.encode(content));
   }
 
   Future<Map<String, String>> listTextFiles({
@@ -202,14 +201,7 @@ class VaultBackend {
     final target = File(
       await _pathResolver.resolveForWrite(rootPath, relativePath),
     );
-    final temporary = File(
-      await _pathResolver.resolveForWrite(rootPath, '$relativePath.tmp'),
-    );
-    await temporary.writeAsBytes(bytes, flush: true);
-    if (await target.exists()) {
-      await target.delete();
-    }
-    await temporary.rename(target.path);
+    await _atomicFileWriter.replace(target.path, bytes);
   }
 
   Future<PickedVaultFile?> pickAttachment() async {
@@ -306,14 +298,7 @@ class VaultBackend {
     final target = File(
       await _pathResolver.resolveForWrite(rootPath, relativePath),
     );
-    final temporary = File(
-      await _pathResolver.resolveForWrite(rootPath, '$relativePath.tmp'),
-    );
-    await temporary.writeAsBytes(bytes, flush: true);
-    if (await target.exists()) {
-      await target.delete();
-    }
-    await temporary.rename(target.path);
+    await _atomicFileWriter.replace(target.path, bytes);
     return target.path;
   }
 
@@ -334,14 +319,7 @@ class VaultBackend {
     final target = File(
       await _pathResolver.resolveForWrite(rootPath, relativePath),
     );
-    final temporary = File(
-      await _pathResolver.resolveForWrite(rootPath, '$relativePath.tmp'),
-    );
-    await temporary.writeAsBytes(bytes, flush: true);
-    if (await target.exists()) {
-      await target.delete();
-    }
-    await temporary.rename(target.path);
+    await _atomicFileWriter.replace(target.path, bytes);
 
     final backups = <File>[];
     await for (final entity in directory.list(followLinks: false)) {
@@ -371,6 +349,16 @@ class VaultBackend {
       relativePath,
     );
     await Directory(resolved).create();
+  }
+
+  int _writePriority(String relativePath) {
+    if (relativePath == 'manifest.json') {
+      return 2;
+    }
+    if (relativePath == '.chronicle/vault-index.json') {
+      return 1;
+    }
+    return 0;
   }
 
   Future<String?> _resolveExistingOrNull(
