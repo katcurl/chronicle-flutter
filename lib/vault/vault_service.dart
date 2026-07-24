@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
+import 'package:synchronized/synchronized.dart';
 import 'package:uuid/uuid.dart';
 
 import '../features/notes/note_document.dart';
@@ -11,6 +12,7 @@ import '../sync/attachment_sync_models.dart';
 import '../sync/sync_models.dart';
 import 'vault_backend.dart';
 import 'vault_models.dart';
+import 'vault_revision.dart';
 
 class VaultService {
   VaultService({VaultBackend? backend}) : _backend = backend ?? VaultBackend();
@@ -26,6 +28,7 @@ class VaultService {
 
   final VaultBackend _backend;
   final Uuid _uuid = const Uuid();
+  static final Lock _attachmentMutationLock = Lock(reentrant: true);
 
   Future<bool> hasExistingNoteContent() async {
     try {
@@ -61,6 +64,7 @@ class VaultService {
         message: 'Файловый Vault недоступен на этой платформе.',
       );
     }
+    final expectedRevision = await _captureRevision(rootPath);
 
     final compatibility = await _readManifestCompatibility(rootPath);
     if (compatibility.readOnly) {
@@ -72,6 +76,18 @@ class VaultService {
             'Совместимость Vault нельзя безопасно подтвердить. '
                 'Автоматическая запись отключена, чтобы не повредить данные.',
         readOnly: true,
+      );
+    }
+    try {
+      await _readAttachmentRecords(rootPath);
+    } on VaultAttachmentIndexException {
+      final current = await inspect();
+      return current.copyWith(
+        noteCount: data.notes.length,
+        readOnly: true,
+        message:
+            'Индекс вложений повреждён или создан более новой версией '
+            'Chronicle. Запись отключена, исходные файлы сохранены.',
       );
     }
 
@@ -109,6 +125,7 @@ class VaultService {
     final currentManagedPaths = built.notePaths.toSet();
     final stalePaths = previousManagedPaths.difference(currentManagedPaths);
 
+    await verifyRevision(expectedRevision);
     await _backend.writeFiles(
       rootPath: rootPath,
       files: built.files,
@@ -158,6 +175,7 @@ class VaultService {
         rootPath: rootPath,
         directory: 'Attachments',
       );
+      await _readAttachmentRecords(rootPath);
       return VaultStatus(
         supported: true,
         rootPath: rootPath,
@@ -177,6 +195,21 @@ class VaultService {
                     'поддерживает формат до $currentVaultFormatVersion. '
                     'Открыт только для чтения.'
                 : null,
+      );
+    } on VaultAttachmentIndexException catch (error) {
+      return VaultStatus(
+        supported: true,
+        rootPath: rootPath,
+        noteCount: _readInt(
+          (jsonDecode(raw) as Map<String, dynamic>)['noteCount'],
+        ),
+        fileCount: 0,
+        message:
+            'Повреждён индекс вложений: ${error.message}. '
+            'Vault открыт только для чтения; файлы не изменялись.',
+        formatVersion: currentVaultFormatVersion,
+        minimumReaderVersion: minimumReadableVaultFormatVersion,
+        readOnly: true,
       );
     } on Object {
       return VaultStatus(
@@ -226,6 +259,14 @@ class VaultService {
       directory: 'Notes',
       extension: '.md',
     );
+    final revisionHashes = <String, String?>{
+      for (final entry in files.entries) entry.key: _sha256Text(entry.value),
+      _indexPath: indexRaw == null ? null : _sha256Text(indexRaw),
+    };
+    for (final path in const <String>[_manifestPath, 'Templates/README.md']) {
+      final raw = await _backend.readTextFile(rootPath, path);
+      revisionHashes[path] = raw == null ? null : _sha256Text(raw);
+    }
     final currentById = {for (final note in data.notes) note.id: note};
     final seenIds = <String>{};
     final changes = <VaultNoteChange>[];
@@ -333,7 +374,23 @@ class VaultService {
       scannedAt: DateTime.now(),
       changes: changes,
       missingFiles: missingFiles,
+      revision: VaultRevision(revisionHashes),
     );
+  }
+
+  Future<void> verifyRevision(VaultRevision expectedRevision) async {
+    final rootPath = await _backend.resolveRootPath();
+    if (rootPath == null || rootPath.isEmpty) {
+      throw UnsupportedError('Не удалось определить папку Vault.');
+    }
+    final currentRevision = await _captureRevision(rootPath);
+    if (!expectedRevision.hasSameContentAs(currentRevision)) {
+      throw VaultChangedSinceScanException(
+        changedPaths: expectedRevision.changedPathsComparedWith(
+          currentRevision,
+        ),
+      );
+    }
   }
 
   Future<VaultStatus> rewriteAfterApply(
@@ -344,11 +401,33 @@ class VaultService {
     if (rootPath == null || rootPath.isEmpty) {
       throw UnsupportedError('Не удалось определить папку Vault.');
     }
+    await verifyRevision(scan.revision);
     await _backend.deleteFiles(
       rootPath: rootPath,
       relativePaths: scan.changes.map((change) => change.relativePath).toSet(),
     );
     return writeMirror(data, force: true);
+  }
+
+  Future<VaultRevision> _captureRevision(String rootPath) async {
+    final notes = await _backend.listBinaryFiles(
+      rootPath: rootPath,
+      directory: 'Notes',
+    );
+    final hashes = <String, String?>{
+      for (final entry in notes.entries)
+        if (entry.key.toLowerCase().endsWith('.md'))
+          entry.key: sha256.convert(entry.value).toString(),
+    };
+    for (final path in const <String>[
+      _indexPath,
+      _manifestPath,
+      'Templates/README.md',
+    ]) {
+      final bytes = await _backend.readBinaryFile(rootPath, path);
+      hashes[path] = bytes == null ? null : sha256.convert(bytes).toString();
+    }
+    return VaultRevision(hashes);
   }
 
   Future<AttachmentImportResult?> pickAndStoreAttachment(Note note) async {
@@ -357,11 +436,13 @@ class VaultService {
     if (picked == null) {
       return null;
     }
-    return _storeAttachmentBytes(
-      rootPath: rootPath,
-      note: note,
-      originalName: picked.name,
-      bytes: picked.bytes,
+    return _attachmentMutationLock.synchronized(
+      () => _storeAttachmentBytes(
+        rootPath: rootPath,
+        note: note,
+        originalName: picked.name,
+        bytes: picked.bytes,
+      ),
     );
   }
 
@@ -383,11 +464,13 @@ class VaultService {
     required Uint8List bytes,
   }) async {
     final rootPath = await _requireVaultRoot();
-    return _storeAttachmentBytes(
-      rootPath: rootPath,
-      note: note,
-      originalName: originalName,
-      bytes: bytes,
+    return _attachmentMutationLock.synchronized(
+      () => _storeAttachmentBytes(
+        rootPath: rootPath,
+        note: note,
+        originalName: originalName,
+        bytes: bytes,
+      ),
     );
   }
 
@@ -491,6 +574,81 @@ class VaultService {
     return List<VaultAttachmentRecord>.unmodifiable(result);
   }
 
+  Future<AttachmentIntegrityReport> inspectAttachmentIntegrity() async {
+    final rootPath = await _requireVaultRoot();
+    final records = await _readAttachmentRecords(rootPath);
+    final files = await _backend.listBinaryFiles(
+      rootPath: rootPath,
+      directory: 'Attachments',
+    );
+    final issues = <AttachmentIntegrityIssue>[];
+    final indexedPaths = <String>{};
+    for (final record in records) {
+      indexedPaths.add(record.relativePath);
+      final bytes = files[record.relativePath];
+      if (record.isDeleted) {
+        if (bytes != null) {
+          issues.add(
+            AttachmentIntegrityIssue(
+              kind: AttachmentIntegrityIssueKind.tombstoneHasBinary,
+              relativePath: record.relativePath,
+            ),
+          );
+        }
+        continue;
+      }
+      if (bytes == null) {
+        issues.add(
+          AttachmentIntegrityIssue(
+            kind: AttachmentIntegrityIssueKind.missingBinary,
+            relativePath: record.relativePath,
+          ),
+        );
+        continue;
+      }
+      if (bytes.length != record.byteLength) {
+        issues.add(
+          AttachmentIntegrityIssue(
+            kind: AttachmentIntegrityIssueKind.sizeMismatch,
+            relativePath: record.relativePath,
+            expected: record.byteLength.toString(),
+            actual: bytes.length.toString(),
+          ),
+        );
+      }
+      final actualHash = sha256.convert(bytes).toString();
+      if (actualHash != record.sha256) {
+        issues.add(
+          AttachmentIntegrityIssue(
+            kind: AttachmentIntegrityIssueKind.hashMismatch,
+            relativePath: record.relativePath,
+            expected: record.sha256,
+            actual: actualHash,
+          ),
+        );
+      }
+    }
+    for (final path in files.keys) {
+      if (!indexedPaths.contains(path)) {
+        issues.add(
+          AttachmentIntegrityIssue(
+            kind: AttachmentIntegrityIssueKind.orphanBinary,
+            relativePath: path,
+          ),
+        );
+      }
+    }
+    issues.sort((left, right) {
+      final pathOrder = left.relativePath.compareTo(right.relativePath);
+      return pathOrder != 0 ? pathOrder : left.kind.index - right.kind.index;
+    });
+    return AttachmentIntegrityReport(
+      rootPath: rootPath,
+      checkedAt: DateTime.now().toUtc(),
+      issues: issues,
+    );
+  }
+
   Future<AttachmentSyncManifest> buildAttachmentSyncManifest() async {
     final rootPath = await _backend.resolveRootPath();
     if (rootPath == null || rootPath.isEmpty) {
@@ -561,6 +719,15 @@ class VaultService {
   Future<AttachmentSyncApplyResult> storeAttachmentFromSync(
     AttachmentSyncEntry entry,
     Uint8List bytes,
+  ) {
+    return _attachmentMutationLock.synchronized(
+      () => _storeAttachmentFromSync(entry, bytes),
+    );
+  }
+
+  Future<AttachmentSyncApplyResult> _storeAttachmentFromSync(
+    AttachmentSyncEntry entry,
+    Uint8List bytes,
   ) async {
     _validateActiveSyncEntry(entry);
     _validateAttachmentBytes(entry, bytes);
@@ -616,6 +783,14 @@ class VaultService {
   }
 
   Future<AttachmentSyncApplyResult> applyAttachmentRecordFromSync(
+    AttachmentSyncEntry entry,
+  ) {
+    return _attachmentMutationLock.synchronized(
+      () => _applyAttachmentRecordFromSync(entry),
+    );
+  }
+
+  Future<AttachmentSyncApplyResult> _applyAttachmentRecordFromSync(
     AttachmentSyncEntry entry,
   ) async {
     _validateActiveSyncEntry(entry);
@@ -683,6 +858,14 @@ class VaultService {
 
   Future<AttachmentSyncApplyResult> applyAttachmentTombstoneFromSync(
     AttachmentSyncEntry entry,
+  ) {
+    return _attachmentMutationLock.synchronized(
+      () => _applyAttachmentTombstoneFromSync(entry),
+    );
+  }
+
+  Future<AttachmentSyncApplyResult> _applyAttachmentTombstoneFromSync(
+    AttachmentSyncEntry entry,
   ) async {
     if (!entry.isDeleted || !_validAttachmentPath(entry.relativePath)) {
       throw const FormatException('Некорректная запись удаления вложения.');
@@ -727,7 +910,13 @@ class VaultService {
     return AttachmentSyncApplyResult(changed: true);
   }
 
-  Future<AttachmentDeleteResult> deleteManagedAttachment(
+  Future<AttachmentDeleteResult> deleteManagedAttachment(String relativePath) {
+    return _attachmentMutationLock.synchronized(
+      () => _deleteManagedAttachment(relativePath),
+    );
+  }
+
+  Future<AttachmentDeleteResult> _deleteManagedAttachment(
     String relativePath,
   ) async {
     if (!_validAttachmentPath(relativePath)) {
@@ -738,6 +927,7 @@ class VaultService {
       throw UnsupportedError('Не удалось определить папку Vault.');
     }
 
+    final records = await _readAttachmentRecords(rootPath);
     final existed = await _backend.fileExists(rootPath, relativePath);
     if (existed) {
       await _backend.deleteFiles(
@@ -746,7 +936,6 @@ class VaultService {
       );
     }
 
-    final records = await _readAttachmentRecords(rootPath);
     final index = records.indexWhere(
       (record) => record.relativePath == relativePath,
     );
@@ -982,6 +1171,12 @@ class VaultService {
   }
 
   Future<void> replaceAttachments(BackupImportPayload payload) async {
+    return _attachmentMutationLock.synchronized(
+      () => _replaceAttachments(payload),
+    );
+  }
+
+  Future<void> _replaceAttachments(BackupImportPayload payload) async {
     final rootPath = await _backend.resolveRootPath();
     if (rootPath == null || rootPath.isEmpty) {
       if (payload.attachments.isEmpty) {
@@ -994,6 +1189,11 @@ class VaultService {
       if (!_validAttachmentPath(relativePath)) {
         throw FormatException('Некорректный путь вложения: $relativePath');
       }
+    }
+    await _readAttachmentRecords(rootPath);
+    final savedIndex = payload.vaultFiles[_attachmentIndexPath];
+    if (savedIndex != null) {
+      _decodeAttachmentRecords(savedIndex);
     }
 
     final existing = await _backend.listBinaryFiles(
@@ -1015,7 +1215,6 @@ class VaultService {
       );
     }
 
-    final savedIndex = payload.vaultFiles[_attachmentIndexPath];
     if (savedIndex != null && savedIndex.trim().isNotEmpty) {
       await _backend.writeTextFile(
         rootPath: rootPath,
@@ -1521,29 +1720,70 @@ class VaultService {
     String rootPath,
   ) async {
     final raw = await _backend.readTextFile(rootPath, _attachmentIndexPath);
-    if (raw == null || raw.trim().isEmpty) {
+    if (raw == null) {
       return <VaultAttachmentRecord>[];
     }
+    return _decodeAttachmentRecords(raw);
+  }
+
+  List<VaultAttachmentRecord> _decodeAttachmentRecords(String raw) {
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        return <VaultAttachmentRecord>[];
+      if (decoded is! Map<String, dynamic> ||
+          decoded['format'] != 'chronicle-attachment-index' ||
+          decoded['version'] != 1) {
+        throw const VaultAttachmentIndexException(
+          'неподдерживаемый формат или версия',
+        );
       }
       final rawAttachments = decoded['attachments'];
-      if (rawAttachments is! List) {
-        return <VaultAttachmentRecord>[];
+      if (rawAttachments is! List ||
+          rawAttachments.length > maxAttachmentSyncManifestEntries) {
+        throw const VaultAttachmentIndexException(
+          'некорректный список вложений',
+        );
       }
-      return rawAttachments
-          .whereType<Map>()
-          .map(
-            (item) => VaultAttachmentRecord.fromJson(
-              item.map((key, value) => MapEntry(key.toString(), value)),
-            ),
-          )
-          .where((record) => _validAttachmentPath(record.relativePath))
-          .toList();
+      final records = <VaultAttachmentRecord>[];
+      final paths = <String>{};
+      for (final rawRecord in rawAttachments) {
+        if (rawRecord is! Map) {
+          throw const VaultAttachmentIndexException(
+            'запись вложения имеет неверный тип',
+          );
+        }
+        final json = rawRecord.map<String, dynamic>(
+          (key, value) => MapEntry(key.toString(), value),
+        );
+        final path = json['path'];
+        final hash = json['sha256'];
+        final byteLength = json['byteLength'];
+        final createdAt = json['createdAt'];
+        final deletedAt = json['deletedAt'];
+        if (path is! String ||
+            path.contains(r'\') ||
+            !_validAttachmentPath(path) ||
+            !paths.add(path.toLowerCase()) ||
+            hash is! String ||
+            !RegExp(r'^[0-9a-f]{64}$').hasMatch(hash) ||
+            byteLength is! int ||
+            byteLength < 0 ||
+            byteLength > maxAttachmentBytes ||
+            createdAt is! String ||
+            DateTime.tryParse(createdAt) == null ||
+            (deletedAt != null &&
+                (deletedAt is! String ||
+                    DateTime.tryParse(deletedAt) == null))) {
+          throw const VaultAttachmentIndexException(
+            'запись вложения повреждена',
+          );
+        }
+        records.add(VaultAttachmentRecord.fromJson(json));
+      }
+      return records;
+    } on VaultAttachmentIndexException {
+      rethrow;
     } on Object {
-      return <VaultAttachmentRecord>[];
+      throw const VaultAttachmentIndexException('не удалось прочитать JSON');
     }
   }
 

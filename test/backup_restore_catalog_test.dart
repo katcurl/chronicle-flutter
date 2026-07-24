@@ -7,6 +7,7 @@ import 'package:chronicle/services/app_store.dart';
 import 'package:chronicle/sync/sync_models.dart';
 import 'package:chronicle/vault/vault_backend.dart';
 import 'package:chronicle/vault/vault_models.dart';
+import 'package:chronicle/vault/vault_revision.dart';
 import 'package:chronicle/vault/vault_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -279,8 +280,12 @@ class _FailOnceRestoreVaultService extends VaultService {
       scannedAt: DateTime.utc(2026, 7, 17),
       changes: const <VaultNoteChange>[],
       missingFiles: const <VaultMissingFile>[],
+      revision: VaultRevision.empty(),
     );
   }
+
+  @override
+  Future<void> verifyRevision(VaultRevision expectedRevision) async {}
 }
 
 class _UnavailableBackend extends VaultBackend {

@@ -2058,6 +2058,7 @@ class AppStore extends ChangeNotifier {
     String? safetyBackupPath;
 
     try {
+      await _vaultService.verifyRevision(scan.revision);
       final needsSafetyBackup =
           scan.conflicts.isNotEmpty ||
           (missingFileResolution == VaultMissingFileResolution.deleteNotes &&

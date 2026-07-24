@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../models/app_models.dart';
+import 'vault_revision.dart';
 
 class VaultStatus {
   const VaultStatus({
@@ -128,12 +129,14 @@ class VaultScanResult {
     required this.scannedAt,
     required this.changes,
     required this.missingFiles,
+    required this.revision,
   });
 
   final String rootPath;
   final DateTime scannedAt;
   final List<VaultNoteChange> changes;
   final List<VaultMissingFile> missingFiles;
+  final VaultRevision revision;
 
   List<VaultNoteChange> get safeChanges =>
       changes.where((change) => !change.isConflict).toList(growable: false);
@@ -253,6 +256,46 @@ class VaultAttachmentRecord {
       deletedAt: clearDeletedAt ? null : deletedAt ?? this.deletedAt,
     );
   }
+}
+
+class VaultAttachmentIndexException extends FormatException {
+  const VaultAttachmentIndexException(super.message);
+}
+
+enum AttachmentIntegrityIssueKind {
+  missingBinary,
+  orphanBinary,
+  hashMismatch,
+  sizeMismatch,
+  tombstoneHasBinary,
+}
+
+class AttachmentIntegrityIssue {
+  const AttachmentIntegrityIssue({
+    required this.kind,
+    required this.relativePath,
+    this.expected,
+    this.actual,
+  });
+
+  final AttachmentIntegrityIssueKind kind;
+  final String relativePath;
+  final String? expected;
+  final String? actual;
+}
+
+class AttachmentIntegrityReport {
+  AttachmentIntegrityReport({
+    required this.rootPath,
+    required this.checkedAt,
+    required List<AttachmentIntegrityIssue> issues,
+  }) : issues = List<AttachmentIntegrityIssue>.unmodifiable(issues);
+
+  final String rootPath;
+  final DateTime checkedAt;
+  final List<AttachmentIntegrityIssue> issues;
+
+  bool get isHealthy => issues.isEmpty;
 }
 
 class AttachmentDeleteResult {
