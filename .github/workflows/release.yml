@@ -1,0 +1,365 @@
+name: Publish signed release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    uses: ./.github/workflows/build-apk.yml
+    permissions:
+      contents: read
+
+  build-windows:
+    uses: ./.github/workflows/build-windows.yml
+    permissions:
+      contents: read
+
+  sign-android:
+    needs: build-android
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release-signing
+    permissions:
+      contents: read
+
+    steps:
+      - name: Set up Java
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install Android build tools
+        run: sdkmanager 'build-tools;36.0.0'
+
+      - name: Download unsigned Android artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: chronicle-android-unsigned
+          path: signing/android
+
+      - name: Sign and verify Android artifacts
+        shell: bash
+        env:
+          CHRONICLE_KEYSTORE_BASE64: ${{ secrets.CHRONICLE_KEYSTORE_BASE64 }}
+          CHRONICLE_STORE_PASSWORD: ${{ secrets.CHRONICLE_STORE_PASSWORD }}
+          CHRONICLE_KEY_ALIAS: ${{ secrets.CHRONICLE_KEY_ALIAS }}
+          CHRONICLE_KEY_PASSWORD: ${{ secrets.CHRONICLE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for variable in \
+            CHRONICLE_KEYSTORE_BASE64 \
+            CHRONICLE_STORE_PASSWORD \
+            CHRONICLE_KEY_ALIAS \
+            CHRONICLE_KEY_PASSWORD
+          do
+            if [ -z "${!variable:-}" ]; then
+              echo "::error::Required release secret is missing: $variable"
+              exit 1
+            fi
+          done
+
+          KEYSTORE="$RUNNER_TEMP/chronicle-release.jks"
+          trap 'rm -f "$KEYSTORE"' EXIT
+          printf '%s' "$CHRONICLE_KEYSTORE_BASE64" \
+            | base64 --decode \
+            > "$KEYSTORE"
+          chmod 600 "$KEYSTORE"
+          test -s "$KEYSTORE"
+
+          APK="$(find signing/android -maxdepth 1 -name '*-unsigned.apk' -print -quit)"
+          AAB="$(find signing/android -maxdepth 1 -name '*-unsigned.aab' -print -quit)"
+          test -n "$APK"
+          test -n "$AAB"
+          SIGNED_APK="${APK%-unsigned.apk}.apk"
+          SIGNED_AAB="${AAB%-unsigned.aab}.aab"
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
+          ZIPALIGN="$ANDROID_SDK_ROOT/build-tools/36.0.0/zipalign"
+          ALIGNED_APK="$RUNNER_TEMP/chronicle-aligned.apk"
+
+          "$ZIPALIGN" -f -p 4 "$APK" "$ALIGNED_APK"
+          "$APKSIGNER" sign \
+            --ks "$KEYSTORE" \
+            --ks-key-alias "$CHRONICLE_KEY_ALIAS" \
+            --ks-pass env:CHRONICLE_STORE_PASSWORD \
+            --key-pass env:CHRONICLE_KEY_PASSWORD \
+            --out "$SIGNED_APK" \
+            "$ALIGNED_APK"
+          "$APKSIGNER" verify \
+            --verbose \
+            --print-certs \
+            "$SIGNED_APK"
+          rm "$APK"
+
+          mv "$AAB" "$SIGNED_AAB"
+          jarsigner \
+            -keystore "$KEYSTORE" \
+            -storepass:env CHRONICLE_STORE_PASSWORD \
+            -keypass:env CHRONICLE_KEY_PASSWORD \
+            "$SIGNED_AAB" \
+            "$CHRONICLE_KEY_ALIAS"
+          AAB_RESULT="$(jarsigner -verify -certs "$SIGNED_AAB" 2>&1)"
+          printf '%s\n' "$AAB_RESULT"
+          grep -Fq 'jar verified.' <<<"$AAB_RESULT"
+
+          rm -f signing/android/SHA256SUMS.txt
+          {
+            printf 'Chronicle signed Android release\n'
+            printf 'Commit: %s\n' "$GITHUB_SHA"
+            printf 'Signing status: protected release-signing environment\n'
+          } > signing/android/RELEASE.txt
+
+          cd signing/android
+          sha256sum \
+            "$(basename "$SIGNED_APK")" \
+            "$(basename "$SIGNED_AAB")" \
+            chronicle-dependencies.spdx.json \
+            > SHA256SUMS.txt
+
+      - name: Upload signed Android artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: chronicle-android-signed
+          path: signing/android/
+          retention-days: 30
+          if-no-files-found: error
+
+  sign-windows:
+    needs: build-windows
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    timeout-minutes: 15
+    environment: release-signing
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download unsigned Windows artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: chronicle-windows-unsigned
+          path: signing/windows
+
+      - name: Sign and verify Windows executable
+        shell: pwsh
+        env:
+          CHRONICLE_WINDOWS_PFX_BASE64: ${{ secrets.CHRONICLE_WINDOWS_PFX_BASE64 }}
+          CHRONICLE_WINDOWS_PFX_PASSWORD: ${{ secrets.CHRONICLE_WINDOWS_PFX_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:CHRONICLE_WINDOWS_PFX_BASE64)) {
+            throw 'Required release secret is missing: CHRONICLE_WINDOWS_PFX_BASE64'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:CHRONICLE_WINDOWS_PFX_PASSWORD)) {
+            throw 'Required release secret is missing: CHRONICLE_WINDOWS_PFX_PASSWORD'
+          }
+
+          $unsignedZip = Get-ChildItem `
+            -Path signing/windows `
+            -File `
+            -Filter '*-unsigned.zip' |
+            Select-Object -First 1
+          if ($null -eq $unsignedZip) {
+            throw 'Unsigned Windows ZIP was not downloaded.'
+          }
+
+          $expandedDir = Join-Path $env:RUNNER_TEMP 'chronicle-windows'
+          Expand-Archive $unsignedZip.FullName $expandedDir
+          $executable = Join-Path $expandedDir 'chronicle.exe'
+          if (-not (Test-Path $executable)) {
+            throw 'chronicle.exe is missing from the portable archive.'
+          }
+
+          $signTool = Get-ChildItem `
+            -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" `
+            -File |
+            Sort-Object -Property FullName -Descending |
+            Select-Object -First 1
+          if ($null -eq $signTool) {
+            throw 'signtool.exe was not found on the Windows runner.'
+          }
+
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'chronicle-release.pfx'
+          $certificate = $null
+          try {
+            [IO.File]::WriteAllBytes(
+              $pfxPath,
+              [Convert]::FromBase64String($env:CHRONICLE_WINDOWS_PFX_BASE64)
+            )
+            $securePassword = ConvertTo-SecureString `
+              $env:CHRONICLE_WINDOWS_PFX_PASSWORD `
+              -AsPlainText `
+              -Force
+            $certificate = Import-PfxCertificate `
+              -FilePath $pfxPath `
+              -CertStoreLocation 'Cert:\CurrentUser\My' `
+              -Password $securePassword |
+              Where-Object HasPrivateKey |
+              Select-Object -First 1
+            if ($null -eq $certificate) {
+              throw 'The release PFX does not contain a private signing key.'
+            }
+
+            & $signTool.FullName sign `
+              /fd SHA256 `
+              /td SHA256 `
+              /tr 'http://timestamp.digicert.com' `
+              /s My `
+              /sha1 $certificate.Thumbprint `
+              $executable
+            if ($LASTEXITCODE -ne 0) {
+              throw "signtool sign failed with code $LASTEXITCODE."
+            }
+
+            & $signTool.FullName verify /pa /v $executable
+            if ($LASTEXITCODE -ne 0) {
+              throw "signtool verify failed with code $LASTEXITCODE."
+            }
+            $signature = Get-AuthenticodeSignature $executable
+            if ($signature.Status -ne 'Valid') {
+              throw "Authenticode verification failed: $($signature.Status)"
+            }
+          } finally {
+            if ($null -ne $certificate) {
+              Remove-Item `
+                "Cert:\CurrentUser\My\$($certificate.Thumbprint)" `
+                -Force
+            }
+            if (Test-Path $pfxPath) {
+              Remove-Item $pfxPath -Force
+            }
+          }
+
+          @(
+            'Chronicle signed Windows release',
+            "Commit: $env:GITHUB_SHA",
+            'Signing status: protected release-signing environment',
+            'Validated: Authenticode signature and clean-runner smoke test'
+          ) | Set-Content `
+            -Path (Join-Path $expandedDir 'RELEASE.txt') `
+            -Encoding utf8
+
+          $signedName = $unsignedZip.Name.Replace('-unsigned.zip', '.zip')
+          $signedPath = Join-Path signing/windows $signedName
+          Remove-Item $unsignedZip.FullName
+          Remove-Item signing/windows/SHA256SUMS.txt -ErrorAction SilentlyContinue
+          Compress-Archive -Path "$expandedDir/*" -DestinationPath $signedPath
+          $hash = (Get-FileHash -Algorithm SHA256 $signedPath).Hash.ToLowerInvariant()
+          "$hash  $signedName" | Set-Content `
+            -Path signing/windows/SHA256SUMS.txt `
+            -Encoding utf8
+
+      - name: Upload signed Windows artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: chronicle-windows-signed
+          path: signing/windows/
+          retention-days: 30
+          if-no-files-found: error
+
+  publish:
+    needs:
+      - sign-android
+      - sign-windows
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
+    steps:
+      - name: Checkout release metadata
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Download signed Android artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: chronicle-android-signed
+          path: release-parts/android
+
+      - name: Download signed Windows artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: chronicle-windows-signed
+          path: release-parts/windows
+
+      - name: Validate tag and assemble release
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(awk '/^version:/{print $2}' pubspec.yaml)"
+          PUBLIC_VERSION="${VERSION%%+*}"
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ] \
+            && [ "$GITHUB_REF_NAME" != "v$PUBLIC_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match pubspec version $VERSION."
+            exit 1
+          fi
+
+          mkdir release
+          cp release-parts/android/*.apk release/
+          cp release-parts/android/*.aab release/
+          cp release-parts/windows/*.zip release/
+          cp \
+            release-parts/android/chronicle-dependencies.spdx.json \
+            release/
+
+          cd release
+          sha256sum \
+            chronicle-*.apk \
+            chronicle-*.aab \
+            chronicle-*.zip \
+            chronicle-dependencies.spdx.json \
+            | sort \
+            > SHA256SUMS.txt
+          sha256sum --check SHA256SUMS.txt
+
+      - name: Generate build provenance attestation
+        id: attest-provenance
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-checksums: release/SHA256SUMS.txt
+
+      - name: Generate SBOM attestation
+        id: attest-sbom
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-path: |
+            release/*.apk
+            release/*.aab
+            release/*.zip
+          sbom-path: release/chronicle-dependencies.spdx.json
+
+      - name: Add attestation bundles
+        shell: bash
+        env:
+          PROVENANCE_BUNDLE: ${{ steps.attest-provenance.outputs.bundle-path }}
+          SBOM_BUNDLE: ${{ steps.attest-sbom.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          cp "$PROVENANCE_BUNDLE" \
+            release/chronicle-provenance-attestation.json
+          cp "$SBOM_BUNDLE" \
+            release/chronicle-sbom-attestation.json
+
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            release/* \
+            --verify-tag \
+            --title "Chronicle $GITHUB_REF_NAME" \
+            --generate-notes

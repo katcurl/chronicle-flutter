@@ -1,5 +1,13 @@
 name: Build Windows desktop
 
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches:
+      - main
+  pull_request:
+
 permissions:
   contents: read
 
@@ -7,25 +15,21 @@ concurrency:
   group: build-windows-${{ github.ref }}
   cancel-in-progress: true
 
-on:
-  workflow_dispatch:
-
 jobs:
   build-windows:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: subosito/flutter-action@v2
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.7'
           channel: stable
           cache: true
-
-      - name: Show toolchain
-        run: flutter --version
 
       - name: Install dependencies from lockfile
         run: flutter pub get --enforce-lockfile
@@ -33,40 +37,163 @@ jobs:
       - name: Generate Drift files
         run: dart run build_runner build
 
-      - name: Analyze
+      - name: Reject uncommitted generated output
+        run: git diff --exit-code
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test tool packages
+
+      - name: Analyze source code
         run: flutter analyze --no-pub
 
       - name: Run tests
         run: flutter test --no-pub
 
-      - name: Build Windows release
-        run: flutter build windows --release
+      - name: Build unsigned Windows release
+        run: flutter build windows --release --no-pub
 
-      - name: Verify Windows release
+      - name: Add the Visual C++ runtime
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $releaseDir = 'build/windows/x64/runner/Release'
-          $executable = Join-Path $releaseDir 'chronicle.exe'
-          if (-not (Test-Path $executable)) {
-            throw "Windows release is missing $executable"
+          $crtDir = Get-ChildItem `
+            -Path (Join-Path $env:VCToolsRedistDir 'x64') `
+            -Directory `
+            -Filter 'Microsoft.VC*.CRT' |
+            Sort-Object -Property FullName -Descending |
+            Select-Object -First 1
+
+          if ($null -eq $crtDir) {
+            throw 'Could not locate the Visual C++ x64 redistributable runtime.'
           }
-          $versionLine = Select-String -Path pubspec.yaml -Pattern '^version:\s*(.+)$'
+
+          $runtimeFiles = @(
+            'msvcp140.dll',
+            'vcruntime140.dll',
+            'vcruntime140_1.dll'
+          )
+          foreach ($runtimeFile in $runtimeFiles) {
+            $source = Join-Path $crtDir.FullName $runtimeFile
+            if (-not (Test-Path $source)) {
+              throw "Required runtime file is missing: $source"
+            }
+            Copy-Item $source (Join-Path $releaseDir $runtimeFile)
+          }
+
+      - name: Verify portable artifact contents
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseDir = 'build/windows/x64/runner/Release'
+          $requiredFiles = @(
+            'chronicle.exe',
+            'flutter_windows.dll',
+            'msvcp140.dll',
+            'vcruntime140.dll',
+            'vcruntime140_1.dll'
+          )
+          foreach ($requiredFile in $requiredFiles) {
+            if (-not (Test-Path (Join-Path $releaseDir $requiredFile))) {
+              throw "Windows release is missing $requiredFile"
+            }
+          }
+
+          $jniFiles = Get-ChildItem `
+            -Path $releaseDir `
+            -Recurse `
+            -File `
+            -Filter 'dartjni.dll'
+          if ($jniFiles.Count -ne 0) {
+            throw 'Unused dartjni.dll is still present in the Windows bundle.'
+          }
+
+      - name: Smoke-test the portable app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $executable = Resolve-Path `
+            'build/windows/x64/runner/Release/chronicle.exe'
+          $process = Start-Process -FilePath $executable -PassThru
+          $deadline = (Get-Date).AddSeconds(45)
+          $windowReady = $false
+
+          try {
+            while ((Get-Date) -lt $deadline) {
+              $process.Refresh()
+              if ($process.HasExited) {
+                throw "Chronicle exited during startup with code $($process.ExitCode)."
+              }
+              if ($process.MainWindowHandle -ne 0) {
+                $windowReady = $true
+                break
+              }
+              Start-Sleep -Milliseconds 500
+            }
+
+            if (-not $windowReady) {
+              throw 'Chronicle did not create a main window within 45 seconds.'
+            }
+            if (-not $process.CloseMainWindow()) {
+              throw 'Chronicle did not accept a normal window-close request.'
+            }
+            if (-not $process.WaitForExit(15000)) {
+              throw 'Chronicle did not shut down cleanly within 15 seconds.'
+            }
+            if ($process.ExitCode -ne 0) {
+              throw "Chronicle smoke test exited with code $($process.ExitCode)."
+            }
+          } finally {
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
+
+      - name: Create portable package and SPDX SBOM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseDir = 'build/windows/x64/runner/Release'
+          $packageDir = 'release-windows'
+          New-Item -ItemType Directory -Path $packageDir | Out-Null
+
+          $versionLine = Select-String `
+            -Path pubspec.yaml `
+            -Pattern '^version:\s*(.+)$'
           $version = $versionLine.Matches[0].Groups[1].Value.Trim()
+          $safeVersion = $version.Replace('+', '-build-')
+          $zipName = "chronicle-$safeVersion-windows-x64-unsigned.zip"
+          $zipPath = Join-Path $packageDir $zipName
+
           @(
             "Chronicle $version",
             "Commit: $env:GITHUB_SHA",
-            "Flutter: 3.44.7",
-            "Validated: analyze, test, windows release"
-          ) | Set-Content -Path (Join-Path $releaseDir 'RELEASE.txt') -Encoding UTF8
+            'Flutter: 3.44.7',
+            'Signing status: unsigned CI artifact',
+            'Validated: analyze, test, Windows startup and clean shutdown'
+          ) | Set-Content `
+            -Path (Join-Path $releaseDir 'RELEASE.txt') `
+            -Encoding utf8
 
-      - name: Package portable Windows app
-        shell: pwsh
-        run: |
-          Compress-Archive `
-            -Path build/windows/x64/runner/Release/* `
-            -DestinationPath chronicle-windows-x64.zip
+          $env:SOURCE_DATE_EPOCH = (
+            git show -s --format=%ct HEAD
+          ).Trim()
+          dart run tool/generate_spdx_sbom.dart `
+            (Join-Path $packageDir 'chronicle-dependencies.spdx.json')
+          Copy-Item `
+            (Join-Path $packageDir 'chronicle-dependencies.spdx.json') `
+            (Join-Path $releaseDir 'chronicle-dependencies.spdx.json')
 
-      - uses: actions/upload-artifact@v4
+          Compress-Archive -Path "$releaseDir/*" -DestinationPath $zipPath
+          $hash = (Get-FileHash -Algorithm SHA256 $zipPath).Hash.ToLowerInvariant()
+          "$hash  $zipName" | Set-Content `
+            -Path (Join-Path $packageDir 'SHA256SUMS.txt') `
+            -Encoding utf8
+
+      - name: Upload unsigned Windows artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: chronicle-windows-x64
-          path: chronicle-windows-x64.zip
+          name: chronicle-windows-unsigned
+          path: release-windows/
+          retention-days: 14
+          if-no-files-found: error

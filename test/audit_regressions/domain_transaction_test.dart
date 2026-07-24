@@ -184,16 +184,17 @@ void main() {
     await firstRepository.close();
 
     final migratedDatabase = ChronicleDatabase(NativeDatabase(file));
-    final migratedRepository = DriftAppRepository(
-      database: migratedDatabase,
-    );
+    final migratedRepository = DriftAppRepository(database: migratedDatabase);
     addTearDown(migratedRepository.close);
 
     final restored = await migratedRepository.load();
     expect(restored.entries.single.durationSeconds, 0);
-    final schema = await migratedDatabase.customSelect(
-      "SELECT sql FROM sqlite_master WHERE name = 'time_entries'",
-    ).getSingle();
+    final schema =
+        await migratedDatabase
+            .customSelect(
+              "SELECT sql FROM sqlite_master WHERE name = 'time_entries'",
+            )
+            .getSingle();
     expect(
       schema.read<String>('sql'),
       contains('CHECK (duration_seconds >= 0)'),

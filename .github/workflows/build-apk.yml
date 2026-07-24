@@ -1,197 +1,47 @@
-name: Build signed Android APK
+name: Build Android artifacts
 
 on:
   workflow_dispatch:
+  workflow_call:
   push:
     branches:
       - main
-      - feature/data-core
+  pull_request:
 
 permissions:
   contents: read
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: true
 
-    env:
-      CHRONICLE_APPLICATION_ID: io.github.katcurl.chronicle
-      CHRONICLE_KEYSTORE_BASE64: ${{ secrets.CHRONICLE_KEYSTORE_BASE64 }}
-      CHRONICLE_STORE_PASSWORD: ${{ secrets.CHRONICLE_STORE_PASSWORD }}
-      CHRONICLE_KEY_ALIAS: ${{ secrets.CHRONICLE_KEY_ALIAS }}
-      CHRONICLE_KEY_PASSWORD: ${{ secrets.CHRONICLE_KEY_PASSWORD }}
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.44.7'
           channel: stable
           cache: true
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
 
       - name: Install Android SDK 36
-        run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
-
-      - name: Show Flutter version
-        run: flutter --version
-
-      - name: Validate signing secrets
-        shell: bash
-        run: |
-          set -euo pipefail
-          for variable in \
-            CHRONICLE_KEYSTORE_BASE64 \
-            CHRONICLE_STORE_PASSWORD \
-            CHRONICLE_KEY_ALIAS \
-            CHRONICLE_KEY_PASSWORD
-          do
-            if [ -z "${!variable:-}" ]; then
-              echo "Required GitHub Actions secret is missing: $variable"
-              exit 1
-            fi
-          done
-
-      - name: Restore release keystore
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s' "$CHRONICLE_KEYSTORE_BASE64" \
-            | base64 --decode \
-            > "$RUNNER_TEMP/chronicle-release.jks"
-          test -s "$RUNNER_TEMP/chronicle-release.jks"
-          chmod 600 "$RUNNER_TEMP/chronicle-release.jks"
-
-      - name: Configure Android release signing
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os
-          import re
-          from pathlib import Path
-
-          application_id = os.environ['CHRONICLE_APPLICATION_ID']
-          keystore_path = Path(os.environ['RUNNER_TEMP']) / 'chronicle-release.jks'
-
-          def properties_escape(value: str) -> str:
-              return (
-                  value.replace('\\', '\\\\')
-                  .replace('\n', '\\n')
-                  .replace('\r', '\\r')
-              )
-
-          key_properties = Path('android/key.properties')
-          key_properties.write_text(
-              '\n'.join(
-                  [
-                      f"storePassword={properties_escape(os.environ['CHRONICLE_STORE_PASSWORD'])}",
-                      f"keyPassword={properties_escape(os.environ['CHRONICLE_KEY_PASSWORD'])}",
-                      f"keyAlias={properties_escape(os.environ['CHRONICLE_KEY_ALIAS'])}",
-                      f"storeFile={properties_escape(str(keystore_path))}",
-                      '',
-                  ]
-              ),
-              encoding='utf-8',
-          )
-
-          gradle = Path('android/app/build.gradle.kts')
-          text = gradle.read_text(encoding='utf-8')
-
-          if 'import java.util.Properties' not in text:
-              text = (
-                  'import java.util.Properties\n'
-                  'import java.io.FileInputStream\n\n'
-                  + text
-              )
-
-          properties_block = '''
-          val keystoreProperties = Properties()
-          val keystorePropertiesFile = rootProject.file("key.properties")
-          if (keystorePropertiesFile.exists()) {
-              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-          }
-
-          '''
-          if 'val keystoreProperties = Properties()' not in text:
-              text = text.replace('android {', properties_block + 'android {', 1)
-
-          text, namespace_count = re.subn(
-              r'namespace\s*=\s*"[^"]+"',
-              f'namespace = "{application_id}"',
-              text,
-              count=1,
-          )
-          text, app_id_count = re.subn(
-              r'applicationId\s*=\s*"[^"]+"',
-              f'applicationId = "{application_id}"',
-              text,
-              count=1,
-          )
-          text, sdk_count = re.subn(
-              r'compileSdk\s*=\s*(?:flutter\.compileSdkVersion|\d+)',
-              'compileSdk = 36',
-              text,
-              count=1,
-          )
-
-          if not all((namespace_count, app_id_count, sdk_count)):
-              raise SystemExit(
-                  'Could not update namespace, applicationId, or compileSdk in build.gradle.kts'
-              )
-
-          signing_block = '''
-              signingConfigs {
-                  create("release") {
-                      keyAlias = keystoreProperties["keyAlias"] as String
-                      keyPassword = keystoreProperties["keyPassword"] as String
-                      storeFile = keystoreProperties["storeFile"]?.let { file(it) }
-                      storePassword = keystoreProperties["storePassword"] as String
-                  }
-              }
-
-          '''
-          if 'create("release")' not in text:
-              text = text.replace('    buildTypes {', signing_block + '    buildTypes {', 1)
-
-          text, signing_count = re.subn(
-              r'signingConfig\s*=\s*signingConfigs\.getByName\("debug"\)',
-              'signingConfig = signingConfigs.getByName("release")',
-              text,
-              count=1,
-          )
-          if signing_count == 0 and 'signingConfigs.getByName("release")' not in text:
-              raise SystemExit('Could not configure release signing in build.gradle.kts')
-
-          gradle.write_text(text, encoding='utf-8')
-
-          manifest = Path('android/app/src/main/AndroidManifest.xml')
-          manifest_text = manifest.read_text(encoding='utf-8')
-          manifest_text = re.sub(
-              r'android:label="[^"]*"',
-              'android:label="Chronicle"',
-              manifest_text,
-              count=1,
-          )
-          manifest.write_text(manifest_text, encoding='utf-8')
-
-          print(f'Configured permanent application ID: {application_id}')
-          print('Configured release signing without writing secrets to the repository.')
-          PY
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
 
       - name: Install dependencies from lockfile
         run: flutter pub get --enforce-lockfile
@@ -199,66 +49,81 @@ jobs:
       - name: Generate Drift files
         run: dart run build_runner build
 
+      - name: Reject uncommitted generated output
+        run: git diff --exit-code
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test tool packages
+
       - name: Analyze source code
         run: flutter analyze --no-pub
 
       - name: Run tests
         run: flutter test --no-pub
 
-      - name: Build signed release APK
-        run: flutter build apk --release
+      - name: Build unsigned release artifacts
+        run: |
+          flutter build apk --release --no-pub
+          flutter build appbundle --release --no-pub
 
-      - name: Verify APK signature
+      - name: Verify artifacts are unsigned
         shell: bash
         run: |
           set -euo pipefail
+          APK='build/app/outputs/flutter-apk/app-release.apk'
+          AAB='build/app/outputs/bundle/release/app-release.aab'
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
 
-          APK="build/app/outputs/flutter-apk/app-release.apk"
-          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -s "$APK"
+          test -s "$AAB"
 
-          if [ -z "$SDK_ROOT" ]; then
-            echo "::error::ANDROID_SDK_ROOT and ANDROID_HOME are not set"
+          if "$APKSIGNER" verify "$APK" >/dev/null 2>&1; then
+            echo '::error::Ordinary CI unexpectedly produced a signed APK.'
             exit 1
           fi
 
-          APKSIGNER="$(
-            find "$SDK_ROOT/build-tools" \
-              -mindepth 2 \
-              -maxdepth 2 \
-              -type f \
-              -name apksigner \
-              | sort -V \
-              | tail -n 1
-          )"
-
-          if [ -z "$APKSIGNER" ]; then
-            echo "::error::apksigner was not found in $SDK_ROOT/build-tools"
-            find "$SDK_ROOT/build-tools" -maxdepth 2 -type f || true
+          AAB_RESULT="$(jarsigner -verify "$AAB" 2>&1)"
+          printf '%s\n' "$AAB_RESULT"
+          if grep -Fq 'jar verified.' <<<"$AAB_RESULT"; then
+            echo '::error::Ordinary CI unexpectedly produced a signed AAB.'
             exit 1
           fi
 
-          echo "Using apksigner: $APKSIGNER"
-
-          "$APKSIGNER" verify \
-            --verbose \
-            --print-certs \
-            "$APK"
-
-      - name: Prepare release artifact
+      - name: Create SPDX SBOM and release manifest
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release
           VERSION="$(awk '/^version:/{print $2}' pubspec.yaml)"
           SAFE_VERSION="${VERSION//+/-build-}"
-          cp build/app/outputs/flutter-apk/app-release.apk \
-            "release/chronicle-${SAFE_VERSION}-android.apk"
-          sha256sum release/*.apk > release/SHA256SUMS.txt
+          APK_NAME="chronicle-${SAFE_VERSION}-android-unsigned.apk"
+          AAB_NAME="chronicle-${SAFE_VERSION}-android-unsigned.aab"
 
-      - name: Upload signed APK
-        uses: actions/upload-artifact@v4
+          cp build/app/outputs/flutter-apk/app-release.apk "release/$APK_NAME"
+          cp build/app/outputs/bundle/release/app-release.aab "release/$AAB_NAME"
+
+          export SOURCE_DATE_EPOCH
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          dart run tool/generate_spdx_sbom.dart \
+            release/chronicle-dependencies.spdx.json
+
+          {
+            printf 'Chronicle %s\n' "$VERSION"
+            printf 'Commit: %s\n' "$GITHUB_SHA"
+            printf 'Signing status: unsigned CI artifact\n'
+          } > release/RELEASE.txt
+
+          cd release
+          sha256sum \
+            "$APK_NAME" \
+            "$AAB_NAME" \
+            chronicle-dependencies.spdx.json \
+            > SHA256SUMS.txt
+
+      - name: Upload unsigned Android artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: chronicle-signed-release-apk
+          name: chronicle-android-unsigned
           path: release/
-          retention-days: 30
+          retention-days: 14
           if-no-files-found: error
