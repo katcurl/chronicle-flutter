@@ -10,20 +10,39 @@ import '../database/chronicle_database.dart';
 import 'app_repository.dart';
 
 class DriftAppRepository implements AppRepository {
-  DriftAppRepository({ChronicleDatabase? database})
-    : _database = database ?? ChronicleDatabase.defaults();
+  DriftAppRepository({
+    ChronicleDatabase? database,
+    int automaticJournalMaxEntries = defaultMaxJournalEntries,
+    int automaticJournalMaxPayloadBytes = defaultMaxJournalPayloadBytes,
+  }) : _database = database ?? ChronicleDatabase.defaults(),
+       _automaticJournalMaxEntries = automaticJournalMaxEntries,
+       _automaticJournalMaxPayloadBytes = automaticJournalMaxPayloadBytes {
+    _validateJournalBudgets(
+      automaticJournalMaxEntries,
+      automaticJournalMaxPayloadBytes,
+    );
+  }
 
   static const _initializedKey = 'initialized';
   static const _activeTimerKey = 'active_timer';
   static const _syncPreferencesKey = 'sync_preferences';
   static const _syncJournalBootstrappedKey = 'sync_journal_bootstrapped';
+  static const _journalEntryCountKey = 'sync_journal_entry_count_v1';
+  static const _journalPayloadBytesKey = 'sync_journal_payload_bytes_v1';
+  static const _journalCompactionMetadataKey =
+      'sync_journal_compaction_metadata_v1';
   static const _deviceKeyMaterialKey = 'device_key_material_v1';
   static const _citationSourcesKey = 'citation_sources_v1';
   static const _dataGenerationKey = 'data_generation_v1';
 
   final ChronicleDatabase _database;
+  final int _automaticJournalMaxEntries;
+  final int _automaticJournalMaxPayloadBytes;
   final Uuid _uuid = const Uuid();
   DeviceIdentity? _identityCache;
+  bool _journalMetricsValidated = false;
+  int _nextAutomaticCompactionEntryCount = 0;
+  int _nextAutomaticCompactionPayloadBytes = 0;
 
   @override
   Future<bool> isInitialized() async {
@@ -163,6 +182,9 @@ class DriftAppRepository implements AppRepository {
       await _database.customStatement('DELETE FROM projects');
       await _database.customStatement('DELETE FROM change_records');
       await _database.customStatement('DELETE FROM sync_cursors');
+      await _writeJournalMetricsInTransaction(
+        const _JournalMetrics(entryCount: 0, payloadBytes: 0),
+      );
 
       for (final project in data.projects) {
         await _upsert('projects', project.toDb());
@@ -643,6 +665,20 @@ class DriftAppRepository implements AppRepository {
   }
 
   @override
+  Future<JournalCompactionResult> compactJournal({
+    int maxEntries = defaultMaxJournalEntries,
+    int maxPayloadBytes = defaultMaxJournalPayloadBytes,
+  }) {
+    _validateJournalBudgets(maxEntries, maxPayloadBytes);
+    return _database.transaction(
+      () => _compactJournalInTransaction(
+        maxEntries: maxEntries,
+        maxPayloadBytes: maxPayloadBytes,
+      ),
+    );
+  }
+
+  @override
   Future<bool> isSyncJournalBootstrapped() async {
     return await _readState(_syncJournalBootstrappedKey) == '1';
   }
@@ -752,6 +788,7 @@ class DriftAppRepository implements AppRepository {
           unsupportedCount++;
         }
       }
+      await _compactJournalIfNeededInTransaction();
     });
 
     return SyncApplyResult(
@@ -840,6 +877,7 @@ class DriftAppRepository implements AppRepository {
   }
 
   Future<void> _insertRemoteChangeInTransaction(ChangeRecord change) async {
+    await _ensureJournalMetricsInTransaction();
     await _database.customStatement(
       'INSERT INTO change_records ('
       'change_id, entity_type, entity_id, operation, revision, '
@@ -857,6 +895,7 @@ class DriftAppRepository implements AppRepository {
         change.appliedAt?.toUtc().toIso8601String(),
       ],
     );
+    await _incrementJournalMetricsInTransaction(change.payloadJson);
   }
 
   Future<bool> _applyRemoteEntityInTransaction(ChangeRecord change) async {
@@ -983,6 +1022,7 @@ class DriftAppRepository implements AppRepository {
     final changeId = _uuid.v4();
     final payloadJson = jsonEncode(payload);
 
+    await _ensureJournalMetricsInTransaction();
     await _database.customStatement(
       'INSERT INTO change_records ('
       'change_id, entity_type, entity_id, operation, revision, '
@@ -999,6 +1039,8 @@ class DriftAppRepository implements AppRepository {
         payloadJson,
       ],
     );
+    await _incrementJournalMetricsInTransaction(payloadJson);
+    await _compactJournalIfNeededInTransaction();
 
     final sequenceRows =
         await _database
@@ -1019,6 +1061,329 @@ class DriftAppRepository implements AppRepository {
       changedAt: changedAt,
       payloadJson: payloadJson,
     );
+  }
+
+  Future<void> _compactJournalIfNeededInTransaction() async {
+    final metrics = await _ensureJournalMetricsInTransaction();
+    if (metrics.entryCount <= _automaticJournalMaxEntries &&
+        metrics.payloadBytes <= _automaticJournalMaxPayloadBytes) {
+      return;
+    }
+    if (metrics.entryCount < _nextAutomaticCompactionEntryCount &&
+        metrics.payloadBytes < _nextAutomaticCompactionPayloadBytes) {
+      return;
+    }
+    final result = await _compactJournalInTransaction(
+      maxEntries: _automaticJournalMaxEntries,
+      maxPayloadBytes: _automaticJournalMaxPayloadBytes,
+    );
+    if (result.withinBudget) {
+      _nextAutomaticCompactionEntryCount = 0;
+      _nextAutomaticCompactionPayloadBytes = 0;
+    } else {
+      _nextAutomaticCompactionEntryCount = result.entryCountAfter + 1000;
+      _nextAutomaticCompactionPayloadBytes =
+          result.payloadBytesAfter + 10 * 1024 * 1024;
+    }
+  }
+
+  Future<JournalCompactionResult> _compactJournalInTransaction({
+    required int maxEntries,
+    required int maxPayloadBytes,
+  }) async {
+    final before = await _ensureJournalMetricsInTransaction();
+    final metadata = await _readJournalCompactionMetadataInTransaction();
+    final minimumPeerCursor = await _minimumPeerCursorInTransaction();
+    if (before.entryCount <= maxEntries &&
+        before.payloadBytes <= maxPayloadBytes) {
+      return JournalCompactionResult(
+        didCompact: false,
+        entryCountBefore: before.entryCount,
+        entryCountAfter: before.entryCount,
+        payloadBytesBefore: before.payloadBytes,
+        payloadBytesAfter: before.payloadBytes,
+        generation: metadata.generation,
+        lastCompactedSequence: metadata.lastCompactedSequence,
+        minimumPeerCursor: minimumPeerCursor,
+        maxEntries: maxEntries,
+        maxPayloadBytes: maxPayloadBytes,
+      );
+    }
+    final candidateRows =
+        await _database
+            .customSelect(
+              'SELECT local_sequence, change_id, entity_type, entity_id, '
+              'operation, revision, changed_at FROM change_records',
+            )
+            .get();
+    final winners = <String, _JournalCandidate>{};
+    var maxSequenceBefore = 0;
+    for (final row in candidateRows) {
+      final candidate = _JournalCandidate(
+        localSequence: row.read<int>('local_sequence'),
+        changeId: row.read<String>('change_id'),
+        entityType: row.read<String>('entity_type'),
+        entityId: row.read<String>('entity_id'),
+        operation: row.read<String>('operation'),
+        revision: row.read<int>('revision'),
+        changedAt: DateTime.parse(row.read<String>('changed_at')).toUtc(),
+      );
+      if (candidate.localSequence > maxSequenceBefore) {
+        maxSequenceBefore = candidate.localSequence;
+      }
+      final current = winners[candidate.entityKey];
+      if (current == null || candidate.isFresherThan(current)) {
+        winners[candidate.entityKey] = candidate;
+      }
+    }
+    final restoreWinners = winners.values
+        .where((candidate) => candidate.operation == 'restore')
+        .toList(growable: false);
+    final removableCount = before.entryCount - winners.length;
+    if (removableCount == 0 && restoreWinners.isEmpty) {
+      return JournalCompactionResult(
+        didCompact: false,
+        entryCountBefore: before.entryCount,
+        entryCountAfter: before.entryCount,
+        payloadBytesBefore: before.payloadBytes,
+        payloadBytesAfter: before.payloadBytes,
+        generation: metadata.generation,
+        lastCompactedSequence: metadata.lastCompactedSequence,
+        minimumPeerCursor: minimumPeerCursor,
+        maxEntries: maxEntries,
+        maxPayloadBytes: maxPayloadBytes,
+      );
+    }
+
+    for (final winner in restoreWinners) {
+      await _canonicalizeRestoreWinnerInTransaction(
+        localSequence: winner.localSequence,
+        entityType: winner.entityType,
+        entityId: winner.entityId,
+        changedAt: winner.changedAt.toIso8601String(),
+      );
+    }
+    if (removableCount > 0) {
+      await _deleteSupersededJournalRowsInTransaction(
+        winners.values
+            .map((candidate) => candidate.localSequence)
+            .toList(growable: false),
+      );
+    }
+
+    final after = await _readActualJournalMetricsInTransaction();
+    await _writeJournalMetricsInTransaction(after);
+    final nextMetadata = _JournalCompactionMetadata(
+      generation: metadata.generation + 1,
+      lastCompactedSequence: maxSequenceBefore,
+    );
+    await _putState(
+      _journalCompactionMetadataKey,
+      jsonEncode(nextMetadata.toJson(minimumPeerCursor: minimumPeerCursor)),
+    );
+    return JournalCompactionResult(
+      didCompact: true,
+      entryCountBefore: before.entryCount,
+      entryCountAfter: after.entryCount,
+      payloadBytesBefore: before.payloadBytes,
+      payloadBytesAfter: after.payloadBytes,
+      generation: nextMetadata.generation,
+      lastCompactedSequence: nextMetadata.lastCompactedSequence,
+      minimumPeerCursor: minimumPeerCursor,
+      maxEntries: maxEntries,
+      maxPayloadBytes: maxPayloadBytes,
+    );
+  }
+
+  Future<void> _deleteSupersededJournalRowsInTransaction(
+    List<int> winnerSequences,
+  ) async {
+    const table = 'chronicle_journal_compaction_winners';
+    await _database.customStatement('DROP TABLE IF EXISTS temp.$table');
+    try {
+      await _database.customStatement(
+        'CREATE TEMP TABLE $table (local_sequence INTEGER PRIMARY KEY)',
+      );
+      const chunkSize = 400;
+      for (var start = 0; start < winnerSequences.length; start += chunkSize) {
+        final end = (start + chunkSize).clamp(0, winnerSequences.length);
+        final chunk = winnerSequences.sublist(start, end);
+        final placeholders = List<String>.filled(
+          chunk.length,
+          '(?)',
+        ).join(', ');
+        await _database.customStatement(
+          'INSERT INTO $table (local_sequence) VALUES $placeholders',
+          chunk,
+        );
+      }
+      await _database.customStatement(
+        'DELETE FROM change_records WHERE local_sequence NOT IN '
+        '(SELECT local_sequence FROM $table)',
+      );
+    } finally {
+      await _database.customStatement('DROP TABLE IF EXISTS temp.$table');
+    }
+  }
+
+  Future<void> _canonicalizeRestoreWinnerInTransaction({
+    required int localSequence,
+    required String entityType,
+    required String entityId,
+    required String changedAt,
+  }) async {
+    Map<String, dynamic>? payload;
+    String? deletedAt;
+    if (entityType == 'note') {
+      final rows =
+          await _database
+              .customSelect(
+                'SELECT * FROM notes WHERE id = ? LIMIT 1',
+                variables: [Variable<String>(entityId)],
+              )
+              .get();
+      if (rows.isNotEmpty) {
+        final note = Note.fromDb(rows.single.data);
+        deletedAt = note.deletedAt?.toUtc().toIso8601String();
+        if (deletedAt == null) {
+          payload = note.toJson();
+        }
+      }
+    } else if (entityType == 'task') {
+      final rows =
+          await _database
+              .customSelect(
+                'SELECT * FROM tasks WHERE id = ? LIMIT 1',
+                variables: [Variable<String>(entityId)],
+              )
+              .get();
+      if (rows.isNotEmpty) {
+        final task = WorkTask.fromDb(rows.single.data);
+        deletedAt = task.deletedAt?.toUtc().toIso8601String();
+        if (deletedAt == null) {
+          payload = task.toJson();
+        }
+      }
+    } else {
+      return;
+    }
+    final operation = payload == null ? 'delete' : 'snapshot';
+    final payloadJson = jsonEncode(
+      payload ?? <String, dynamic>{'deletedAt': deletedAt ?? changedAt},
+    );
+    await _database.customStatement(
+      'UPDATE change_records SET operation = ?, payload_json = ? '
+      'WHERE local_sequence = ?',
+      [operation, payloadJson, localSequence],
+    );
+  }
+
+  Future<_JournalMetrics> _ensureJournalMetricsInTransaction() async {
+    if (!_journalMetricsValidated) {
+      final actual = await _readActualJournalMetricsInTransaction();
+      await _writeJournalMetricsInTransaction(actual);
+      _journalMetricsValidated = true;
+      return actual;
+    }
+    final rows =
+        await _database
+            .customSelect(
+              'SELECT key, value FROM app_state WHERE key IN (?, ?)',
+              variables: [
+                Variable<String>(_journalEntryCountKey),
+                Variable<String>(_journalPayloadBytesKey),
+              ],
+            )
+            .get();
+    int? entryCount;
+    int? payloadBytes;
+    for (final row in rows) {
+      final key = row.read<String>('key');
+      final value = int.tryParse(row.read<String>('value'));
+      if (key == _journalEntryCountKey) {
+        entryCount = value;
+      } else if (key == _journalPayloadBytesKey) {
+        payloadBytes = value;
+      }
+    }
+    if (entryCount != null &&
+        entryCount >= 0 &&
+        payloadBytes != null &&
+        payloadBytes >= 0) {
+      return _JournalMetrics(
+        entryCount: entryCount,
+        payloadBytes: payloadBytes,
+      );
+    }
+    final actual = await _readActualJournalMetricsInTransaction();
+    await _writeJournalMetricsInTransaction(actual);
+    return actual;
+  }
+
+  Future<_JournalMetrics> _readActualJournalMetricsInTransaction() async {
+    final rows =
+        await _database
+            .customSelect(
+              'SELECT COUNT(*) AS entry_count, '
+              'COALESCE(SUM(LENGTH(CAST(payload_json AS BLOB))), 0) '
+              'AS payload_bytes FROM change_records',
+            )
+            .get();
+    return _JournalMetrics(
+      entryCount: rows.single.read<int>('entry_count'),
+      payloadBytes: rows.single.read<int>('payload_bytes'),
+    );
+  }
+
+  Future<void> _writeJournalMetricsInTransaction(
+    _JournalMetrics metrics,
+  ) async {
+    await _putState(_journalEntryCountKey, '${metrics.entryCount}');
+    await _putState(_journalPayloadBytesKey, '${metrics.payloadBytes}');
+  }
+
+  Future<void> _incrementJournalMetricsInTransaction(String payloadJson) async {
+    final payloadBytes = utf8.encode(payloadJson).length;
+    await _database.customStatement(
+      'UPDATE app_state SET value = '
+      'CAST(CAST(value AS INTEGER) + 1 AS TEXT) WHERE key = ?',
+      [_journalEntryCountKey],
+    );
+    await _database.customStatement(
+      'UPDATE app_state SET value = '
+      'CAST(CAST(value AS INTEGER) + ? AS TEXT) WHERE key = ?',
+      [payloadBytes, _journalPayloadBytesKey],
+    );
+  }
+
+  Future<int?> _minimumPeerCursorInTransaction() async {
+    final rows =
+        await _database
+            .customSelect(
+              'SELECT MIN(last_sent_sequence) AS minimum_cursor '
+              'FROM sync_cursors',
+            )
+            .get();
+    return rows.single.readNullable<int>('minimum_cursor');
+  }
+
+  Future<_JournalCompactionMetadata>
+  _readJournalCompactionMetadataInTransaction() async {
+    final raw = await _readState(_journalCompactionMetadataKey);
+    if (raw == null) {
+      return const _JournalCompactionMetadata();
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        return _JournalCompactionMetadata.fromJson(
+          Map<String, dynamic>.from(decoded),
+        );
+      }
+    } on Object {
+      // Invalid diagnostics metadata is safely rebuilt after compaction.
+    }
+    return const _JournalCompactionMetadata();
   }
 
   Future<List<Map<String, Object?>>> _readRows(String sql) async {
@@ -1106,4 +1471,84 @@ int _syncEntityRank(String entityType) {
     'time_entry' => 4,
     _ => 100,
   };
+}
+
+void _validateJournalBudgets(int maxEntries, int maxPayloadBytes) {
+  if (maxEntries < 1 || maxPayloadBytes < 1) {
+    throw ArgumentError('Journal budgets must be positive.');
+  }
+}
+
+class _JournalMetrics {
+  const _JournalMetrics({required this.entryCount, required this.payloadBytes});
+
+  final int entryCount;
+  final int payloadBytes;
+}
+
+class _JournalCandidate {
+  const _JournalCandidate({
+    required this.localSequence,
+    required this.changeId,
+    required this.entityType,
+    required this.entityId,
+    required this.operation,
+    required this.revision,
+    required this.changedAt,
+  });
+
+  final int localSequence;
+  final String changeId;
+  final String entityType;
+  final String entityId;
+  final String operation;
+  final int revision;
+  final DateTime changedAt;
+
+  String get entityKey => '$entityType\u0000$entityId';
+
+  bool isFresherThan(_JournalCandidate other) {
+    final revisionOrder = revision.compareTo(other.revision);
+    if (revisionOrder != 0) {
+      return revisionOrder > 0;
+    }
+    final timeOrder = changedAt.compareTo(other.changedAt);
+    if (timeOrder != 0) {
+      return timeOrder > 0;
+    }
+    return changeId.compareTo(other.changeId) > 0;
+  }
+}
+
+class _JournalCompactionMetadata {
+  const _JournalCompactionMetadata({
+    this.generation = 0,
+    this.lastCompactedSequence = 0,
+  });
+
+  final int generation;
+  final int lastCompactedSequence;
+
+  Map<String, dynamic> toJson({required int? minimumPeerCursor}) => {
+    'generation': generation,
+    'lastCompactedSequence': lastCompactedSequence,
+    'minimumPeerCursor': minimumPeerCursor,
+  };
+
+  factory _JournalCompactionMetadata.fromJson(Map<String, dynamic> json) {
+    return _JournalCompactionMetadata(
+      generation: _nonNegativeInt(json['generation']),
+      lastCompactedSequence: _nonNegativeInt(json['lastCompactedSequence']),
+    );
+  }
+}
+
+int _nonNegativeInt(Object? value) {
+  final parsed = switch (value) {
+    int number => number,
+    num number => number.toInt(),
+    String text => int.tryParse(text) ?? 0,
+    _ => 0,
+  };
+  return parsed < 0 ? 0 : parsed;
 }

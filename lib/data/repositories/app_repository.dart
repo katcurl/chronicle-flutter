@@ -66,6 +66,11 @@ abstract class AppRepository implements DomainMutationRepository {
 
   Future<int> countJournalEntries();
 
+  Future<JournalCompactionResult> compactJournal({
+    int maxEntries = defaultMaxJournalEntries,
+    int maxPayloadBytes = defaultMaxJournalPayloadBytes,
+  });
+
   Future<bool> isSyncJournalBootstrapped();
 
   Future<void> markSyncJournalBootstrapped();

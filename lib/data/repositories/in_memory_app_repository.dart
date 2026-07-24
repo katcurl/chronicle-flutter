@@ -8,10 +8,21 @@ import '../../sync/sync_models.dart';
 import 'app_repository.dart';
 
 class InMemoryAppRepository implements AppRepository {
-  InMemoryAppRepository({AppData? initialData})
-    : _data = initialData ?? AppData.empty();
+  InMemoryAppRepository({
+    AppData? initialData,
+    int automaticJournalMaxEntries = defaultMaxJournalEntries,
+    int automaticJournalMaxPayloadBytes = defaultMaxJournalPayloadBytes,
+  }) : _data = initialData ?? AppData.empty(),
+       _automaticJournalMaxEntries = automaticJournalMaxEntries,
+       _automaticJournalMaxPayloadBytes = automaticJournalMaxPayloadBytes {
+    if (automaticJournalMaxEntries < 1 || automaticJournalMaxPayloadBytes < 1) {
+      throw ArgumentError('Journal budgets must be positive.');
+    }
+  }
 
   final Uuid _uuid = const Uuid();
+  final int _automaticJournalMaxEntries;
+  final int _automaticJournalMaxPayloadBytes;
   AppData _data;
   bool _initialized = false;
   ActiveTimerState? _activeTimer;
@@ -23,6 +34,12 @@ class InMemoryAppRepository implements AppRepository {
   final List<SyncCursor> _syncCursors = [];
   bool _syncJournalBootstrapped = false;
   String? _dataGeneration;
+  int _nextLocalSequence = 1;
+  int _journalPayloadBytes = 0;
+  int _journalCompactionGeneration = 0;
+  int _lastCompactedSequence = 0;
+  int _nextAutomaticCompactionEntryCount = 0;
+  int _nextAutomaticCompactionPayloadBytes = 0;
 
   @override
   Future<bool> isInitialized() async => _initialized;
@@ -95,9 +112,14 @@ class InMemoryAppRepository implements AppRepository {
     final previousTimer = _activeTimer;
     final previousInitialized = _initialized;
     final previousBootstrapped = _syncJournalBootstrapped;
+    final previousPayloadBytes = _journalPayloadBytes;
+    final previousCompactionGeneration = _journalCompactionGeneration;
+    final previousLastCompactedSequence = _lastCompactedSequence;
+    final previousNextLocalSequence = _nextLocalSequence;
     try {
       _data = AppData.decode(data.encode());
       _changes.clear();
+      _journalPayloadBytes = 0;
       _syncCursors.clear();
       _activeTimer = null;
       _dataGeneration = generation;
@@ -147,6 +169,10 @@ class InMemoryAppRepository implements AppRepository {
         ..addAll(previousCursors);
       _initialized = previousInitialized;
       _syncJournalBootstrapped = previousBootstrapped;
+      _journalPayloadBytes = previousPayloadBytes;
+      _journalCompactionGeneration = previousCompactionGeneration;
+      _lastCompactedSequence = previousLastCompactedSequence;
+      _nextLocalSequence = previousNextLocalSequence;
       rethrow;
     }
   }
@@ -258,6 +284,10 @@ class InMemoryAppRepository implements AppRepository {
   Future<void> deleteTaskGraph(String taskId, DateTime deletedAt) async {
     final snapshot = AppData.decode(_data.encode());
     final changesSnapshot = List<ChangeRecord>.from(_changes);
+    final payloadBytesSnapshot = _journalPayloadBytes;
+    final nextLocalSequenceSnapshot = _nextLocalSequence;
+    final compactionGenerationSnapshot = _journalCompactionGeneration;
+    final lastCompactedSequenceSnapshot = _lastCompactedSequence;
     try {
       for (final child in _data.tasks.where(
         (task) => task.parentTaskId == taskId,
@@ -272,6 +302,10 @@ class InMemoryAppRepository implements AppRepository {
       _changes
         ..clear()
         ..addAll(changesSnapshot);
+      _journalPayloadBytes = payloadBytesSnapshot;
+      _nextLocalSequence = nextLocalSequenceSnapshot;
+      _journalCompactionGeneration = compactionGenerationSnapshot;
+      _lastCompactedSequence = lastCompactedSequenceSnapshot;
       rethrow;
     }
   }
@@ -280,6 +314,10 @@ class InMemoryAppRepository implements AppRepository {
   Future<void> deleteNoteGraph(String noteId, DateTime deletedAt) async {
     final snapshot = AppData.decode(_data.encode());
     final changesSnapshot = List<ChangeRecord>.from(_changes);
+    final payloadBytesSnapshot = _journalPayloadBytes;
+    final nextLocalSequenceSnapshot = _nextLocalSequence;
+    final compactionGenerationSnapshot = _journalCompactionGeneration;
+    final lastCompactedSequenceSnapshot = _lastCompactedSequence;
     try {
       for (final task in _data.tasks.where((task) => task.noteId == noteId)) {
         task.noteId = null;
@@ -295,6 +333,10 @@ class InMemoryAppRepository implements AppRepository {
       _changes
         ..clear()
         ..addAll(changesSnapshot);
+      _journalPayloadBytes = payloadBytesSnapshot;
+      _nextLocalSequence = nextLocalSequenceSnapshot;
+      _journalCompactionGeneration = compactionGenerationSnapshot;
+      _lastCompactedSequence = lastCompactedSequenceSnapshot;
       rethrow;
     }
   }
@@ -420,6 +462,18 @@ class InMemoryAppRepository implements AppRepository {
   Future<int> countJournalEntries() async => _changes.length;
 
   @override
+  Future<JournalCompactionResult> compactJournal({
+    int maxEntries = defaultMaxJournalEntries,
+    int maxPayloadBytes = defaultMaxJournalPayloadBytes,
+  }) async {
+    _validateJournalBudgets(maxEntries, maxPayloadBytes);
+    return _compactJournalNow(
+      maxEntries: maxEntries,
+      maxPayloadBytes: maxPayloadBytes,
+    );
+  }
+
+  @override
   Future<bool> isSyncJournalBootstrapped() async => _syncJournalBootstrapped;
 
   @override
@@ -446,7 +500,7 @@ class InMemoryAppRepository implements AppRepository {
               change.revision > maxRevision ? change.revision : maxRevision,
         );
     final change = ChangeRecord(
-      localSequence: _changes.length + 1,
+      localSequence: _nextLocalSequence++,
       changeId: _uuid.v4(),
       entityType: entityType,
       entityId: entityId,
@@ -457,6 +511,8 @@ class InMemoryAppRepository implements AppRepository {
       payloadJson: jsonEncode(payload),
     );
     _changes.add(change);
+    _journalPayloadBytes += utf8.encode(change.payloadJson).length;
+    _compactJournalIfNeeded();
     return change;
   }
 
@@ -495,7 +551,11 @@ class InMemoryAppRepository implements AppRepository {
     final ordered = List<ChangeRecord>.from(changes)
       ..sort(_compareRemoteApplicationOrder);
     final dataBefore = AppData.decode(_data.encode());
-    final changeCountBefore = _changes.length;
+    final changesBefore = List<ChangeRecord>.from(_changes);
+    final payloadBytesBefore = _journalPayloadBytes;
+    final nextLocalSequenceBefore = _nextLocalSequence;
+    final compactionGenerationBefore = _journalCompactionGeneration;
+    final lastCompactedSequenceBefore = _lastCompactedSequence;
 
     try {
       for (final incoming in ordered) {
@@ -517,7 +577,7 @@ class InMemoryAppRepository implements AppRepository {
         }
 
         final stored = ChangeRecord(
-          localSequence: _changes.length + 1,
+          localSequence: _nextLocalSequence++,
           changeId: incoming.changeId,
           entityType: incoming.entityType,
           entityId: incoming.entityId,
@@ -529,6 +589,7 @@ class InMemoryAppRepository implements AppRepository {
           appliedAt: DateTime.now(),
         );
         _changes.add(stored);
+        _journalPayloadBytes += utf8.encode(stored.payloadJson).length;
         insertedCount++;
 
         if (currentWinner != null &&
@@ -543,11 +604,16 @@ class InMemoryAppRepository implements AppRepository {
           unsupportedCount++;
         }
       }
+      _compactJournalIfNeeded();
     } on Object {
       _data = dataBefore;
-      if (_changes.length > changeCountBefore) {
-        _changes.removeRange(changeCountBefore, _changes.length);
-      }
+      _changes
+        ..clear()
+        ..addAll(changesBefore);
+      _journalPayloadBytes = payloadBytesBefore;
+      _nextLocalSequence = nextLocalSequenceBefore;
+      _journalCompactionGeneration = compactionGenerationBefore;
+      _lastCompactedSequence = lastCompactedSequenceBefore;
       rethrow;
     }
 
@@ -575,6 +641,174 @@ class InMemoryAppRepository implements AppRepository {
 
   @override
   Future<void> close() async {}
+
+  void _compactJournalIfNeeded() {
+    if (_changes.length <= _automaticJournalMaxEntries &&
+        _journalPayloadBytes <= _automaticJournalMaxPayloadBytes) {
+      return;
+    }
+    if (_changes.length < _nextAutomaticCompactionEntryCount &&
+        _journalPayloadBytes < _nextAutomaticCompactionPayloadBytes) {
+      return;
+    }
+    final result = _compactJournalNow(
+      maxEntries: _automaticJournalMaxEntries,
+      maxPayloadBytes: _automaticJournalMaxPayloadBytes,
+    );
+    if (result.withinBudget) {
+      _nextAutomaticCompactionEntryCount = 0;
+      _nextAutomaticCompactionPayloadBytes = 0;
+    } else {
+      _nextAutomaticCompactionEntryCount = result.entryCountAfter + 1000;
+      _nextAutomaticCompactionPayloadBytes =
+          result.payloadBytesAfter + 10 * 1024 * 1024;
+    }
+  }
+
+  JournalCompactionResult _compactJournalNow({
+    required int maxEntries,
+    required int maxPayloadBytes,
+  }) {
+    final entryCountBefore = _changes.length;
+    final payloadBytesBefore = _journalPayloadBytes;
+    final minimumPeerCursor = _minimumPeerCursor();
+    final lastSequenceBefore = _changes.fold<int>(
+      _lastCompactedSequence,
+      (value, change) =>
+          change.localSequence > value ? change.localSequence : value,
+    );
+    if (entryCountBefore <= maxEntries &&
+        payloadBytesBefore <= maxPayloadBytes) {
+      return _journalCompactionResult(
+        didCompact: false,
+        entryCountBefore: entryCountBefore,
+        payloadBytesBefore: payloadBytesBefore,
+        minimumPeerCursor: minimumPeerCursor,
+        maxEntries: maxEntries,
+        maxPayloadBytes: maxPayloadBytes,
+      );
+    }
+
+    final winners = <String, ChangeRecord>{};
+    for (final change in _changes) {
+      final key = '${change.entityType}\u0000${change.entityId}';
+      final current = winners[key];
+      if (current == null || compareChangeFreshness(change, current) > 0) {
+        winners[key] = change;
+      }
+    }
+    var canonicalized = false;
+    final compacted = winners.values
+      .map((winner) {
+        final replacement = _canonicalizeRestoreWinner(winner);
+        canonicalized = canonicalized || !identical(replacement, winner);
+        return replacement;
+      })
+      .toList(growable: false)..sort(
+      (left, right) => left.localSequence.compareTo(right.localSequence),
+    );
+    if (compacted.length == _changes.length && !canonicalized) {
+      return _journalCompactionResult(
+        didCompact: false,
+        entryCountBefore: entryCountBefore,
+        payloadBytesBefore: payloadBytesBefore,
+        minimumPeerCursor: minimumPeerCursor,
+        maxEntries: maxEntries,
+        maxPayloadBytes: maxPayloadBytes,
+      );
+    }
+
+    _changes
+      ..clear()
+      ..addAll(compacted);
+    _journalPayloadBytes = compacted.fold<int>(
+      0,
+      (total, change) => total + utf8.encode(change.payloadJson).length,
+    );
+    _journalCompactionGeneration += 1;
+    _lastCompactedSequence = lastSequenceBefore;
+    return _journalCompactionResult(
+      didCompact: true,
+      entryCountBefore: entryCountBefore,
+      payloadBytesBefore: payloadBytesBefore,
+      minimumPeerCursor: minimumPeerCursor,
+      maxEntries: maxEntries,
+      maxPayloadBytes: maxPayloadBytes,
+    );
+  }
+
+  ChangeRecord _canonicalizeRestoreWinner(ChangeRecord winner) {
+    if (winner.operation != 'restore') {
+      return winner;
+    }
+    Map<String, dynamic>? payload;
+    if (winner.entityType == 'note') {
+      final index = _data.notes.indexWhere(
+        (note) => note.id == winner.entityId,
+      );
+      if (index >= 0 && _data.notes[index].deletedAt == null) {
+        payload = _data.notes[index].toJson();
+      }
+    } else if (winner.entityType == 'task') {
+      final index = _data.tasks.indexWhere(
+        (task) => task.id == winner.entityId,
+      );
+      if (index >= 0 && _data.tasks[index].deletedAt == null) {
+        payload = _data.tasks[index].toJson();
+      }
+    } else {
+      return winner;
+    }
+    return ChangeRecord(
+      localSequence: winner.localSequence,
+      changeId: winner.changeId,
+      entityType: winner.entityType,
+      entityId: winner.entityId,
+      operation: payload == null ? 'delete' : 'snapshot',
+      revision: winner.revision,
+      originDeviceId: winner.originDeviceId,
+      changedAt: winner.changedAt,
+      payloadJson: jsonEncode(
+        payload ??
+            <String, dynamic>{
+              'deletedAt': winner.changedAt.toUtc().toIso8601String(),
+            },
+      ),
+      appliedAt: winner.appliedAt,
+    );
+  }
+
+  JournalCompactionResult _journalCompactionResult({
+    required bool didCompact,
+    required int entryCountBefore,
+    required int payloadBytesBefore,
+    required int? minimumPeerCursor,
+    required int maxEntries,
+    required int maxPayloadBytes,
+  }) {
+    return JournalCompactionResult(
+      didCompact: didCompact,
+      entryCountBefore: entryCountBefore,
+      entryCountAfter: _changes.length,
+      payloadBytesBefore: payloadBytesBefore,
+      payloadBytesAfter: _journalPayloadBytes,
+      generation: _journalCompactionGeneration,
+      lastCompactedSequence: _lastCompactedSequence,
+      minimumPeerCursor: minimumPeerCursor,
+      maxEntries: maxEntries,
+      maxPayloadBytes: maxPayloadBytes,
+    );
+  }
+
+  int? _minimumPeerCursor() {
+    int? minimum;
+    for (final cursor in _syncCursors) {
+      if (minimum == null || cursor.lastSentSequence < minimum) {
+        minimum = cursor.lastSentSequence;
+      }
+    }
+    return minimum;
+  }
 
   bool _applyRemoteEntity(ChangeRecord change) {
     final payload = change.payload;
@@ -716,4 +950,10 @@ int _syncEntityRank(String entityType) {
     'time_entry' => 4,
     _ => 100,
   };
+}
+
+void _validateJournalBudgets(int maxEntries, int maxPayloadBytes) {
+  if (maxEntries < 1 || maxPayloadBytes < 1) {
+    throw ArgumentError('Journal budgets must be positive.');
+  }
 }

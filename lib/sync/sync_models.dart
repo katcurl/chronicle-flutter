@@ -339,6 +339,38 @@ class SyncJournalBatch {
   }
 }
 
+const int defaultMaxJournalEntries = 50000;
+const int defaultMaxJournalPayloadBytes = 100 * 1024 * 1024;
+
+class JournalCompactionResult {
+  const JournalCompactionResult({
+    required this.didCompact,
+    required this.entryCountBefore,
+    required this.entryCountAfter,
+    required this.payloadBytesBefore,
+    required this.payloadBytesAfter,
+    required this.generation,
+    required this.lastCompactedSequence,
+    required this.minimumPeerCursor,
+    required this.maxEntries,
+    required this.maxPayloadBytes,
+  });
+
+  final bool didCompact;
+  final int entryCountBefore;
+  final int entryCountAfter;
+  final int payloadBytesBefore;
+  final int payloadBytesAfter;
+  final int generation;
+  final int lastCompactedSequence;
+  final int? minimumPeerCursor;
+  final int maxEntries;
+  final int maxPayloadBytes;
+
+  bool get withinBudget =>
+      entryCountAfter <= maxEntries && payloadBytesAfter <= maxPayloadBytes;
+}
+
 class SyncApplyResult {
   const SyncApplyResult({
     required this.receivedCount,

@@ -123,6 +123,8 @@ class AppStore extends ChangeNotifier {
   List<SyncCursor> syncCursors = [];
   SyncPreferences syncPreferences = const SyncPreferences();
   int journalEntryCount = 0;
+  int journalPayloadBytes = 0;
+  JournalCompactionResult? lastJournalCompaction;
   bool lanSyncBusy = false;
   String? lanSyncPeerDeviceId;
   LanSyncReport? lastLanSyncReport;
@@ -1422,7 +1424,10 @@ class AppStore extends ChangeNotifier {
       await _bootstrapSyncJournal();
       await _repository.markSyncJournalBootstrapped();
     }
-    journalEntryCount = await _repository.countJournalEntries();
+    final compaction = await _repository.compactJournal();
+    lastJournalCompaction = compaction;
+    journalEntryCount = compaction.entryCountAfter;
+    journalPayloadBytes = compaction.payloadBytesAfter;
     recentChanges = await _repository.loadRecentChanges(limit: 20);
     syncCursors = await _repository.loadSyncCursors();
     if (_automaticLanSyncEnabled &&
@@ -1482,6 +1487,22 @@ class AppStore extends ChangeNotifier {
       afterSequence: afterSequence,
       limit: limit,
     );
+  }
+
+  Future<JournalCompactionResult> compactSyncJournal({
+    int maxEntries = defaultMaxJournalEntries,
+    int maxPayloadBytes = defaultMaxJournalPayloadBytes,
+  }) async {
+    final result = await _repository.compactJournal(
+      maxEntries: maxEntries,
+      maxPayloadBytes: maxPayloadBytes,
+    );
+    lastJournalCompaction = result;
+    journalEntryCount = result.entryCountAfter;
+    journalPayloadBytes = result.payloadBytesAfter;
+    recentChanges = await _repository.loadRecentChanges(limit: 20);
+    notifyListeners();
+    return result;
   }
 
   Future<SyncApplyResult> applyIncomingSyncChanges(
@@ -2481,6 +2502,11 @@ class AppStore extends ChangeNotifier {
           'deviceName': deviceIdentity?.displayName,
           'trustedDeviceCount': trustedDevices.length,
           'journalEntryCount': journalEntryCount,
+          'journalPayloadBytes': journalPayloadBytes,
+          'journalCompactionGeneration': lastJournalCompaction?.generation ?? 0,
+          'journalLastCompactedSequence':
+              lastJournalCompaction?.lastCompactedSequence ?? 0,
+          'journalMinimumPeerCursor': lastJournalCompaction?.minimumPeerCursor,
           'syncCursorCount': syncCursors.length,
           'discoveryActive': lanDiscoveryActive,
           'discoveryStatus': lanDiscoveryStatus,
