@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../application/backup/restore_coordinator.dart';
+import '../application/sync/lan_discovery_coordinator.dart';
+import '../application/sync/sync_coordinator.dart';
 import '../application/timer/timer_service.dart';
 import '../application/vault/vault_coordinator.dart';
 import '../data/migration/legacy_preferences_importer.dart';
@@ -25,9 +27,7 @@ import '../reliability/reliability_service.dart';
 import '../reliability/undo_journal.dart';
 import '../security/device_key_store.dart';
 import '../security/device_key_store_secure.dart';
-import '../sync/lan_auto_sync_models.dart';
 import '../sync/lan_auto_sync_service.dart';
-import '../sync/lan_auto_sync_transport.dart';
 import '../sync/lan_sync_models.dart';
 import '../sync/lan_sync_resilience.dart';
 import '../sync/lan_sync_service.dart';
@@ -127,6 +127,54 @@ class AppStore extends ChangeNotifier {
       onAttachmentRefresh: _notifyAttachmentRefresh,
       notifyListeners: notifyListeners,
     );
+    _syncCoordinator = SyncCoordinator(
+      repository: repository,
+      lanSyncService: this.lanSyncService,
+      currentData: () => data,
+      replaceData: (replacement) => data = replacement,
+      rebuildAllNoteLinks: () => rebuildAllNoteLinks(notify: false),
+      scheduleVaultMirror: _scheduleVaultMirror,
+      onAttachmentRefresh: _notifyAttachmentRefresh,
+      recordReliability:
+          ({
+            required stage,
+            required level,
+            required message,
+            peerDeviceId,
+            details = const <String, Object?>{},
+          }) => _recordReliability(
+            stage: stage,
+            level: level,
+            message: message,
+            peerDeviceId: peerDeviceId,
+            details: details,
+            notify: false,
+          ),
+      notifyListeners: notifyListeners,
+    );
+    _lanDiscoveryCoordinator = LanDiscoveryCoordinator(
+      autoSyncService: autoSyncService,
+      syncCoordinator: _syncCoordinator,
+      enabled: _automaticLanSyncEnabled,
+      appReady: () => ready,
+      loadError: () => loadError,
+      recordReliability:
+          ({
+            required stage,
+            required level,
+            required message,
+            peerDeviceId,
+            details = const <String, Object?>{},
+          }) => _recordReliability(
+            stage: stage,
+            level: level,
+            message: message,
+            peerDeviceId: peerDeviceId,
+            details: details,
+            notify: false,
+          ),
+      notifyListeners: notifyListeners,
+    );
   }
 
   factory AppStore.production() => AppStore(
@@ -155,6 +203,8 @@ class AppStore extends ChangeNotifier {
   late final TimerService _timerService;
   late final RestoreCoordinator _restoreCoordinator;
   late final VaultCoordinator _vaultCoordinator;
+  late final SyncCoordinator _syncCoordinator;
+  late final LanDiscoveryCoordinator _lanDiscoveryCoordinator;
   final ValueNotifier<int> _attachmentRefreshNotifier = ValueNotifier<int>(0);
 
   ValueListenable<int> get attachmentRefreshListenable =>
@@ -165,23 +215,32 @@ class AppStore extends ChangeNotifier {
   bool ready = false;
   Object? loadError;
 
-  DeviceIdentity? deviceIdentity;
-  List<TrustedDevice> trustedDevices = [];
-  List<ChangeRecord> recentChanges = [];
-  List<SyncCursor> syncCursors = [];
-  SyncPreferences syncPreferences = const SyncPreferences();
-  int journalEntryCount = 0;
-  int journalPayloadBytes = 0;
-  JournalCompactionResult? lastJournalCompaction;
-  bool lanSyncBusy = false;
-  String? lanSyncPeerDeviceId;
-  LanSyncReport? lastLanSyncReport;
-  bool lanDiscoveryActive = false;
-  String lanDiscoveryStatus = 'Обнаружение ещё не запущено';
-  String? lanAutoSyncError;
-  final Map<String, LanDiscoveredPeer> _lanPeers = {};
-  final Map<String, DateTime> _lastAutoSyncAttempt = {};
-  final Map<String, String> _lanPeerErrors = {};
+  DeviceIdentity? get deviceIdentity => _syncCoordinator.deviceIdentity;
+  set deviceIdentity(DeviceIdentity? value) =>
+      _syncCoordinator.deviceIdentity = value;
+  List<TrustedDevice> get trustedDevices => _syncCoordinator.trustedDevices;
+  List<ChangeRecord> get recentChanges => _syncCoordinator.recentChanges;
+  List<SyncCursor> get syncCursors => _syncCoordinator.syncCursors;
+  SyncPreferences get syncPreferences => _syncCoordinator.syncPreferences;
+  set syncPreferences(SyncPreferences value) =>
+      _syncCoordinator.syncPreferences = value;
+  int get journalEntryCount => _syncCoordinator.journalEntryCount;
+  int get journalPayloadBytes => _syncCoordinator.journalPayloadBytes;
+  JournalCompactionResult? get lastJournalCompaction =>
+      _syncCoordinator.lastJournalCompaction;
+  bool get lanSyncBusy => _syncCoordinator.lanSyncBusy;
+  set lanSyncBusy(bool value) => _syncCoordinator.lanSyncBusy = value;
+  String? get lanSyncPeerDeviceId => _syncCoordinator.lanSyncPeerDeviceId;
+  set lanSyncPeerDeviceId(String? value) =>
+      _syncCoordinator.lanSyncPeerDeviceId = value;
+  LanSyncReport? get lastLanSyncReport => _syncCoordinator.lastLanSyncReport;
+  set lastLanSyncReport(LanSyncReport? value) =>
+      _syncCoordinator.lastLanSyncReport = value;
+  bool get lanDiscoveryActive => _lanDiscoveryCoordinator.discoveryActive;
+  String get lanDiscoveryStatus => _lanDiscoveryCoordinator.discoveryStatus;
+  String? get lanAutoSyncError => _lanDiscoveryCoordinator.autoSyncError;
+  set lanAutoSyncError(String? value) =>
+      _lanDiscoveryCoordinator.autoSyncError = value;
 
   VaultStatus get vaultStatus => _vaultCoordinator.status;
   set vaultStatus(VaultStatus value) => _vaultCoordinator.status = value;
@@ -213,10 +272,6 @@ class AppStore extends ChangeNotifier {
   String? get nextUndoLabel => _undoJournal.nextLabel;
 
   Timer? _syncRefreshDebounce;
-  Timer? _lanPresenceTimer;
-  LanAutoSyncNode? _autoSyncNode;
-  StreamSubscription<LanDiscoveredPeer>? _autoSyncPeerSubscription;
-  StreamSubscription<LanSyncReport>? _autoSyncHostReportSubscription;
   Future<void>? _shutdownFuture;
   DateTime? get activeStartedAt => _timerService.activeStartedAt;
   String get activeDescription => _timerService.activeDescription;
@@ -1203,14 +1258,8 @@ class AppStore extends ChangeNotifier {
     _timerService.dispose();
     _syncRefreshDebounce?.cancel();
     _vaultCoordinator.dispose();
-    _lanPresenceTimer?.cancel();
     await _mutationQueue.drain();
-    await _autoSyncPeerSubscription?.cancel();
-    await _autoSyncHostReportSubscription?.cancel();
-    final node = _autoSyncNode;
-    if (node != null) {
-      await node.close();
-    }
+    await _lanDiscoveryCoordinator.dispose();
     await _repository.close();
   }
 
@@ -1390,23 +1439,10 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> refreshSyncFoundation({bool notify = true}) async {
-    deviceIdentity = await _repository.ensureDeviceIdentity();
-    trustedDevices = await _repository.loadTrustedDevices();
-    syncPreferences = await _repository.loadSyncPreferences();
-    final journalBootstrapped = await _repository.isSyncJournalBootstrapped();
-    if (!journalBootstrapped) {
-      await _bootstrapSyncJournal();
-      await _repository.markSyncJournalBootstrapped();
-    }
-    final compaction = await _repository.compactJournal();
-    lastJournalCompaction = compaction;
-    journalEntryCount = compaction.entryCountAfter;
-    journalPayloadBytes = compaction.payloadBytesAfter;
-    recentChanges = await _repository.loadRecentChanges(limit: 20);
-    syncCursors = await _repository.loadSyncCursors();
+    await _syncCoordinator.refreshFoundation(notify: false);
     if (_automaticLanSyncEnabled &&
         ready &&
-        _autoSyncNode == null &&
+        !_lanDiscoveryCoordinator.running &&
         syncPreferences.discoverOnLocalNetwork &&
         trustedDevices.isNotEmpty) {
       unawaited(_restartAutomaticLanSync());
@@ -1416,47 +1452,12 @@ class AppStore extends ChangeNotifier {
     }
   }
 
-  Future<void> _bootstrapSyncJournal() async {
-    for (final project in data.projects) {
-      await _repository.recordLocalChange(
-        entityType: 'project',
-        entityId: project.id,
-        operation: 'snapshot',
-        payload: project.toJson(),
-      );
-    }
-    for (final task in data.tasks) {
-      await _repository.recordLocalChange(
-        entityType: 'task',
-        entityId: task.id,
-        operation: 'snapshot',
-        payload: task.toJson(),
-      );
-    }
-    for (final note in data.notes) {
-      await _repository.recordLocalChange(
-        entityType: 'note',
-        entityId: note.id,
-        operation: 'snapshot',
-        payload: note.toJson(),
-      );
-    }
-    for (final entry in data.entries) {
-      await _repository.recordLocalChange(
-        entityType: 'time_entry',
-        entityId: entry.id,
-        operation: 'snapshot',
-        payload: entry.toJson(),
-      );
-    }
-  }
-
   Future<SyncJournalBatch> buildOutgoingSyncBatch({
     required String peerDeviceId,
     required int afterSequence,
     int limit = 200,
   }) {
-    return _repository.loadOutgoingChanges(
+    return _syncCoordinator.buildOutgoingBatch(
       peerDeviceId: peerDeviceId,
       afterSequence: afterSequence,
       limit: limit,
@@ -1466,42 +1467,17 @@ class AppStore extends ChangeNotifier {
   Future<JournalCompactionResult> compactSyncJournal({
     int maxEntries = defaultMaxJournalEntries,
     int maxPayloadBytes = defaultMaxJournalPayloadBytes,
-  }) async {
-    final result = await _repository.compactJournal(
-      maxEntries: maxEntries,
-      maxPayloadBytes: maxPayloadBytes,
-    );
-    lastJournalCompaction = result;
-    journalEntryCount = result.entryCountAfter;
-    journalPayloadBytes = result.payloadBytesAfter;
-    recentChanges = await _repository.loadRecentChanges(limit: 20);
-    notifyListeners();
-    return result;
-  }
+  }) => _syncCoordinator.compactJournal(
+    maxEntries: maxEntries,
+    maxPayloadBytes: maxPayloadBytes,
+  );
 
   Future<SyncApplyResult> applyIncomingSyncChanges(
     List<ChangeRecord> changes,
-  ) async {
-    final result = await _repository.applyRemoteChanges(changes);
-    if (result.insertedCount == 0) {
-      return result;
-    }
-
-    data = await _repository.load();
-    await rebuildAllNoteLinks(notify: false);
-    await refreshSyncFoundation(notify: false);
-    if (result.changedData) {
-      _scheduleVaultMirror();
-    }
-    notifyListeners();
-    return result;
-  }
+  ) => _syncCoordinator.applyIncomingChanges(changes);
 
   Future<LanSyncHostSession> startLanSyncHost(String peerDeviceId) {
-    return lanSyncService.startHost(
-      peerDeviceId: peerDeviceId,
-      onRemoteApplied: (_) => refreshAfterLanSync(),
-    );
+    return _syncCoordinator.startLanHost(peerDeviceId);
   }
 
   Future<LanSyncReport> syncFromLanOffer(
@@ -1509,411 +1485,55 @@ class AppStore extends ChangeNotifier {
     required String expectedPeerDeviceId,
     LanSyncProgressCallback? onProgress,
     LanSyncCancellationToken? cancellationToken,
-  }) async {
-    if (lanSyncBusy) {
-      throw StateError('Синхронизация уже выполняется.');
-    }
-    lanSyncBusy = true;
-    lanSyncPeerDeviceId = expectedPeerDeviceId;
-    notifyListeners();
-    await _recordReliability(
-      stage: ReliabilityStage.connection,
-      level: ReliabilityLevel.info,
-      message: 'Запущена ручная LAN-синхронизация по одноразовому коду.',
-      peerDeviceId: expectedPeerDeviceId,
-      notify: false,
-    );
-    try {
-      final report = await lanSyncService.syncFromOffer(
-        rawOffer,
-        expectedPeerDeviceId: expectedPeerDeviceId,
-        onRemoteApplied: (_) => refreshAfterLanSync(),
-        onProgress: onProgress,
-        cancellationToken: cancellationToken,
-      );
-      await refreshAfterLanSync(report: report);
-      await _recordSyncSuccess(
-        report,
-        peerDeviceId: expectedPeerDeviceId,
-        automatic: false,
-      );
-      return report;
-    } on Object catch (error) {
-      final cancelled = error is LanSyncCancelledException;
-      await _recordReliability(
-        stage: ReliabilityStage.connection,
-        level: cancelled ? ReliabilityLevel.info : ReliabilityLevel.error,
-        message:
-            cancelled
-                ? 'Ручная LAN-синхронизация отменена пользователем.'
-                : 'Ручная LAN-синхронизация не выполнена.',
-        peerDeviceId: expectedPeerDeviceId,
-        details: <String, Object?>{'error': _friendlyLanError(error)},
-        notify: false,
-      );
-      rethrow;
-    } finally {
-      lanSyncBusy = false;
-      lanSyncPeerDeviceId = null;
-      notifyListeners();
-    }
-  }
+  }) => _syncCoordinator.syncFromLanOffer(
+    rawOffer,
+    expectedPeerDeviceId: expectedPeerDeviceId,
+    onProgress: onProgress,
+    cancellationToken: cancellationToken,
+  );
 
-  Future<void> refreshAfterLanSync({LanSyncReport? report}) async {
-    if (report != null) {
-      lastLanSyncReport = report;
-    }
-    data = await _repository.load();
-    await rebuildAllNoteLinks(notify: false);
-    await refreshSyncFoundation(notify: false);
-    if (report?.changedData ?? false) {
-      _scheduleVaultMirror();
-    }
-    _notifyAttachmentRefresh();
-    notifyListeners();
-  }
+  Future<void> refreshAfterLanSync({LanSyncReport? report}) =>
+      _syncCoordinator.refreshAfterLanSync(report: report);
 
-  bool isLanPeerOnline(String deviceId) {
-    final peer = _lanPeers[deviceId];
-    return peer != null && peer.isOnlineAt(DateTime.now());
-  }
+  bool isLanPeerOnline(String deviceId) =>
+      _lanDiscoveryCoordinator.isPeerOnline(deviceId);
 
-  String? lanPeerEndpoint(String deviceId) => _lanPeers[deviceId]?.endpoint;
+  String? lanPeerEndpoint(String deviceId) =>
+      _lanDiscoveryCoordinator.peerEndpoint(deviceId);
 
-  String? lanPeerError(String deviceId) => _lanPeerErrors[deviceId];
+  String? lanPeerError(String deviceId) =>
+      _lanDiscoveryCoordinator.peerError(deviceId);
 
-  Future<void> handleAppResumed() async {
-    if (!_automaticLanSyncEnabled || loadError != null || !ready) {
-      return;
-    }
-    final node = _autoSyncNode;
-    if (node == null) {
-      await _restartAutomaticLanSync();
-      return;
-    }
-    await node.announceNow();
-  }
+  Future<void> handleAppResumed() =>
+      _lanDiscoveryCoordinator.handleAppResumed();
 
-  Future<void> refreshLanDiscovery() async {
-    final node = _autoSyncNode;
-    if (node == null) {
-      await _restartAutomaticLanSync();
-      return;
-    }
-    lanDiscoveryStatus = 'Ищем доверенные устройства…';
-    lanAutoSyncError = null;
-    notifyListeners();
-    await node.announceNow();
-  }
+  Future<void> refreshLanDiscovery() =>
+      _lanDiscoveryCoordinator.refreshDiscovery();
 
-  Future<LanSyncReport> syncWithTrustedDevice(String peerDeviceId) async {
-    final discovered = _lanPeers[peerDeviceId];
-    if (discovered == null || !discovered.isOnlineAt(DateTime.now())) {
-      throw StateError(
-        'Устройство не найдено в локальной сети. Открой Chronicle на обоих '
-        'устройствах, проверь общий Wi-Fi и доступ VPN к локальной сети.',
-      );
-    }
-    return _syncDiscoveredPeer(discovered, automatic: false);
-  }
+  Future<LanSyncReport> syncWithTrustedDevice(String peerDeviceId) =>
+      _lanDiscoveryCoordinator.syncWithTrustedDevice(peerDeviceId);
 
-  Future<void> _restartAutomaticLanSync() async {
-    await _stopAutomaticLanSync(notify: false);
-    if (!_automaticLanSyncEnabled ||
-        kIsWeb ||
-        loadError != null ||
-        !ready ||
-        !syncPreferences.discoverOnLocalNetwork ||
-        trustedDevices.isEmpty) {
-      lanDiscoveryActive = false;
-      lanDiscoveryStatus =
-          trustedDevices.isEmpty
-              ? 'Сначала подключи доверенное устройство'
-              : 'Обнаружение в локальной сети выключено';
-      notifyListeners();
-      return;
-    }
+  Future<void> _restartAutomaticLanSync() => _lanDiscoveryCoordinator.restart();
 
-    await _recordReliability(
-      stage: ReliabilityStage.discovery,
-      level: ReliabilityLevel.info,
-      message: 'Запуск обнаружения доверенных устройств в локальной сети.',
-      notify: false,
-    );
-    try {
-      final node = await autoSyncService.start(
-        incomingAutoSyncEnabled: () async => syncPreferences.autoSyncEnabled,
-        localNetworkOnly: syncPreferences.localNetworkOnly,
-        onRemoteApplied: (_) => refreshAfterLanSync(),
-      );
-      _autoSyncNode = node;
-      _autoSyncPeerSubscription = node.peers.listen(
-        _rememberDiscoveredPeer,
-        onError: (Object error) {
-          lanAutoSyncError = error.toString();
-          lanDiscoveryStatus = 'Ошибка обнаружения';
-          unawaited(
-            _recordReliability(
-              stage: ReliabilityStage.discovery,
-              level: ReliabilityLevel.error,
-              message: 'Ошибка потока локального обнаружения.',
-              details: <String, Object?>{'error': _friendlyLanError(error)},
-              notify: false,
-            ),
-          );
-          notifyListeners();
-        },
-      );
-      _autoSyncHostReportSubscription = node.reports.listen((report) {
-        unawaited(refreshAfterLanSync(report: report));
-      });
-      _lanPresenceTimer = Timer.periodic(
-        const Duration(seconds: 5),
-        (_) => _expireLanPeers(),
-      );
-      lanDiscoveryActive = true;
-      lanDiscoveryStatus = 'Ищем доверенные устройства…';
-      lanAutoSyncError = null;
-      notifyListeners();
-      await node.announceNow();
-      await _recordReliability(
-        stage: ReliabilityStage.discovery,
-        level: ReliabilityLevel.success,
-        message: 'Локальное обнаружение запущено.',
-        details: <String, Object?>{'udpPort': 45891},
-        notify: false,
-      );
-    } on Object catch (error) {
-      lanDiscoveryActive = false;
-      lanDiscoveryStatus = 'Не удалось запустить обнаружение';
-      lanAutoSyncError = _friendlyLanError(error);
-      await _recordReliability(
-        stage: ReliabilityStage.discovery,
-        level: ReliabilityLevel.error,
-        message: 'Не удалось запустить локальное обнаружение.',
-        details: <String, Object?>{'error': lanAutoSyncError},
-        notify: false,
-      );
-      notifyListeners();
-    }
-  }
-
-  void _rememberDiscoveredPeer(LanDiscoveredPeer peer) {
-    final trusted = trustedDevices.where(
-      (device) => device.deviceId == peer.peer.deviceId && device.isActive,
-    );
-    if (trusted.isEmpty) {
-      return;
-    }
-    final previous = _lanPeers[peer.peer.deviceId];
-    final now = DateTime.now();
-    final wasOnline = previous?.isOnlineAt(now) ?? false;
-    final endpointChanged = previous?.endpoint != peer.endpoint;
-    _lanPeers[peer.peer.deviceId] = peer;
-    _lanPeerErrors.remove(peer.peer.deviceId);
-    lanDiscoveryStatus = 'Доверенное устройство найдено';
-    if (!wasOnline || endpointChanged) {
-      unawaited(
-        _recordReliability(
-          stage: ReliabilityStage.discovery,
-          level: ReliabilityLevel.success,
-          message: 'Доверенное устройство обнаружено в локальной сети.',
-          peerDeviceId: peer.peer.deviceId,
-          details: <String, Object?>{'endpoint': peer.endpoint},
-          notify: false,
-        ),
-      );
-      notifyListeners();
-    }
-    _maybeAutoSync(peer);
-  }
-
-  void _maybeAutoSync(LanDiscoveredPeer peer) {
-    if (!syncPreferences.autoSyncEnabled || lanSyncBusy) {
-      return;
-    }
-    final identity = deviceIdentity;
-    if (identity == null ||
-        identity.deviceId.compareTo(peer.peer.deviceId) >= 0) {
-      return;
-    }
-    TrustedDevice? trusted;
-    for (final device in trustedDevices) {
-      if (device.deviceId == peer.peer.deviceId) {
-        trusted = device;
-        break;
-      }
-    }
-    if (trusted == null || !trusted.autoSyncEnabled) {
-      return;
-    }
-    final now = DateTime.now();
-    final lastAttempt = _lastAutoSyncAttempt[peer.peer.deviceId];
-    if (lastAttempt != null &&
-        now.difference(lastAttempt) < const Duration(seconds: 20)) {
-      return;
-    }
-    _lastAutoSyncAttempt[peer.peer.deviceId] = now;
-    unawaited(_runAutomaticSync(peer));
-  }
-
-  Future<void> _runAutomaticSync(LanDiscoveredPeer peer) async {
-    try {
-      await _syncDiscoveredPeer(peer, automatic: true);
-    } on Object {
-      // The error is stored for the devices screen. Automatic retries are
-      // driven by later discovery announcements.
-    }
-  }
-
-  Future<LanSyncReport> _syncDiscoveredPeer(
-    LanDiscoveredPeer peer, {
-    required bool automatic,
-  }) async {
-    if (lanSyncBusy) {
-      throw StateError('Синхронизация уже выполняется.');
-    }
-    final node = _autoSyncNode;
-    if (node == null) {
-      throw StateError('Обнаружение в локальной сети ещё не запущено.');
-    }
-
-    lanSyncBusy = true;
-    lanSyncPeerDeviceId = peer.peer.deviceId;
-    lanAutoSyncError = null;
-    _lanPeerErrors.remove(peer.peer.deviceId);
-    lanDiscoveryStatus =
-        automatic ? 'Автоматическая синхронизация…' : 'Синхронизация…';
-    notifyListeners();
-    await _recordReliability(
-      stage: ReliabilityStage.connection,
-      level: ReliabilityLevel.info,
-      message:
-          automatic
-              ? 'Запущена автоматическая LAN-синхронизация.'
-              : 'Запущена LAN-синхронизация без QR-кода.',
-      peerDeviceId: peer.peer.deviceId,
-      details: <String, Object?>{'endpoint': peer.endpoint},
-      notify: false,
-    );
-    try {
-      final report = await autoSyncService.syncWithDiscoveredPeer(
-        node: node,
-        discoveredPeer: peer,
-        onRemoteApplied: (_) => refreshAfterLanSync(),
-      );
-      await refreshAfterLanSync(report: report);
-      lanDiscoveryStatus = 'Синхронизация завершена';
-      await _recordSyncSuccess(
-        report,
-        peerDeviceId: peer.peer.deviceId,
-        automatic: automatic,
-      );
-      return report;
-    } on Object catch (error) {
-      final message = _friendlyLanError(error);
-      lanAutoSyncError = message;
-      _lanPeerErrors[peer.peer.deviceId] = message;
-      lanDiscoveryStatus = 'Синхронизация не выполнена';
-      await _recordReliability(
-        stage: ReliabilityStage.connection,
-        level: ReliabilityLevel.error,
-        message:
-            automatic
-                ? 'Автоматическая LAN-синхронизация не выполнена.'
-                : 'LAN-синхронизация без QR-кода не выполнена.',
-        peerDeviceId: peer.peer.deviceId,
-        details: <String, Object?>{'endpoint': peer.endpoint, 'error': message},
-        notify: false,
-      );
-      rethrow;
-    } finally {
-      lanSyncBusy = false;
-      lanSyncPeerDeviceId = null;
-      notifyListeners();
-    }
-  }
-
-  void _expireLanPeers() {
-    final now = DateTime.now();
-    final before = _lanPeers.length;
-    _lanPeers.removeWhere(
-      (_, peer) =>
-          now.difference(peer.lastSeenAt) > const Duration(seconds: 20),
-    );
-    if (_lanPeers.length != before) {
-      lanDiscoveryStatus =
-          _lanPeers.isEmpty
-              ? 'Доверенные устройства не найдены'
-              : 'Доверенное устройство найдено';
-      notifyListeners();
-    }
-  }
-
-  Future<void> _stopAutomaticLanSync({bool notify = true}) async {
-    _lanPresenceTimer?.cancel();
-    _lanPresenceTimer = null;
-    await _autoSyncPeerSubscription?.cancel();
-    _autoSyncPeerSubscription = null;
-    await _autoSyncHostReportSubscription?.cancel();
-    _autoSyncHostReportSubscription = null;
-    final node = _autoSyncNode;
-    _autoSyncNode = null;
-    if (node != null) {
-      await node.close();
-    }
-    _lanPeers.clear();
-    lanDiscoveryActive = false;
-    if (notify) {
-      notifyListeners();
-    }
-  }
-
-  String _friendlyLanError(Object error) {
-    final raw = error.toString().replaceFirst('Bad state: ', '');
-    if (raw.contains('Address already in use')) {
-      return 'Порт локального обнаружения уже занят. Полностью закрой вторую '
-          'копию Chronicle и запусти приложение снова.';
-    }
-    if (raw.contains('Permission denied')) {
-      return 'Система запретила доступ к локальной сети. Проверь разрешения '
-          'Chronicle и правила брандмауэра.';
-    }
-    return raw;
-  }
-
-  Future<void> renameLocalDevice(String displayName) async {
-    final identity = deviceIdentity ?? await _repository.ensureDeviceIdentity();
-    final trimmed = displayName.trim();
-    if (trimmed.isEmpty || trimmed == identity.displayName) {
-      return;
-    }
-    identity.displayName = trimmed;
-    await _repository.saveDeviceIdentity(identity);
-    deviceIdentity = identity;
-    notifyListeners();
-  }
+  Future<void> renameLocalDevice(String displayName) =>
+      _syncCoordinator.renameLocalDevice(displayName);
 
   Future<void> updateSyncPreferences(SyncPreferences preferences) async {
     final discoveryChanged =
         syncPreferences.discoverOnLocalNetwork !=
             preferences.discoverOnLocalNetwork ||
         syncPreferences.localNetworkOnly != preferences.localNetworkOnly;
-    syncPreferences = preferences;
-    await _repository.saveSyncPreferences(preferences);
-    notifyListeners();
+    await _syncCoordinator.savePreferences(preferences);
     if (discoveryChanged && _automaticLanSyncEnabled) {
       unawaited(_restartAutomaticLanSync());
     } else if (preferences.autoSyncEnabled) {
-      unawaited(_autoSyncNode?.announceNow());
+      unawaited(_lanDiscoveryCoordinator.announceIfEnabled());
     }
   }
 
   Future<void> revokeTrustedDevice(String deviceId) async {
-    await _repository.revokeTrustedDevice(deviceId, DateTime.now());
-    _lanPeers.remove(deviceId);
-    _lanPeerErrors.remove(deviceId);
-    await refreshSyncFoundation();
+    _lanDiscoveryCoordinator.removePeer(deviceId);
+    await _syncCoordinator.revokeTrustedDevice(deviceId);
     if (_automaticLanSyncEnabled) {
       unawaited(_restartAutomaticLanSync());
     }
@@ -2046,47 +1666,6 @@ class AppStore extends ChangeNotifier {
     if (notify) {
       notifyListeners();
     }
-  }
-
-  Future<void> _recordSyncSuccess(
-    LanSyncReport report, {
-    required String peerDeviceId,
-    required bool automatic,
-  }) {
-    return _recordReliability(
-      stage: ReliabilityStage.transfer,
-      level: ReliabilityLevel.success,
-      message:
-          automatic
-              ? 'Автоматическая LAN-синхронизация завершена.'
-              : 'LAN-синхронизация завершена.',
-      peerDeviceId: peerDeviceId,
-      details: <String, Object?>{
-        'rounds': report.roundCount,
-        'sent': report.sentCount,
-        'received': report.receivedCount,
-        'applied': report.appliedCount,
-        'duplicates': report.duplicateCount,
-        'stale': report.staleCount,
-        'unsupported': report.unsupportedCount,
-        'attachmentFilesFromPeer': report.attachmentPlanFromPeer.fileCount,
-        'attachmentFilesByPeer': report.attachmentPlanByPeer.fileCount,
-        'attachmentTombstonesFromPeer':
-            report.attachmentPlanFromPeer.tombstoneCount,
-        'attachmentTombstonesByPeer':
-            report.attachmentPlanByPeer.tombstoneCount,
-        'attachmentFilesReceived': report.attachmentFilesReceived,
-        'attachmentFilesSent': report.attachmentFilesSent,
-        'attachmentBytesReceived': report.attachmentBytesReceived,
-        'attachmentBytesSent': report.attachmentBytesSent,
-        'attachmentRecordsApplied': report.attachmentRecordsApplied,
-        'attachmentTombstonesApplied': report.attachmentTombstonesApplied,
-        'attachmentConflicts': report.attachmentConflictCount,
-        'durationMs':
-            report.completedAt.difference(report.startedAt).inMilliseconds,
-      },
-      notify: false,
-    );
   }
 
   Future<BackupExportResult?> createInternalSafetyBackup() async {
