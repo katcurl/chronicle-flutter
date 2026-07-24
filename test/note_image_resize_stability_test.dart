@@ -28,7 +28,15 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 20; attempt += 1) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 25)),
+      );
+      await tester.pump();
+      if (find.byType(Image).evaluate().isNotEmpty) {
+        break;
+      }
+    }
 
     final image = find.byType(Image).first;
     final initialWidth = tester.getSize(image).width;

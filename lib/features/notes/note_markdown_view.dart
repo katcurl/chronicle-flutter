@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/scheduler.dart';
@@ -14,6 +15,7 @@ import '../../vault/vault_asset_loader.dart';
 import '../references/citation_syntax.dart';
 import 'note_columns_syntax.dart';
 import 'note_document.dart';
+import 'note_editor_profile.dart';
 import 'note_image_syntax.dart';
 import 'scientific_reference_syntax.dart';
 
@@ -33,6 +35,25 @@ typedef NoteColumnsResizeCallback =
 const int _decreaseImageWidthAction = -1;
 const int _increaseImageWidthAction = -2;
 
+const int noteDataImageMaxEncodedBytes = 14 * 1024 * 1024;
+const int noteDataImageMaxDecodedBytes = 10 * 1024 * 1024;
+const int noteDataImageMaxDimension = 8192;
+const int noteDataImageMaxPixels = 40000000;
+
+bool noteDataImageEncodedPayloadFits({required int encodedPayloadLength}) =>
+    encodedPayloadLength >= 0 &&
+    encodedPayloadLength <= noteDataImageMaxEncodedBytes;
+
+bool noteDataImageDecodedLengthFits(int decodedLength) =>
+    decodedLength >= 0 && decodedLength <= noteDataImageMaxDecodedBytes;
+
+bool noteDataImageDimensionsFit({required int width, required int height}) =>
+    width > 0 &&
+    height > 0 &&
+    width <= noteDataImageMaxDimension &&
+    height <= noteDataImageMaxDimension &&
+    width * height <= noteDataImageMaxPixels;
+
 class NoteMarkdownView extends StatelessWidget {
   const NoteMarkdownView({
     super.key,
@@ -47,6 +68,9 @@ class NoteMarkdownView extends StatelessWidget {
     this.assetLoader,
     this.citationSources = const [],
     this.vaultRootPath = '',
+    this.remoteImagePolicy = RemoteImagePolicy.block,
+    this.allowedRemoteImageDomains = const <String>{},
+    this.onAllowRemoteImageDomain,
     this.padding = const EdgeInsets.fromLTRB(20, 18, 20, 120),
   });
 
@@ -61,6 +85,9 @@ class NoteMarkdownView extends StatelessWidget {
   final VaultAttachmentBytesLoader? assetLoader;
   final List<CitationSource> citationSources;
   final String vaultRootPath;
+  final RemoteImagePolicy remoteImagePolicy;
+  final Set<String> allowedRemoteImageDomains;
+  final ValueChanged<String>? onAllowRemoteImageDomain;
   final EdgeInsets padding;
 
   @override
@@ -219,27 +246,31 @@ class NoteMarkdownView extends StatelessWidget {
   }
 
   Widget _loadImage(String target, String alt, {bool expand = false}) {
+    if (target.toLowerCase().startsWith('data:')) {
+      return _SafeDataNoteImage(
+        key: ValueKey<String>('data-image:${target.hashCode}'),
+        dataUri: target,
+        fallbackLabel: alt,
+        expand: expand,
+      );
+    }
     final uri = Uri.tryParse(target);
     if (uri == null) {
       return _ImageFallback(label: alt.isEmpty ? target : alt);
     }
-    if (uri.scheme == 'data') {
-      final bytes = _decodeDataUri(uri.toString());
-      if (bytes != null) {
-        return Image.memory(
-          bytes,
-          width: expand ? double.infinity : null,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => _ImageFallback(label: alt),
-        );
-      }
-    }
     if (uri.scheme == 'http' || uri.scheme == 'https') {
-      return Image.network(
-        uri.toString(),
-        width: expand ? double.infinity : null,
-        fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => _ImageFallback(label: alt),
+      if (uri.host.isEmpty || uri.userInfo.isNotEmpty) {
+        return _ImageFallback(label: alt.isEmpty ? target : alt);
+      }
+      final domain = uri.host.toLowerCase();
+      return _RemoteNoteImage(
+        key: ValueKey<String>('remote-image:${uri.toString()}'),
+        uri: uri,
+        fallbackLabel: alt,
+        expand: expand,
+        policy: remoteImagePolicy,
+        domainAllowed: allowedRemoteImageDomains.contains(domain),
+        onAllowDomain: onAllowRemoteImageDomain,
       );
     }
     if (vaultRootPath.isNotEmpty &&
@@ -254,6 +285,207 @@ class NoteMarkdownView extends StatelessWidget {
       );
     }
     return _ImageFallback(label: alt.isEmpty ? target : alt);
+  }
+}
+
+class _RemoteNoteImage extends StatefulWidget {
+  const _RemoteNoteImage({
+    super.key,
+    required this.uri,
+    required this.fallbackLabel,
+    required this.expand,
+    required this.policy,
+    required this.domainAllowed,
+    this.onAllowDomain,
+  });
+
+  final Uri uri;
+  final String fallbackLabel;
+  final bool expand;
+  final RemoteImagePolicy policy;
+  final bool domainAllowed;
+  final ValueChanged<String>? onAllowDomain;
+
+  @override
+  State<_RemoteNoteImage> createState() => _RemoteNoteImageState();
+}
+
+class _RemoteNoteImageState extends State<_RemoteNoteImage> {
+  late bool loadRequested = _loadsAutomatically;
+
+  bool get _loadsAutomatically =>
+      widget.policy == RemoteImagePolicy.allow || widget.domainAllowed;
+
+  @override
+  void didUpdateWidget(covariant _RemoteNoteImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.uri != widget.uri) {
+      loadRequested = _loadsAutomatically;
+    } else if (_loadsAutomatically) {
+      loadRequested = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loadRequested) {
+      return Image.network(
+        widget.uri.toString(),
+        width: widget.expand ? double.infinity : null,
+        fit: BoxFit.contain,
+        errorBuilder:
+            (_, __, ___) => _ImageFallback(label: widget.fallbackLabel),
+      );
+    }
+
+    final domain = widget.uri.host.toLowerCase();
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      key: ValueKey<String>('remote-image-blocked:$domain'),
+      constraints: const BoxConstraints(minHeight: 104),
+      width: widget.expand ? double.infinity : null,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.shield_outlined, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Внешнее изображение заблокировано: $domain',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              TextButton(
+                onPressed: () => setState(() => loadRequested = true),
+                child: const Text('Загрузить один раз'),
+              ),
+              TextButton(
+                onPressed: () {
+                  widget.onAllowDomain?.call(domain);
+                  setState(() => loadRequested = true);
+                },
+                child: const Text('Разрешить домен'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SafeDataNoteImage extends StatefulWidget {
+  const _SafeDataNoteImage({
+    super.key,
+    required this.dataUri,
+    required this.fallbackLabel,
+    required this.expand,
+  });
+
+  final String dataUri;
+  final String fallbackLabel;
+  final bool expand;
+
+  @override
+  State<_SafeDataNoteImage> createState() => _SafeDataNoteImageState();
+}
+
+class _SafeDataNoteImageState extends State<_SafeDataNoteImage> {
+  Uint8List? bytes;
+  bool rejected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  @override
+  void didUpdateWidget(covariant _SafeDataNoteImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.dataUri != widget.dataUri) {
+      bytes = null;
+      rejected = false;
+      unawaited(_load());
+    }
+  }
+
+  Future<void> _load() async {
+    final candidate = await compute(_decodeBoundedNoteDataUri, widget.dataUri);
+    if (candidate == null) {
+      if (mounted) setState(() => rejected = true);
+      return;
+    }
+
+    ui.ImmutableBuffer? buffer;
+    ui.ImageDescriptor? descriptor;
+    var dimensionsAllowed = false;
+    try {
+      buffer = await ui.ImmutableBuffer.fromUint8List(candidate);
+      descriptor = await ui.ImageDescriptor.encoded(buffer);
+      dimensionsAllowed = noteDataImageDimensionsFit(
+        width: descriptor.width,
+        height: descriptor.height,
+      );
+    } on Object {
+      dimensionsAllowed = false;
+    } finally {
+      descriptor?.dispose();
+      buffer?.dispose();
+    }
+
+    if (!mounted) return;
+    setState(() {
+      if (dimensionsAllowed) {
+        bytes = candidate;
+      } else {
+        rejected = true;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imageBytes = bytes;
+    if (imageBytes != null) {
+      return Image.memory(
+        imageBytes,
+        width: widget.expand ? double.infinity : null,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        errorBuilder:
+            (_, __, ___) => _ImageFallback(label: widget.fallbackLabel),
+      );
+    }
+    if (rejected) {
+      return _ImageFallback(
+        label:
+            widget.fallbackLabel.isEmpty
+                ? 'Встроенное изображение отклонено'
+                : widget.fallbackLabel,
+      );
+    }
+    return const SizedBox(
+      height: 64,
+      child: Center(child: Icon(Icons.image_outlined)),
+    );
   }
 }
 
@@ -1280,14 +1512,35 @@ bool _isInsideMarkdownCode(String source, int offset) {
   return backticks.isOdd;
 }
 
-Uint8List? _decodeDataUri(String value) {
+Uint8List? _decodeBoundedNoteDataUri(String value) {
   final comma = value.indexOf(',');
-  if (comma < 0 || !value.substring(0, comma).contains(';base64')) {
+  if (comma < 0 || comma > 256) {
+    return null;
+  }
+  final metadata = value.substring(0, comma).toLowerCase();
+  if (!metadata.startsWith('data:image/') ||
+      !metadata.split(';').contains('base64')) {
+    return null;
+  }
+
+  final payloadLength = value.length - comma - 1;
+  if (!noteDataImageEncodedPayloadFits(encodedPayloadLength: payloadLength)) {
+    return null;
+  }
+  var padding = 0;
+  if (value.endsWith('==')) {
+    padding = 2;
+  } else if (value.endsWith('=')) {
+    padding = 1;
+  }
+  final estimatedDecodedLength = (payloadLength * 3 ~/ 4) - padding;
+  if (!noteDataImageDecodedLengthFits(estimatedDecodedLength)) {
     return null;
   }
   try {
-    return base64Decode(value.substring(comma + 1));
-  } on FormatException {
+    final decoded = base64Decode(value.substring(comma + 1));
+    return noteDataImageDecodedLengthFits(decoded.length) ? decoded : null;
+  } on Object {
     return null;
   }
 }

@@ -1328,6 +1328,12 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
                       assetListenable: widget.store.attachmentRefreshListenable,
                       citationSources: widget.store.data.citationSources,
                       vaultRootPath: widget.store.vaultStatus.rootPath,
+                      remoteImagePolicy: profile.remoteImagePolicy,
+                      allowedRemoteImageDomains:
+                          _editorPreferences.allowedRemoteImageDomains.toSet(),
+                      onAllowRemoteImageDomain:
+                          (domain) =>
+                              unawaited(_allowRemoteImageDomain(domain)),
                       padding: EdgeInsets.fromLTRB(
                         profile.density.horizontalPadding,
                         profile.density.verticalPadding,
@@ -1439,6 +1445,16 @@ class _NoteWorkspaceScreenState extends State<NoteWorkspaceScreen> {
         SnackBar(content: Text('Не удалось сохранить профиль: $error')),
       );
     }
+  }
+
+  Future<void> _allowRemoteImageDomain(String domain) async {
+    final next = _editorPreferences.allowRemoteImageDomain(domain);
+    if (next.allowedRemoteImageDomains.length ==
+        _editorPreferences.allowedRemoteImageDomains.length) {
+      return;
+    }
+    setState(() => _editorPreferences = next);
+    await _saveEditorPreferences(next);
   }
 
   Widget _editorProfileSwitcher() {

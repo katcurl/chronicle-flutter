@@ -99,6 +99,42 @@ enum NoteEditorStartMode {
   }
 }
 
+enum RemoteImagePolicy {
+  block(
+    id: 'block',
+    label: 'Блокировать по умолчанию',
+    description: 'Сеть не используется, пока вы явно не загрузите изображение.',
+  ),
+  ask(
+    id: 'ask',
+    label: 'Спрашивать',
+    description: 'Показывать подтверждение перед каждой новой загрузкой.',
+  ),
+  allow(
+    id: 'allow',
+    label: 'Разрешать',
+    description: 'Автоматически загружать внешние изображения.',
+  );
+
+  const RemoteImagePolicy({
+    required this.id,
+    required this.label,
+    required this.description,
+  });
+
+  final String id;
+  final String label;
+  final String description;
+
+  static RemoteImagePolicy fromId(Object? raw) {
+    final id = raw?.toString();
+    for (final value in values) {
+      if (value.id == id) return value;
+    }
+    return RemoteImagePolicy.block;
+  }
+}
+
 class NoteEditorProfile {
   const NoteEditorProfile({
     required this.id,
@@ -116,6 +152,7 @@ class NoteEditorProfile {
     required this.showLinkSuggestions,
     required this.showContextPanel,
     required this.showTimerButton,
+    this.remoteImagePolicy = RemoteImagePolicy.block,
   });
 
   static const int maxProfiles = 12;
@@ -137,6 +174,7 @@ class NoteEditorProfile {
   final bool showLinkSuggestions;
   final bool showContextPanel;
   final bool showTimerButton;
+  final RemoteImagePolicy remoteImagePolicy;
 
   String? get fontFamily => switch (font) {
     NoteEditorFont.monospace => 'monospace',
@@ -214,6 +252,7 @@ class NoteEditorProfile {
     bool? showLinkSuggestions,
     bool? showContextPanel,
     bool? showTimerButton,
+    RemoteImagePolicy? remoteImagePolicy,
   }) {
     return NoteEditorProfile(
       id: id ?? this.id,
@@ -231,6 +270,7 @@ class NoteEditorProfile {
       showLinkSuggestions: showLinkSuggestions ?? this.showLinkSuggestions,
       showContextPanel: showContextPanel ?? this.showContextPanel,
       showTimerButton: showTimerButton ?? this.showTimerButton,
+      remoteImagePolicy: remoteImagePolicy ?? this.remoteImagePolicy,
     );
   }
 
@@ -250,6 +290,7 @@ class NoteEditorProfile {
     'showLinkSuggestions': showLinkSuggestions,
     'showContextPanel': showContextPanel,
     'showTimerButton': showTimerButton,
+    'remoteImagePolicy': remoteImagePolicy.id,
   };
 
   static NoteEditorProfile? fromJson(Map<String, Object?> json) {
@@ -273,6 +314,7 @@ class NoteEditorProfile {
       showLinkSuggestions: _boolean(json['showLinkSuggestions'], true),
       showContextPanel: _boolean(json['showContextPanel'], true),
       showTimerButton: _boolean(json['showTimerButton'], true),
+      remoteImagePolicy: RemoteImagePolicy.fromId(json['remoteImagePolicy']),
     );
   }
 
@@ -304,16 +346,21 @@ class NoteEditorPreferences {
   const NoteEditorPreferences({
     required this.activeProfileId,
     required this.profiles,
+    this.allowedRemoteImageDomains = const <String>[],
   });
+
+  static const int maxAllowedRemoteImageDomains = 100;
 
   final String activeProfileId;
   final List<NoteEditorProfile> profiles;
+  final List<String> allowedRemoteImageDomains;
 
   factory NoteEditorPreferences.defaults() {
     final profiles = NoteEditorProfile.defaults();
     return NoteEditorPreferences(
       activeProfileId: profiles.first.id,
       profiles: List<NoteEditorProfile>.unmodifiable(profiles),
+      allowedRemoteImageDomains: const <String>[],
     );
   }
 
@@ -327,16 +374,26 @@ class NoteEditorPreferences {
   NoteEditorPreferences copyWith({
     String? activeProfileId,
     List<NoteEditorProfile>? profiles,
+    List<String>? allowedRemoteImageDomains,
   }) {
     return NoteEditorPreferences.normalized(
       activeProfileId: activeProfileId ?? this.activeProfileId,
       profiles: profiles ?? this.profiles,
+      allowedRemoteImageDomains:
+          allowedRemoteImageDomains ?? this.allowedRemoteImageDomains,
+    );
+  }
+
+  NoteEditorPreferences allowRemoteImageDomain(String domain) {
+    return copyWith(
+      allowedRemoteImageDomains: <String>[...allowedRemoteImageDomains, domain],
     );
   }
 
   factory NoteEditorPreferences.normalized({
     required String activeProfileId,
     required Iterable<NoteEditorProfile> profiles,
+    Iterable<String> allowedRemoteImageDomains = const <String>[],
   }) {
     final safeProfiles = <NoteEditorProfile>[];
     final ids = <String>{};
@@ -345,18 +402,32 @@ class NoteEditorPreferences {
       safeProfiles.add(profile);
     }
     if (safeProfiles.isEmpty) return NoteEditorPreferences.defaults();
+    final safeDomains = <String>[];
+    final seenDomains = <String>{};
+    for (final raw in allowedRemoteImageDomains) {
+      final domain = _normalizeRemoteImageDomain(raw);
+      if (domain == null || !seenDomains.add(domain)) {
+        continue;
+      }
+      safeDomains.add(domain);
+      if (safeDomains.length >= maxAllowedRemoteImageDomains) {
+        break;
+      }
+    }
     return NoteEditorPreferences(
       activeProfileId:
           ids.contains(activeProfileId)
               ? activeProfileId
               : safeProfiles.first.id,
       profiles: List<NoteEditorProfile>.unmodifiable(safeProfiles),
+      allowedRemoteImageDomains: List<String>.unmodifiable(safeDomains),
     );
   }
 
   Map<String, Object?> toJson() => <String, Object?>{
     'activeProfileId': activeProfileId,
     'profiles': profiles.map((profile) => profile.toJson()).toList(),
+    'allowedRemoteImageDomains': allowedRemoteImageDomains,
   };
 
   static NoteEditorPreferences fromJson(Map<String, Object?> json) {
@@ -375,6 +446,28 @@ class NoteEditorPreferences {
     return NoteEditorPreferences.normalized(
       activeProfileId: json['activeProfileId']?.toString() ?? '',
       profiles: profiles,
+      allowedRemoteImageDomains:
+          (json['allowedRemoteImageDomains'] as List?)?.map(
+            (value) => value.toString(),
+          ) ??
+          const <String>[],
     );
+  }
+
+  static String? _normalizeRemoteImageDomain(String raw) {
+    var domain = raw.trim().toLowerCase();
+    while (domain.endsWith('.')) {
+      domain = domain.substring(0, domain.length - 1);
+    }
+    if (domain.isEmpty ||
+        domain.length > 253 ||
+        domain.contains(RegExp(r'[\s/@:?#]'))) {
+      return null;
+    }
+    final parsed = Uri.tryParse('https://$domain/');
+    if (parsed == null || parsed.host.toLowerCase() != domain) {
+      return null;
+    }
+    return domain;
   }
 }

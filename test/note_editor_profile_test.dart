@@ -48,6 +48,27 @@ void main() {
     expect(decoded.activeProfile.fontSize, 18);
     expect(decoded.activeProfile.contentWidth, 720);
     expect(decoded.activeProfile.showContextPanel, isFalse);
+    expect(decoded.activeProfile.remoteImagePolicy, RemoteImagePolicy.block);
+  });
+
+  test('trusted remote image domains are normalized and bounded', () {
+    final preferences = NoteEditorPreferences.normalized(
+      activeProfileId: 'scientific',
+      profiles: NoteEditorProfile.defaults(),
+      allowedRemoteImageDomains: const <String>[
+        'EXAMPLE.org.',
+        'example.org',
+        '',
+      ],
+    );
+
+    expect(preferences.allowedRemoteImageDomains, <String>['example.org']);
+    expect(
+      preferences
+          .allowRemoteImageDomain('Images.Example.org.')
+          .allowedRemoteImageDomains,
+      contains('images.example.org'),
+    );
   });
 
   test('invalid numeric values are bounded during decoding', () {

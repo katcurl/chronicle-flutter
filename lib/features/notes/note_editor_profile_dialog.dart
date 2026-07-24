@@ -26,6 +26,7 @@ class NoteEditorProfileDialog extends StatefulWidget {
 class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
   late List<NoteEditorProfile> profiles;
   late String activeProfileId;
+  late Set<String> allowedRemoteImageDomains;
   late int selectedIndex;
   final nameController = TextEditingController();
   final emojiController = TextEditingController();
@@ -37,6 +38,8 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
     super.initState();
     profiles = List<NoteEditorProfile>.from(widget.initialPreferences.profiles);
     activeProfileId = widget.initialPreferences.activeProfileId;
+    allowedRemoteImageDomains =
+        widget.initialPreferences.allowedRemoteImageDomains.toSet();
     selectedIndex = profiles.indexWhere(
       (profile) => profile.id == activeProfileId,
     );
@@ -336,6 +339,54 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
             _replaceSelected(profile.copyWith(startMode: value));
           },
         ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<RemoteImagePolicy>(
+          key: ValueKey('${profile.id}-remote-${profile.remoteImagePolicy.id}'),
+          initialValue: profile.remoteImagePolicy,
+          decoration: const InputDecoration(labelText: 'Внешние изображения'),
+          items: [
+            for (final policy in RemoteImagePolicy.values)
+              DropdownMenuItem<RemoteImagePolicy>(
+                value: policy,
+                child: Text(policy.label),
+              ),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            _replaceSelected(profile.copyWith(remoteImagePolicy: value));
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(
+            profile.remoteImagePolicy.description,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+        if (allowedRemoteImageDomains.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Разрешённые домены',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final domain in allowedRemoteImageDomains.toList()..sort())
+                InputChip(
+                  label: Text(domain),
+                  onDeleted:
+                      () => setState(
+                        () => allowedRemoteImageDomains.remove(domain),
+                      ),
+                ),
+            ],
+          ),
+        ],
         const SizedBox(height: 18),
         _slider(
           label: 'Размер текста',
@@ -622,6 +673,7 @@ class _NoteEditorProfileDialogState extends State<NoteEditorProfileDialog> {
     final normalized = NoteEditorPreferences.normalized(
       activeProfileId: activeProfileId,
       profiles: profiles,
+      allowedRemoteImageDomains: allowedRemoteImageDomains,
     );
     Navigator.pop(context, normalized);
   }
