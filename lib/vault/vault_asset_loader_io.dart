@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:path/path.dart' as p;
+import 'managed_path_resolver.dart';
 
 Future<Uint8List?> loadVaultAttachment(
   String rootPath,
@@ -16,16 +16,17 @@ Future<Uint8List?> loadVaultAttachment(
     return null;
   }
   final relative = decoded.substring(marker);
-  final root = p.normalize(p.absolute(p.join(rootPath, 'Attachments')));
-  final target = p.normalize(
-    p.absolute(p.join(rootPath, relative.replaceAll('/', p.separator))),
-  );
-  if (target != root && !p.isWithin(root, target)) {
-    return null;
+  try {
+    final target = await createManagedPathResolver().resolveExisting(
+      rootPath,
+      relative,
+    );
+    return File(target).readAsBytes();
+  } on FileSystemException catch (error) {
+    final code = error.osError?.errorCode;
+    if (code == 2 || code == 3) {
+      return null;
+    }
+    rethrow;
   }
-  final file = File(target);
-  if (!await file.exists()) {
-    return null;
-  }
-  return file.readAsBytes();
 }

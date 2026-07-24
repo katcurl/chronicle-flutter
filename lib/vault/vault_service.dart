@@ -34,7 +34,11 @@ class VaultService {
         return false;
       }
       final indexRaw = await _backend.readTextFile(rootPath, _indexPath);
-      if (_managedPathsFromIndex(indexRaw).isNotEmpty) {
+      final index = _readIndex(indexRaw);
+      if (index is _InvalidVaultIndex) {
+        return true;
+      }
+      if (_managedPathsFromIndex(index).isNotEmpty) {
         return true;
       }
       final files = await _backend.listTextFiles(
@@ -71,6 +75,19 @@ class VaultService {
       );
     }
 
+    final previousIndexRaw = await _backend.readTextFile(rootPath, _indexPath);
+    final previousIndex = _readIndex(previousIndexRaw);
+    if (previousIndex is _InvalidVaultIndex) {
+      final current = await inspect();
+      return current.copyWith(
+        noteCount: data.notes.length,
+        message:
+            'Индекс Vault повреждён. Запись отключена до восстановления '
+            '.chronicle/vault-index.json.',
+        readOnly: true,
+      );
+    }
+
     if (!force) {
       final scanResult = await scan(data);
       if (scanResult.hasChanges) {
@@ -88,8 +105,7 @@ class VaultService {
     }
 
     final built = _buildVaultFiles(data);
-    final previousIndexRaw = await _backend.readTextFile(rootPath, _indexPath);
-    final previousManagedPaths = _managedPathsFromIndex(previousIndexRaw);
+    final previousManagedPaths = _managedPathsFromIndex(previousIndex);
     final currentManagedPaths = built.notePaths.toSet();
     final stalePaths = previousManagedPaths.difference(currentManagedPaths);
 
@@ -193,7 +209,17 @@ class VaultService {
     }
 
     final indexRaw = await _backend.readTextFile(rootPath, _indexPath);
-    final index = _readIndex(indexRaw);
+    final indexRead = _readIndex(indexRaw);
+    if (indexRead is _InvalidVaultIndex) {
+      throw const FormatException(
+        'Индекс Vault повреждён; импорт и удаление отключены.',
+      );
+    }
+    final index = switch (indexRead) {
+      _ValidVaultIndex(:final entries) => entries,
+      _MissingVaultIndex() => const <_VaultIndexEntry>[],
+      _InvalidVaultIndex() => throw StateError('unreachable'),
+    };
     final indexById = {for (final entry in index) entry.noteId: entry};
     final files = await _backend.listTextFiles(
       rootPath: rootPath,
@@ -1208,36 +1234,73 @@ class VaultService {
     );
   }
 
-  List<_VaultIndexEntry> _readIndex(String? raw) {
-    if (raw == null || raw.isEmpty) {
-      return const [];
+  _VaultIndexReadResult _readIndex(String? raw) {
+    if (raw == null) {
+      return const _MissingVaultIndex();
     }
     try {
-      final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      final notes = decoded['notes'] as List<dynamic>? ?? const [];
-      return notes
-          .whereType<Map>()
-          .map((item) {
-            return _VaultIndexEntry(
-              noteId: item['id']?.toString() ?? '',
-              relativePath: item['path']?.toString() ?? '',
-              sha256: item['sha256']?.toString() ?? '',
-            );
-          })
-          .where((entry) {
-            return entry.noteId.isNotEmpty && entry.relativePath.isNotEmpty;
-          })
-          .toList(growable: false);
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic> ||
+          decoded['format'] != 'chronicle-vault-index' ||
+          decoded['version'] is! int ||
+          decoded['minimumReaderVersion'] is! int ||
+          decoded['notes'] is! List<dynamic>) {
+        return const _InvalidVaultIndex();
+      }
+      final version = decoded['version']! as int;
+      final minimumReaderVersion = decoded['minimumReaderVersion']! as int;
+      if (version < minimumReadableVaultFormatVersion ||
+          version > currentVaultFormatVersion ||
+          minimumReaderVersion < minimumReadableVaultFormatVersion ||
+          minimumReaderVersion > currentVaultFormatVersion) {
+        return const _InvalidVaultIndex();
+      }
+      final entries = <_VaultIndexEntry>[];
+      final noteIds = <String>{};
+      final paths = <String>{};
+      for (final value in decoded['notes'] as List<dynamic>) {
+        if (value is! Map) {
+          return const _InvalidVaultIndex();
+        }
+        final item = Map<String, dynamic>.from(value);
+        final entry = _VaultIndexEntry(
+          noteId: item['id']?.toString() ?? '',
+          relativePath: item['path']?.toString() ?? '',
+          sha256: item['sha256']?.toString() ?? '',
+        );
+        if (entry.noteId.isEmpty ||
+            !_validManagedNotePath(entry.relativePath) ||
+            !RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(entry.sha256) ||
+            !noteIds.add(entry.noteId) ||
+            !paths.add(entry.relativePath.toLowerCase())) {
+          return const _InvalidVaultIndex();
+        }
+        entries.add(entry);
+      }
+      return _ValidVaultIndex(entries);
     } on Object {
-      return const [];
+      return const _InvalidVaultIndex();
     }
   }
 
-  Set<String> _managedPathsFromIndex(String? raw) {
-    return _readIndex(raw)
-        .map((entry) => entry.relativePath)
-        .where((path) => path.startsWith('Notes/') && path.endsWith('.md'))
-        .toSet();
+  Set<String> _managedPathsFromIndex(_VaultIndexReadResult result) {
+    return switch (result) {
+      _ValidVaultIndex(:final entries) =>
+        entries.map((entry) => entry.relativePath).toSet(),
+      _MissingVaultIndex() || _InvalidVaultIndex() => <String>{},
+    };
+  }
+
+  bool _validManagedNotePath(String relativePath) {
+    if (!relativePath.startsWith('Notes/') ||
+        !relativePath.endsWith('.md') ||
+        relativePath.contains('\\')) {
+      return false;
+    }
+    final segments = relativePath.split('/');
+    return segments.every(
+      (segment) => segment.isNotEmpty && segment != '.' && segment != '..',
+    );
   }
 
   _ParsedVaultNote _parseVaultNote({
@@ -1783,6 +1846,24 @@ class _BuiltBackup {
 
   final String raw;
   final BackupPreview preview;
+}
+
+sealed class _VaultIndexReadResult {
+  const _VaultIndexReadResult();
+}
+
+final class _ValidVaultIndex extends _VaultIndexReadResult {
+  const _ValidVaultIndex(this.entries);
+
+  final List<_VaultIndexEntry> entries;
+}
+
+final class _MissingVaultIndex extends _VaultIndexReadResult {
+  const _MissingVaultIndex();
+}
+
+final class _InvalidVaultIndex extends _VaultIndexReadResult {
+  const _InvalidVaultIndex();
 }
 
 class _VaultIndexEntry {

@@ -6,6 +6,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'managed_path_resolver.dart';
+
 class PickedVaultFile {
   const PickedVaultFile({required this.name, required this.bytes});
 
@@ -28,7 +30,12 @@ class VaultBackupFileInfo {
 }
 
 class VaultBackend {
+  VaultBackend({ManagedPathResolver? pathResolver})
+    : _pathResolver = pathResolver ?? createManagedPathResolver();
+
   static const _vaultPathKey = 'chronicle_vault_path';
+
+  final ManagedPathResolver _pathResolver;
 
   Future<String?> resolveRootPath() async {
     final preferences = await SharedPreferences.getInstance();
@@ -57,20 +64,22 @@ class VaultBackend {
     required Map<String, String> files,
     required Set<String> staleManagedPaths,
   }) async {
-    final root = Directory(rootPath);
-    await root.create(recursive: true);
+    await Directory(rootPath).create(recursive: true);
 
     for (final relativePath in staleManagedPaths) {
-      final target = File(p.join(rootPath, _native(relativePath)));
-      if (await target.exists()) {
-        await target.delete();
+      final target = await _resolveExistingOrNull(rootPath, relativePath);
+      if (target != null) {
+        await File(target).delete();
       }
     }
 
     for (final entry in files.entries) {
-      final target = File(p.join(rootPath, _native(entry.key)));
-      await target.parent.create(recursive: true);
-      final temporary = File('${target.path}.tmp');
+      final target = File(
+        await _pathResolver.resolveForWrite(rootPath, entry.key),
+      );
+      final temporary = File(
+        await _pathResolver.resolveForWrite(rootPath, '${entry.key}.tmp'),
+      );
       await temporary.writeAsString(entry.value, flush: true);
       if (await target.exists()) {
         await target.delete();
@@ -78,19 +87,17 @@ class VaultBackend {
       await temporary.rename(target.path);
     }
 
-    await Directory(p.join(rootPath, 'Attachments')).create(recursive: true);
-    await Directory(p.join(rootPath, 'Templates')).create(recursive: true);
-    await Directory(
-      p.join(rootPath, '.chronicle', 'Backups'),
-    ).create(recursive: true);
+    await _createManagedDirectory(rootPath, 'Attachments');
+    await _createManagedDirectory(rootPath, 'Templates');
+    await _createManagedDirectory(rootPath, '.chronicle/Backups');
   }
 
   Future<String?> readTextFile(String rootPath, String relativePath) async {
-    final file = File(p.join(rootPath, _native(relativePath)));
-    if (!await file.exists()) {
+    final resolved = await _resolveExistingOrNull(rootPath, relativePath);
+    if (resolved == null) {
       return null;
     }
-    return file.readAsString();
+    return File(resolved).readAsString();
   }
 
   Future<void> writeTextFile({
@@ -98,9 +105,12 @@ class VaultBackend {
     required String relativePath,
     required String content,
   }) async {
-    final target = File(p.join(rootPath, _native(relativePath)));
-    await target.parent.create(recursive: true);
-    final temporary = File('${target.path}.tmp');
+    final target = File(
+      await _pathResolver.resolveForWrite(rootPath, relativePath),
+    );
+    final temporary = File(
+      await _pathResolver.resolveForWrite(rootPath, '$relativePath.tmp'),
+    );
     await temporary.writeAsString(content, flush: true);
     if (await target.exists()) {
       await target.delete();
@@ -113,10 +123,12 @@ class VaultBackend {
     required String directory,
     required String extension,
   }) async {
-    final base = Directory(p.join(rootPath, _native(directory)));
-    if (!await base.exists()) {
+    final resolved = await _resolveExistingOrNull(rootPath, directory);
+    if (resolved == null) {
       return <String, String>{};
     }
+    final base = Directory(resolved);
+    final canonicalRoot = await Directory(rootPath).resolveSymbolicLinks();
 
     final result = <String, String>{};
     await for (final entity in base.list(recursive: true, followLinks: false)) {
@@ -125,7 +137,7 @@ class VaultBackend {
         continue;
       }
       final relative = p
-          .relative(entity.path, from: rootPath)
+          .relative(entity.path, from: canonicalRoot)
           .replaceAll(p.separator, '/');
       result[relative] = await entity.readAsString();
     }
@@ -136,18 +148,10 @@ class VaultBackend {
     required String rootPath,
     required Set<String> relativePaths,
   }) async {
-    final normalizedRoot = p.normalize(p.absolute(rootPath));
     for (final relativePath in relativePaths) {
-      final targetPath = p.normalize(
-        p.absolute(p.join(rootPath, _native(relativePath))),
-      );
-      if (targetPath != normalizedRoot &&
-          !p.isWithin(normalizedRoot, targetPath)) {
-        continue;
-      }
-      final target = File(targetPath);
-      if (await target.exists()) {
-        await target.delete();
+      final resolved = await _resolveExistingOrNull(rootPath, relativePath);
+      if (resolved != null) {
+        await File(resolved).delete();
       }
     }
   }
@@ -156,17 +160,19 @@ class VaultBackend {
     required String rootPath,
     required String directory,
   }) async {
-    final base = Directory(p.join(rootPath, _native(directory)));
-    if (!await base.exists()) {
+    final resolved = await _resolveExistingOrNull(rootPath, directory);
+    if (resolved == null) {
       return <String, Uint8List>{};
     }
+    final base = Directory(resolved);
+    final canonicalRoot = await Directory(rootPath).resolveSymbolicLinks();
     final result = <String, Uint8List>{};
     await for (final entity in base.list(recursive: true, followLinks: false)) {
       if (entity is! File) {
         continue;
       }
       final relative = p
-          .relative(entity.path, from: rootPath)
+          .relative(entity.path, from: canonicalRoot)
           .replaceAll(p.separator, '/');
       result[relative] = await entity.readAsBytes();
     }
@@ -177,15 +183,15 @@ class VaultBackend {
     String rootPath,
     String relativePath,
   ) async {
-    final file = File(p.join(rootPath, _native(relativePath)));
-    if (!await file.exists()) {
+    final resolved = await _resolveExistingOrNull(rootPath, relativePath);
+    if (resolved == null) {
       return null;
     }
-    return file.readAsBytes();
+    return File(resolved).readAsBytes();
   }
 
-  Future<bool> fileExists(String rootPath, String relativePath) {
-    return File(p.join(rootPath, _native(relativePath))).exists();
+  Future<bool> fileExists(String rootPath, String relativePath) async {
+    return await _resolveExistingOrNull(rootPath, relativePath) != null;
   }
 
   Future<void> writeBinaryFile({
@@ -193,9 +199,12 @@ class VaultBackend {
     required String relativePath,
     required Uint8List bytes,
   }) async {
-    final target = File(p.join(rootPath, _native(relativePath)));
-    await target.parent.create(recursive: true);
-    final temporary = File('${target.path}.tmp');
+    final target = File(
+      await _pathResolver.resolveForWrite(rootPath, relativePath),
+    );
+    final temporary = File(
+      await _pathResolver.resolveForWrite(rootPath, '$relativePath.tmp'),
+    );
     await temporary.writeAsBytes(bytes, flush: true);
     if (await target.exists()) {
       await target.delete();
@@ -249,12 +258,14 @@ class VaultBackend {
   Future<List<VaultBackupFileInfo>> listAutomaticBackups({
     required String rootPath,
   }) async {
-    final directory = Directory(
-      p.join(rootPath, '.chronicle', 'Backups', 'Automatic'),
+    final resolved = await _resolveExistingOrNull(
+      rootPath,
+      '.chronicle/Backups/Automatic',
     );
-    if (!await directory.exists()) {
+    if (resolved == null) {
       return const <VaultBackupFileInfo>[];
     }
+    final directory = Directory(resolved);
 
     final result = <VaultBackupFileInfo>[];
     await for (final entity in directory.list(followLinks: false)) {
@@ -291,9 +302,13 @@ class VaultBackend {
     required String fileName,
     required Uint8List bytes,
   }) async {
-    final target = File(p.join(rootPath, '.chronicle', 'Backups', fileName));
-    await target.parent.create(recursive: true);
-    final temporary = File('${target.path}.tmp');
+    final relativePath = '.chronicle/Backups/$fileName';
+    final target = File(
+      await _pathResolver.resolveForWrite(rootPath, relativePath),
+    );
+    final temporary = File(
+      await _pathResolver.resolveForWrite(rootPath, '$relativePath.tmp'),
+    );
     await temporary.writeAsBytes(bytes, flush: true);
     if (await target.exists()) {
       await target.delete();
@@ -309,11 +324,19 @@ class VaultBackend {
     int maxFiles = 5,
   }) async {
     final directory = Directory(
-      p.join(rootPath, '.chronicle', 'Backups', 'Automatic'),
+      await _pathResolver.resolveForWrite(
+        rootPath,
+        '.chronicle/Backups/Automatic',
+      ),
     );
     await directory.create(recursive: true);
-    final target = File(p.join(directory.path, fileName));
-    final temporary = File('${target.path}.tmp');
+    final relativePath = '.chronicle/Backups/Automatic/$fileName';
+    final target = File(
+      await _pathResolver.resolveForWrite(rootPath, relativePath),
+    );
+    final temporary = File(
+      await _pathResolver.resolveForWrite(rootPath, '$relativePath.tmp'),
+    );
     await temporary.writeAsBytes(bytes, flush: true);
     if (await target.exists()) {
       await target.delete();
@@ -339,6 +362,29 @@ class VaultBackend {
     return target.path;
   }
 
-  String _native(String relativePath) =>
-      relativePath.replaceAll('/', p.separator);
+  Future<void> _createManagedDirectory(
+    String rootPath,
+    String relativePath,
+  ) async {
+    final resolved = await _pathResolver.resolveForWrite(
+      rootPath,
+      relativePath,
+    );
+    await Directory(resolved).create();
+  }
+
+  Future<String?> _resolveExistingOrNull(
+    String rootPath,
+    String relativePath,
+  ) async {
+    try {
+      return await _pathResolver.resolveExisting(rootPath, relativePath);
+    } on FileSystemException catch (error) {
+      final code = error.osError?.errorCode;
+      if (code == 2 || code == 3) {
+        return null;
+      }
+      rethrow;
+    }
+  }
 }
