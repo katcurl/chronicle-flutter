@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../application/backup/restore_coordinator.dart';
 import '../application/timer/timer_service.dart';
+import '../application/vault/vault_coordinator.dart';
 import '../data/migration/legacy_preferences_importer.dart';
 import '../data/backup/staged_restore.dart';
 import '../data/repositories/app_repository.dart';
@@ -113,6 +114,19 @@ class AppStore extends ChangeNotifier {
       notifyListeners: notifyListeners,
       restoreCutPoint: restoreCutPoint,
     );
+    _vaultCoordinator = VaultCoordinator(
+      repository: repository,
+      vaultService: _vaultService,
+      currentData: () => data,
+      currentIdentity: () => deviceIdentity,
+      isBusy: () => vaultBusy,
+      setBusy: (value) => vaultBusy = value,
+      rebuildAllNoteLinks: () => rebuildAllNoteLinks(),
+      refreshSyncFoundation: () => refreshSyncFoundation(notify: false),
+      onEmergencyBackupCreated: (path) => lastEmergencyBackupPath = path,
+      onAttachmentRefresh: _notifyAttachmentRefresh,
+      notifyListeners: notifyListeners,
+    );
   }
 
   factory AppStore.production() => AppStore(
@@ -140,6 +154,7 @@ class AppStore extends ChangeNotifier {
   final MutationQueue _mutationQueue = MutationQueue();
   late final TimerService _timerService;
   late final RestoreCoordinator _restoreCoordinator;
+  late final VaultCoordinator _vaultCoordinator;
   final ValueNotifier<int> _attachmentRefreshNotifier = ValueNotifier<int>(0);
 
   ValueListenable<int> get attachmentRefreshListenable =>
@@ -168,8 +183,11 @@ class AppStore extends ChangeNotifier {
   final Map<String, DateTime> _lastAutoSyncAttempt = {};
   final Map<String, String> _lanPeerErrors = {};
 
-  VaultStatus vaultStatus = const VaultStatus.unavailable();
-  VaultScanResult? pendingVaultScan;
+  VaultStatus get vaultStatus => _vaultCoordinator.status;
+  set vaultStatus(VaultStatus value) => _vaultCoordinator.status = value;
+  VaultScanResult? get pendingVaultScan => _vaultCoordinator.pendingScan;
+  set pendingVaultScan(VaultScanResult? value) =>
+      _vaultCoordinator.pendingScan = value;
   bool vaultBusy = false;
   String? get lastEmergencyBackupPath =>
       _restoreCoordinator.lastEmergencyBackupPath;
@@ -195,7 +213,6 @@ class AppStore extends ChangeNotifier {
   String? get nextUndoLabel => _undoJournal.nextLabel;
 
   Timer? _syncRefreshDebounce;
-  Timer? _vaultMirrorDebounce;
   Timer? _lanPresenceTimer;
   LanAutoSyncNode? _autoSyncNode;
   StreamSubscription<LanDiscoveredPeer>? _autoSyncPeerSubscription;
@@ -1185,7 +1202,7 @@ class AppStore extends ChangeNotifier {
   Future<void> _shutdown() async {
     _timerService.dispose();
     _syncRefreshDebounce?.cancel();
-    _vaultMirrorDebounce?.cancel();
+    _vaultCoordinator.dispose();
     _lanPresenceTimer?.cancel();
     await _mutationQueue.drain();
     await _autoSyncPeerSubscription?.cancel();
@@ -1911,161 +1928,47 @@ class AppStore extends ChangeNotifier {
 
   Future<void> _initializeVaultFoundation({
     required bool allowAutomaticWrite,
-  }) async {
-    try {
-      vaultStatus = await _vaultService.inspect();
-      if (vaultStatus.supported) {
-        pendingVaultScan = await _vaultService.scan(data);
-        if (allowAutomaticWrite && !pendingVaultScan!.hasChanges) {
-          vaultStatus = await _vaultService.writeMirror(data);
-          pendingVaultScan = await _vaultService.scan(data);
-        }
-        _mergeVaultScanIntoStatus(
-          messageOverride:
-              !allowAutomaticWrite
-                  ? pendingVaultScan!.hasChanges
-                      ? 'Найдены данные Vault. Автоматическая запись отключена '
-                          'до просмотра изменений.'
-                      : 'Новая локальная база создана. Автоматическая запись '
-                          'в Vault пропущена для защиты существующих файлов.'
-                  : null,
-        );
-      }
-    } on Object catch (error) {
-      vaultStatus = VaultStatus.unavailable(message: error.toString());
-      pendingVaultScan = null;
-    }
-  }
+  }) => _vaultCoordinator.initialize(allowAutomaticWrite: allowAutomaticWrite);
 
-  Future<void> refreshVaultStatus({bool notify = true}) async {
-    try {
-      vaultStatus = await _vaultService.inspect();
-      if (vaultStatus.supported) {
-        pendingVaultScan = await _vaultService.scan(data);
-        _mergeVaultScanIntoStatus();
-      }
-    } on Object catch (error) {
-      vaultStatus = VaultStatus.unavailable(message: error.toString());
-      pendingVaultScan = null;
-    }
-    if (notify) {
-      notifyListeners();
-    }
-  }
+  Future<void> refreshVaultStatus({bool notify = true}) =>
+      _vaultCoordinator.refreshStatus(notify: notify);
 
-  Future<VaultScanResult> scanVaultChanges({bool notify = true}) async {
-    final scan = await _vaultService.scan(data);
-    pendingVaultScan = scan;
-    _mergeVaultScanIntoStatus();
-    if (notify) {
-      notifyListeners();
-    }
-    return scan;
-  }
+  Future<VaultScanResult> scanVaultChanges({bool notify = true}) =>
+      _vaultCoordinator.scanChanges(notify: notify);
 
-  void _mergeVaultScanIntoStatus({String? messageOverride}) {
-    final scan = pendingVaultScan;
-    if (scan == null) {
-      return;
-    }
-    vaultStatus = vaultStatus.copyWith(
-      pendingChangeCount: scan.pendingCount,
-      conflictCount: scan.conflicts.length,
-      missingFileCount: scan.missingFiles.length,
-      message:
-          messageOverride ??
-          (scan.hasChanges
-              ? 'Найдены внешние изменения. Просмотри их перед импортом.'
-              : 'Chronicle и Markdown Vault синхронизированы.'),
-    );
-  }
+  void _mergeVaultScanIntoStatus({String? messageOverride}) =>
+      _vaultCoordinator.mergePendingScan(messageOverride: messageOverride);
 
-  Future<void> writeVaultMirror() async {
-    if (vaultBusy) {
-      return;
-    }
-    vaultBusy = true;
-    notifyListeners();
-    try {
-      vaultStatus = await _vaultService.writeMirror(data);
-      pendingVaultScan = await _vaultService.scan(data);
-      _mergeVaultScanIntoStatus();
-    } finally {
-      vaultBusy = false;
-      notifyListeners();
-    }
-  }
+  Future<void> writeVaultMirror() => _vaultCoordinator.writeMirror();
 
-  Future<bool> chooseVaultFolder() async {
-    if (vaultBusy) {
-      return false;
-    }
-    vaultBusy = true;
-    notifyListeners();
-    try {
-      final result = await _vaultService.chooseRootAndWrite(data);
-      if (result == null) {
-        return false;
-      }
-      vaultStatus = result;
-      pendingVaultScan = await _vaultService.scan(data);
-      _mergeVaultScanIntoStatus();
-      return true;
-    } finally {
-      vaultBusy = false;
-      notifyListeners();
-    }
-  }
+  Future<bool> chooseVaultFolder() => _vaultCoordinator.chooseFolder();
 
   Future<Uint8List?> readManagedAttachment(String relativePath) {
-    return _vaultService.readManagedAttachment(relativePath);
+    return _vaultCoordinator.readManagedAttachment(relativePath);
   }
 
-  Future<AttachmentImportResult?> pickAttachmentForNote(Note note) async {
-    final result = await _vaultService.pickAndStoreAttachment(note);
-    if (result != null) {
-      _notifyAttachmentRefresh();
-    }
-    return result;
-  }
+  Future<AttachmentImportResult?> pickAttachmentForNote(Note note) =>
+      _vaultCoordinator.pickAttachmentForNote(note);
 
   Future<AttachmentImportResult> storeAttachmentBytesForNote(
     Note note, {
     required String fileName,
     required Uint8List bytes,
-  }) async {
-    final result = await _vaultService.storeAttachmentBytes(
-      note: note,
-      originalName: fileName,
-      bytes: bytes,
-    );
-    _notifyAttachmentRefresh();
-    return result;
-  }
+  }) => _vaultCoordinator.storeAttachmentBytesForNote(
+    note,
+    fileName: fileName,
+    bytes: bytes,
+  );
 
   Future<List<AttachmentImportResult>> storeAttachmentBatchForNote(
     Note note, {
     required List<String> fileNames,
     required List<Uint8List> fileBytes,
-  }) async {
-    if (fileNames.length != fileBytes.length) {
-      throw ArgumentError('Количество имён и файлов должно совпадать.');
-    }
-    final results = <AttachmentImportResult>[];
-    for (var index = 0; index < fileNames.length; index += 1) {
-      results.add(
-        await _vaultService.storeAttachmentBytes(
-          note: note,
-          originalName: fileNames[index],
-          bytes: fileBytes[index],
-        ),
-      );
-    }
-    if (results.isNotEmpty) {
-      _notifyAttachmentRefresh();
-    }
-    return List<AttachmentImportResult>.unmodifiable(results);
-  }
+  }) => _vaultCoordinator.storeAttachmentBatchForNote(
+    note,
+    fileNames: fileNames,
+    fileBytes: fileBytes,
+  );
 
   Future<VaultApplyResult> applyVaultChanges(
     VaultScanResult scan, {
@@ -2073,207 +1976,14 @@ class AppStore extends ChangeNotifier {
     Map<String, VaultConflictResolution> conflictResolutions = const {},
     VaultMissingFileResolution missingFileResolution =
         VaultMissingFileResolution.restoreFiles,
-  }) async {
-    if (vaultBusy) {
-      throw StateError('Vault уже занят другой операцией.');
-    }
-    vaultBusy = true;
-    notifyListeners();
+  }) => _vaultCoordinator.applyChanges(
+    scan,
+    conflictResolution: conflictResolution,
+    conflictResolutions: conflictResolutions,
+    missingFileResolution: missingFileResolution,
+  );
 
-    var createdCount = 0;
-    var updatedCount = 0;
-    var duplicatedCount = 0;
-    var keptChronicleCount = 0;
-    var deletedCount = 0;
-    String? safetyBackupPath;
-
-    try {
-      await _vaultService.verifyRevision(scan.revision);
-      final needsSafetyBackup =
-          scan.conflicts.isNotEmpty ||
-          (missingFileResolution == VaultMissingFileResolution.deleteNotes &&
-              scan.missingFiles.isNotEmpty);
-      if (needsSafetyBackup) {
-        final snapshot = await _vaultService.createEmergencyBackupSnapshot(
-          data: data,
-          identity: deviceIdentity,
-        );
-        safetyBackupPath = snapshot.path;
-        lastEmergencyBackupPath = snapshot.path;
-      }
-      for (final change in scan.safeChanges) {
-        if (change.isNew || noteById(change.currentNoteId ?? '') == null) {
-          await _createNoteFromVault(change.proposedNote);
-          createdCount++;
-        } else {
-          await _overwriteNoteFromVault(
-            noteById(change.currentNoteId!)!,
-            change.proposedNote,
-          );
-          updatedCount++;
-        }
-      }
-
-      for (final conflict in scan.conflicts) {
-        final current = noteById(conflict.currentNoteId ?? '');
-        if (current == null) {
-          await _createNoteFromVault(conflict.proposedNote);
-          createdCount++;
-          continue;
-        }
-        final resolution =
-            conflictResolutions[conflict.decisionKey] ?? conflictResolution;
-        switch (resolution) {
-          case VaultConflictResolution.keepChronicle:
-            keptChronicleCount++;
-            break;
-          case VaultConflictResolution.importFile:
-            await _overwriteNoteFromVault(current, conflict.proposedNote);
-            updatedCount++;
-            break;
-          case VaultConflictResolution.keepBoth:
-            await _createNoteFromVault(
-              conflict.proposedNote,
-              forceNewId: true,
-              titleSuffix: ' (конфликтная версия Vault)',
-            );
-            duplicatedCount++;
-            break;
-        }
-      }
-
-      if (missingFileResolution == VaultMissingFileResolution.deleteNotes) {
-        for (final missing in scan.missingFiles) {
-          if (noteById(missing.noteId) == null) {
-            continue;
-          }
-          await _deleteNoteFromVault(missing.noteId);
-          deletedCount++;
-        }
-      }
-
-      await rebuildAllNoteLinks();
-      await refreshSyncFoundation(notify: false);
-      vaultStatus = await _vaultService.rewriteAfterApply(data, scan);
-      pendingVaultScan = await _vaultService.scan(data);
-      _mergeVaultScanIntoStatus();
-      _notifyAttachmentRefresh();
-
-      return VaultApplyResult(
-        createdCount: createdCount,
-        updatedCount: updatedCount,
-        duplicatedCount: duplicatedCount,
-        keptChronicleCount: keptChronicleCount,
-        restoredFileCount:
-            missingFileResolution == VaultMissingFileResolution.restoreFiles
-                ? scan.missingFiles.length
-                : 0,
-        deletedCount: deletedCount,
-        safetyBackupPath: safetyBackupPath,
-      );
-    } finally {
-      vaultBusy = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> _createNoteFromVault(
-    Note source, {
-    bool forceNewId = false,
-    String titleSuffix = '',
-  }) async {
-    if (data.projects.isEmpty) {
-      throw StateError('Сначала создай хотя бы один проект.');
-    }
-    final projectId =
-        data.projects.any((project) => project.id == source.projectId)
-            ? source.projectId
-            : data.projects.first.id;
-    final imported = Note(
-      id: forceNewId || noteById(source.id) != null ? _uuid.v4() : source.id,
-      title: '${source.title}$titleSuffix',
-      projectId: projectId,
-      body: '',
-      tags: List<String>.from(source.tags),
-      status: source.status,
-      folderPath: source.folderPath,
-      noteType: source.noteType,
-      properties: Map<String, String>.from(source.properties),
-      pinned: source.pinned,
-      revision: source.revision < 1 ? 1 : source.revision,
-      createdAt: source.createdAt,
-      updatedAt: DateTime.now(),
-    );
-    imported.body = NoteDocument.serialize(
-      imported,
-      NoteDocument.parse(source.body).content,
-    );
-    data.notes.add(imported);
-    await _repository.saveNote(imported);
-  }
-
-  Future<void> _deleteNoteFromVault(String noteId) async {
-    final deletedAt = DateTime.now();
-    final noteIndex = data.notes.indexWhere((note) => note.id == noteId);
-    if (noteIndex < 0) {
-      return;
-    }
-
-    data.notes.removeAt(noteIndex);
-    data.noteLinks.removeWhere(
-      (link) => link.sourceNoteId == noteId || link.targetNoteId == noteId,
-    );
-    for (final task in data.tasks.where((task) => task.noteId == noteId)) {
-      task.noteId = null;
-      task.updatedAt = deletedAt;
-      await _repository.saveTask(task);
-    }
-    await _repository.replaceNoteLinks(noteId, const []);
-    await _repository.softDeleteNote(noteId, deletedAt);
-  }
-
-  Future<void> _overwriteNoteFromVault(Note current, Note source) async {
-    final version = NoteVersion(
-      id: _uuid.v4(),
-      noteId: current.id,
-      title: current.title,
-      body: current.body,
-      tags: List<String>.from(current.tags),
-      status: current.status,
-      folderPath: current.folderPath,
-      noteType: current.noteType,
-      properties: Map<String, String>.from(current.properties),
-      reason: 'Перед импортом из Markdown Vault',
-    );
-    data.noteVersions.insert(0, version);
-    await _repository.saveNoteVersion(version);
-
-    current.title = source.title;
-    current.projectId =
-        data.projects.any((project) => project.id == source.projectId)
-            ? source.projectId
-            : current.projectId;
-    current.tags = List<String>.from(source.tags);
-    current.status = source.status;
-    current.folderPath = source.folderPath;
-    current.noteType = source.noteType;
-    current.properties = Map<String, String>.from(source.properties);
-    current.pinned = source.pinned;
-    current.revision += 1;
-    current.updatedAt = DateTime.now();
-    current.body = NoteDocument.serialize(
-      current,
-      NoteDocument.parse(source.body).content,
-    );
-    await _repository.saveNote(current);
-  }
-
-  void _scheduleVaultMirror() {
-    _vaultMirrorDebounce?.cancel();
-    _vaultMirrorDebounce = Timer(const Duration(milliseconds: 700), () {
-      unawaited(writeVaultMirror());
-    });
-  }
+  void _scheduleVaultMirror() => _vaultCoordinator.scheduleMirror();
 
   Future<void> _initializeReliability() async {
     if (!_reliabilityFeaturesEnabled) {
@@ -2723,6 +2433,7 @@ class AppStore extends ChangeNotifier {
   void dispose() {
     unawaited(shutdown());
     _timerService.dispose();
+    _vaultCoordinator.dispose();
     _attachmentRefreshNotifier.dispose();
     super.dispose();
   }
