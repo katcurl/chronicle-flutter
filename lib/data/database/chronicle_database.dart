@@ -351,18 +351,22 @@ QueryExecutor _openConnection() {
 }
 
 Future<String> _resolveDatabasePath() async {
-  final supportDirectory = await getApplicationSupportDirectory();
-  final databaseDirectory = Directory(
-    path.join(supportDirectory.path, 'Chronicle'),
-  );
+  final target = File(await locateChronicleDatabasePath());
+  final databaseDirectory = target.parent;
   await databaseDirectory.create(recursive: true);
 
-  final target = File(path.join(databaseDirectory.path, 'chronicle.sqlite'));
   if (!await target.exists() && (Platform.isAndroid || Platform.isIOS)) {
     await _copyLegacyMobileDatabase(target);
   }
 
   return target.path;
+}
+
+/// Resolves the production database location without creating, migrating, or
+/// opening any file. Recovery preflight uses this to remain strictly read-only.
+Future<String> locateChronicleDatabasePath() async {
+  final supportDirectory = await getApplicationSupportDirectory();
+  return path.join(supportDirectory.path, 'Chronicle', 'chronicle.sqlite');
 }
 
 Future<void> _copyLegacyMobileDatabase(File target) async {

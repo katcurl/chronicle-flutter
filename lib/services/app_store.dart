@@ -171,6 +171,7 @@ class AppStore extends ChangeNotifier {
   LanAutoSyncNode? _autoSyncNode;
   StreamSubscription<LanDiscoveredPeer>? _autoSyncPeerSubscription;
   StreamSubscription<LanSyncReport>? _autoSyncHostReportSubscription;
+  Future<void>? _shutdownFuture;
   int nowTick = 0;
 
   Future<void> load() async {
@@ -1239,6 +1240,25 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> flushPendingWrites() => _mutationQueue.drain();
+
+  Future<void> shutdown() {
+    return _shutdownFuture ??= _shutdown();
+  }
+
+  Future<void> _shutdown() async {
+    _ticker?.cancel();
+    _syncRefreshDebounce?.cancel();
+    _vaultMirrorDebounce?.cancel();
+    _lanPresenceTimer?.cancel();
+    await _mutationQueue.drain();
+    await _autoSyncPeerSubscription?.cancel();
+    await _autoSyncHostReportSubscription?.cancel();
+    final node = _autoSyncNode;
+    if (node != null) {
+      await node.close();
+    }
+    await _repository.close();
+  }
 
   Future<void> addNoteVersion(NoteVersion version) {
     final persisted = NoteVersion.fromJson(
@@ -2920,17 +2940,7 @@ class AppStore extends ChangeNotifier {
 
   @override
   void dispose() {
-    _ticker?.cancel();
-    _syncRefreshDebounce?.cancel();
-    _vaultMirrorDebounce?.cancel();
-    _lanPresenceTimer?.cancel();
-    unawaited(_autoSyncPeerSubscription?.cancel());
-    unawaited(_autoSyncHostReportSubscription?.cancel());
-    final node = _autoSyncNode;
-    if (node != null) {
-      unawaited(node.close());
-    }
-    unawaited(_repository.close());
+    unawaited(shutdown());
     _attachmentRefreshNotifier.dispose();
     super.dispose();
   }

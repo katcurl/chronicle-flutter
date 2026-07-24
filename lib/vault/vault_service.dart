@@ -1060,6 +1060,58 @@ class VaultService {
     return _inspectBackupBytes(picked.bytes, sourceName: entry.fileName);
   }
 
+  Future<List<BackupCatalogEntry>> listRecoveryBackups() async {
+    final rootPath = await _backend.resolveRootPath();
+    if (rootPath == null || rootPath.isEmpty) {
+      return const <BackupCatalogEntry>[];
+    }
+    final files = await _backend.listRecoveryBackups(rootPath: rootPath);
+    final entries = <BackupCatalogEntry>[];
+    for (final file in files) {
+      try {
+        _validateRawBackupByteLength(file.byteLength);
+        final picked = await _backend.readBackupPath(file.path);
+        if (picked == null) {
+          throw const FormatException('Файл резервной копии недоступен.');
+        }
+        final payload = _inspectBackupBytes(
+          picked.bytes,
+          sourceName: file.name,
+        );
+        entries.add(
+          BackupCatalogEntry(
+            path: file.path,
+            fileName: file.name,
+            modifiedAt: file.modifiedAt,
+            byteLength: file.byteLength,
+            preview: payload.preview,
+          ),
+        );
+      } on Object catch (error) {
+        entries.add(
+          BackupCatalogEntry(
+            path: file.path,
+            fileName: file.name,
+            modifiedAt: file.modifiedAt,
+            byteLength: file.byteLength,
+            validationError: _backupValidationMessage(error),
+          ),
+        );
+      }
+    }
+    return entries;
+  }
+
+  Future<BackupImportPayload> loadRecoveryBackup(
+    BackupCatalogEntry entry,
+  ) async {
+    final picked = await _backend.readBackupPath(entry.path);
+    if (picked == null) {
+      throw const FormatException('Файл резервной копии больше недоступен.');
+    }
+    return _inspectBackupBytes(picked.bytes, sourceName: entry.fileName);
+  }
+
   Future<BackupImportPayload?> pickBackup() async {
     final selected = await _backend.pickBackup();
     if (selected == null) {

@@ -7,6 +7,9 @@ import 'package:flutter/material.dart';
 import 'features/appearance/app_appearance.dart';
 import 'features/appearance/app_appearance_store.dart';
 import 'features/appearance/app_appearance_theme.dart';
+import 'recovery/recovery_models.dart';
+import 'recovery/recovery_service.dart';
+import 'screens/recovery_screen.dart';
 import 'services/app_store.dart';
 import 'shells/home_shell.dart';
 
@@ -16,9 +19,16 @@ void main() {
 }
 
 class ChronicleApp extends StatefulWidget {
-  const ChronicleApp({super.key, this.store});
+  const ChronicleApp({
+    super.key,
+    this.store,
+    this.storeFactory,
+    this.recoveryService,
+  });
 
   final AppStore? store;
+  final AppStore Function()? storeFactory;
+  final RecoveryService? recoveryService;
 
   @override
   State<ChronicleApp> createState() => _ChronicleAppState();
@@ -26,23 +36,37 @@ class ChronicleApp extends StatefulWidget {
 
 class _ChronicleAppState extends State<ChronicleApp>
     with WidgetsBindingObserver {
-  late final AppStore store;
+  late AppStore store;
+  late final AppStore Function()? _storeFactory;
+  late final RecoveryService _recoveryService;
   final AppAppearanceStore _appearanceStore = AppAppearanceStore();
   AppAppearancePreferences _appearance = AppAppearancePreferences.defaults();
   File? _backgroundFile;
+  RecoveryInspection _recoveryInspection = RecoveryInspection.empty();
+  bool _bootstrapping = true;
+  String? _startupTechnicalCode;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    store = widget.store ?? AppStore.production();
-    store.load();
+    _storeFactory =
+        widget.storeFactory ??
+        (widget.store == null ? AppStore.production : null);
+    store = widget.store ?? _storeFactory!.call();
+    _recoveryService =
+        widget.recoveryService ??
+        (widget.store == null ? RecoveryService() : RecoveryService.disabled());
+    unawaited(_bootstrap());
     unawaited(_loadAppearance());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed &&
+        !_bootstrapping &&
+        store.loadError == null &&
+        !_recoveryInspection.hasBlockingProblems) {
       store.handleAppResumed();
     }
   }
@@ -94,11 +118,17 @@ class _ChronicleAppState extends State<ChronicleApp>
   }
 
   Widget _home() {
-    if (!store.ready) {
+    if (_bootstrapping || !store.ready && store.loadError == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (store.loadError != null) {
-      return _DatabaseErrorScreen(error: store.loadError!, onRetry: store.load);
+    if (_recoveryInspection.hasBlockingProblems || store.loadError != null) {
+      return RecoveryScreen(
+        service: _recoveryService,
+        initialInspection: _recoveryInspection,
+        technicalCode: _startupTechnicalCode,
+        onRetry: _bootstrap,
+        onRestore: _restoreCandidate,
+      );
     }
     return HomeShell(
       store: store,
@@ -107,6 +137,79 @@ class _ChronicleAppState extends State<ChronicleApp>
           _backgroundFile == null ? null : FileImage(_backgroundFile!),
       onAppearanceChanged: _updateAppearance,
     );
+  }
+
+  Future<void> _bootstrap() async {
+    if (mounted) {
+      setState(() {
+        _bootstrapping = true;
+        _startupTechnicalCode = null;
+      });
+    }
+    RecoveryInspection inspection;
+    try {
+      inspection = await _recoveryService.inspectForStartup();
+    } on Object {
+      inspection = RecoveryInspection(
+        candidates: const <RecoveryCandidate>[
+          RecoveryCandidate(
+            id: 'preflight-failed',
+            kind: RecoveryCandidateKind.startupFailure,
+            title: 'Безопасная проверка не завершена',
+            description:
+                'Chronicle остановил запуск, не изменяя исходные файлы.',
+            severity: RecoverySeverity.blocking,
+          ),
+        ],
+      );
+      _startupTechnicalCode = 'preflight-unavailable';
+    }
+
+    if (!inspection.hasBlockingProblems) {
+      await store.load();
+      if (store.loadError != null) {
+        _startupTechnicalCode = 'database-open-${store.loadError.runtimeType}';
+      }
+    } else {
+      _startupTechnicalCode ??= 'preflight-blocked';
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _recoveryInspection = inspection;
+      _bootstrapping = false;
+    });
+  }
+
+  Future<void> _restoreCandidate(RecoveryCandidate candidate) async {
+    final factory = _storeFactory;
+    if (factory == null) {
+      throw StateError(
+        'Для этого экземпляра Chronicle не задана фабрика AppStore.',
+      );
+    }
+    final previousStore = store;
+    await previousStore.shutdown();
+    previousStore.dispose();
+    Object? failure;
+    try {
+      await _recoveryService.restoreCandidate(candidate);
+    } on Object catch (error) {
+      failure = error;
+    }
+    store = factory();
+    if (mounted) {
+      setState(() {
+        _bootstrapping = failure == null;
+        if (failure != null) {
+          _startupTechnicalCode = 'restore-${failure.runtimeType}';
+        }
+      });
+    }
+    if (failure != null) {
+      throw StateError('Восстановление остановлено безопасно.');
+    }
+    await _bootstrap();
   }
 
   Future<void> _loadAppearance() async {
@@ -134,58 +237,5 @@ class _ChronicleAppState extends State<ChronicleApp>
       _appearance = saved;
       _backgroundFile = backgroundFile;
     });
-  }
-}
-
-class _DatabaseErrorScreen extends StatelessWidget {
-  const _DatabaseErrorScreen({required this.error, required this.onRetry});
-
-  final Object error;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.storage_rounded,
-                    size: 56,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    'Не удалось открыть базу Chronicle',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    '$error',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 22),
-                  FilledButton.icon(
-                    onPressed: onRetry,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Повторить'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

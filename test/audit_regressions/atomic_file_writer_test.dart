@@ -125,4 +125,13 @@ final class _RecordingAtomicFileWriter implements AtomicFileWriter {
     }
     await _delegate.replace(targetPath, bytes);
   }
+
+  @override
+  Future<void> replaceFile(String targetPath, String sourcePath) async {
+    paths.add(targetPath);
+    if (paths.length == failAtCall) {
+      throw StateError('Injected atomic replacement failure.');
+    }
+    await _delegate.replaceFile(targetPath, sourcePath);
+  }
 }

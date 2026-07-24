@@ -49,6 +49,29 @@ final class PosixAtomicFileWriter implements AtomicFileWriter {
     }
   }
 
+  @override
+  Future<void> replaceFile(String targetPath, String sourcePath) async {
+    final target = File(targetPath);
+    final source = File(sourcePath);
+    if (!await source.exists()) {
+      throw FileSystemException(
+        'Atomic replacement source is missing.',
+        sourcePath,
+      );
+    }
+    if (p.dirname(source.absolute.path) != p.dirname(target.absolute.path)) {
+      throw FileSystemException(
+        'Atomic replacement source must share the target directory.',
+        sourcePath,
+      );
+    }
+    await target.parent.create(recursive: true);
+    _onCutPoint?.call(AtomicWriteCutPoint.beforeReplace);
+    await source.rename(target.path);
+    _fsyncDirectory(target.parent.path);
+    _onCutPoint?.call(AtomicWriteCutPoint.afterReplace);
+  }
+
   Future<void> _removeStaleTemps(File target) async {
     final cutoff = DateTime.now().subtract(const Duration(hours: 24));
     final name = RegExp.escape(p.basename(target.path));

@@ -526,10 +526,7 @@ class DriftAppRepository implements AppRepository {
       final decoded = jsonDecode(value) as Map<String, dynamic>;
       return ActiveTimerState.fromJson(decoded);
     } on Object {
-      await _database.customStatement('DELETE FROM app_state WHERE key = ?', [
-        _activeTimerKey,
-      ]);
-      return null;
+      throw const FormatException('Системная запись active_timer повреждена.');
     }
   }
 

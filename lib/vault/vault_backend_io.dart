@@ -372,6 +372,41 @@ class VaultBackend {
     return result;
   }
 
+  Future<List<VaultBackupFileInfo>> listRecoveryBackups({
+    required String rootPath,
+    int maxFiles = 50,
+  }) async {
+    final resolved = await _resolveExistingOrNull(
+      rootPath,
+      '.chronicle/Backups',
+    );
+    if (resolved == null) {
+      return const <VaultBackupFileInfo>[];
+    }
+    final result = <VaultBackupFileInfo>[];
+    await for (final entity in Directory(
+      resolved,
+    ).list(recursive: true, followLinks: false)) {
+      if (entity is! File || !entity.path.endsWith('.chronicle')) {
+        continue;
+      }
+      final stat = await entity.stat();
+      result.add(
+        VaultBackupFileInfo(
+          path: entity.path,
+          name: p.basename(entity.path),
+          modifiedAt: stat.modified,
+          byteLength: stat.size,
+        ),
+      );
+      if (result.length >= maxFiles.clamp(1, 100)) {
+        break;
+      }
+    }
+    result.sort((left, right) => right.modifiedAt.compareTo(left.modifiedAt));
+    return result;
+  }
+
   Future<PickedVaultFile?> readBackupPath(String path) async {
     final file = File(path);
     if (!path.endsWith('.chronicle') || !await file.exists()) {

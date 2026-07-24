@@ -137,6 +137,11 @@ class VaultBackend {
     required String rootPath,
   }) async => const <VaultBackupFileInfo>[];
 
+  Future<List<VaultBackupFileInfo>> listRecoveryBackups({
+    required String rootPath,
+    int maxFiles = 50,
+  }) async => const <VaultBackupFileInfo>[];
+
   Future<PickedVaultFile?> readBackupPath(String path) async => null;
 
   Future<String> writeEmergencyBackup({
