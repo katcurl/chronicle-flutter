@@ -6,6 +6,8 @@ import 'package:path/path.dart' as p;
 import 'package:synchronized/synchronized.dart';
 import 'package:uuid/uuid.dart';
 
+import '../data/backup/backup_limits.dart';
+import '../data/backup/staged_restore.dart';
 import '../features/notes/note_document.dart';
 import '../models/app_models.dart';
 import '../sync/attachment_sync_models.dart';
@@ -15,18 +17,24 @@ import 'vault_models.dart';
 import 'vault_revision.dart';
 
 class VaultService {
-  VaultService({VaultBackend? backend}) : _backend = backend ?? VaultBackend();
+  VaultService({
+    VaultBackend? backend,
+    BackupResourceLimits backupLimits = const BackupResourceLimits(),
+  }) : _backend = backend ?? VaultBackend(),
+       _backupLimits = backupLimits;
 
-  static const int backupFormatVersion = 2;
+  static const int backupFormatVersion = 3;
   static const int currentVaultFormatVersion = 2;
   static const int minimumReadableVaultFormatVersion = 1;
   static const String _indexPath = '.chronicle/vault-index.json';
   static const String _attachmentIndexPath =
       '.chronicle/attachments-index.json';
+  static const String _restoreMarkerPath = '.chronicle/restore-marker.json';
   static const int maxAttachmentBytes = 100 * 1024 * 1024;
   static const String _manifestPath = 'manifest.json';
 
   final VaultBackend _backend;
+  final BackupResourceLimits _backupLimits;
   final Uuid _uuid = const Uuid();
   static final Lock _attachmentMutationLock = Lock(reentrant: true);
 
@@ -1009,12 +1017,15 @@ class VaultService {
     final entries = <BackupCatalogEntry>[];
     for (final file in files) {
       try {
+        _validateRawBackupByteLength(file.byteLength);
         final picked = await _backend.readBackupPath(file.path);
         if (picked == null) {
           throw const FormatException('Файл резервной копии недоступен.');
         }
-        final raw = utf8.decode(picked.bytes, allowMalformed: false);
-        final payload = inspectBackup(raw, sourceName: file.name);
+        final payload = _inspectBackupBytes(
+          picked.bytes,
+          sourceName: file.name,
+        );
         entries.add(
           BackupCatalogEntry(
             path: file.path,
@@ -1046,8 +1057,7 @@ class VaultService {
     if (picked == null) {
       throw const FormatException('Файл резервной копии больше недоступен.');
     }
-    final raw = utf8.decode(picked.bytes, allowMalformed: false);
-    return inspectBackup(raw, sourceName: entry.fileName);
+    return _inspectBackupBytes(picked.bytes, sourceName: entry.fileName);
   }
 
   Future<BackupImportPayload?> pickBackup() async {
@@ -1055,14 +1065,38 @@ class VaultService {
     if (selected == null) {
       return null;
     }
-    final raw = utf8.decode(selected.bytes, allowMalformed: false);
-    return inspectBackup(raw, sourceName: selected.name);
+    return _inspectBackupBytes(selected.bytes, sourceName: selected.name);
   }
 
   BackupImportPayload inspectBackup(
     String raw, {
     String sourceName = 'backup.chronicle',
   }) {
+    return _inspectBackupRaw(
+      raw,
+      sourceName: sourceName,
+      rawByteLength: utf8.encode(raw).length,
+    );
+  }
+
+  BackupImportPayload _inspectBackupBytes(
+    Uint8List bytes, {
+    required String sourceName,
+  }) {
+    _validateRawBackupByteLength(bytes.length);
+    return _inspectBackupRaw(
+      utf8.decode(bytes, allowMalformed: false),
+      sourceName: sourceName,
+      rawByteLength: bytes.length,
+    );
+  }
+
+  BackupImportPayload _inspectBackupRaw(
+    String raw, {
+    required String sourceName,
+    required int rawByteLength,
+  }) {
+    _validateRawBackupByteLength(rawByteLength);
     final decoded = jsonDecode(raw);
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException('Некорректная структура резервной копии.');
@@ -1113,28 +1147,117 @@ class VaultService {
     }
 
     final rawAttachments = decoded['attachmentsBase64'];
+    if (rawAttachments != null && rawAttachments is! Map) {
+      throw const FormatException('Некорректный список вложений.');
+    }
+    final attachmentEntries =
+        rawAttachments is Map
+            ? rawAttachments.entries.toList(growable: false)
+            : const <MapEntry<dynamic, dynamic>>[];
+    if (attachmentEntries.length > _backupLimits.maxAttachmentCount) {
+      throw BackupLimitException(
+        'В резервной копии больше '
+        '${_backupLimits.maxAttachmentCount} вложений.',
+      );
+    }
+    final rawMetadata = decoded['attachmentMetadata'];
+    if (formatVersion >= 3 && rawMetadata is! Map) {
+      throw const FormatException(
+        'В резервной копии отсутствуют размеры вложений.',
+      );
+    }
+    final metadata =
+        rawMetadata is Map ? rawMetadata : const <Object?, Object?>{};
+    final candidates = <_EncodedBackupAttachment>[];
+    var estimatedTotalBytes = 0;
+    for (final entry in attachmentEntries) {
+      final relativePath = entry.key.toString();
+      if (!_validAttachmentPath(relativePath) || entry.value is! String) {
+        throw FormatException('Некорректное вложение: $relativePath');
+      }
+      final encoded = entry.value! as String;
+      final estimatedBytes = _estimatedBase64DecodedLength(encoded);
+      if (estimatedBytes > _backupLimits.maxAttachmentBytes) {
+        throw BackupLimitException(
+          'Превышен лимит размера одного вложения '
+          '(${_backupLimits.maxAttachmentBytes} байт).',
+        );
+      }
+      estimatedTotalBytes += estimatedBytes;
+      if (estimatedTotalBytes > _backupLimits.maxDecodedAttachmentBytes) {
+        throw BackupLimitException(
+          'Превышен общий лимит вложений '
+          '(${_backupLimits.maxDecodedAttachmentBytes} байт).',
+        );
+      }
+      int? declaredLength;
+      if (formatVersion >= 3) {
+        final rawEntryMetadata = metadata[relativePath];
+        if (rawEntryMetadata is! Map ||
+            rawEntryMetadata['byteLength'] is! int) {
+          throw FormatException('Не указан размер вложения $relativePath.');
+        }
+        declaredLength = rawEntryMetadata['byteLength']! as int;
+        if (declaredLength < 0 ||
+            declaredLength > _backupLimits.maxAttachmentBytes) {
+          throw BackupLimitException(
+            'Заявленный размер вложения $relativePath превышает лимит.',
+          );
+        }
+      }
+      candidates.add(
+        _EncodedBackupAttachment(
+          relativePath: relativePath,
+          encoded: encoded,
+          declaredLength: declaredLength,
+        ),
+      );
+    }
+    if (formatVersion >= 3 && metadata.length != candidates.length) {
+      throw const FormatException(
+        'Метаданные вложений не соответствуют их списку.',
+      );
+    }
+
     final attachments = <String, Uint8List>{};
-    if (rawAttachments is Map) {
-      for (final entry in rawAttachments.entries) {
-        final relativePath = entry.key.toString();
-        if (!_validAttachmentPath(relativePath)) {
-          throw FormatException('Некорректный путь вложения: $relativePath');
+    var decodedTotalBytes = 0;
+    for (final candidate in candidates) {
+      try {
+        final bytes = base64Decode(candidate.encoded);
+        if (bytes.length > _backupLimits.maxAttachmentBytes) {
+          throw BackupLimitException(
+            'Превышен лимит размера одного вложения '
+            '(${_backupLimits.maxAttachmentBytes} байт).',
+          );
         }
-        try {
-          final bytes = base64Decode(entry.value.toString());
-          final expected = checksums[relativePath];
-          final actual = sha256.convert(bytes).toString();
-          if (expected == null || expected != actual) {
-            throw FormatException(
-              'Контрольная сумма $relativePath не совпадает.',
-            );
-          }
-          attachments[relativePath] = bytes;
-        } on FormatException {
-          rethrow;
-        } on Object {
-          throw FormatException('Вложение $relativePath повреждено.');
+        decodedTotalBytes += bytes.length;
+        if (decodedTotalBytes > _backupLimits.maxDecodedAttachmentBytes) {
+          throw BackupLimitException(
+            'Превышен общий лимит вложений '
+            '(${_backupLimits.maxDecodedAttachmentBytes} байт).',
+          );
         }
+        if (candidate.declaredLength != null &&
+            candidate.declaredLength != bytes.length) {
+          throw FormatException(
+            'Заявленный размер ${candidate.relativePath} '
+            'не совпадает с фактическим.',
+          );
+        }
+        final expected = checksums[candidate.relativePath];
+        final actual = sha256.convert(bytes).toString();
+        if (expected == null || expected != actual) {
+          throw FormatException(
+            'Контрольная сумма ${candidate.relativePath} не совпадает.',
+          );
+        }
+        attachments[candidate.relativePath] = bytes;
+      } on BackupLimitException {
+        rethrow;
+      } on FormatException {
+        rethrow;
+      } on Object {
+        throw FormatException('Вложение ${candidate.relativePath} повреждено.');
       }
     }
 
@@ -1168,6 +1291,182 @@ class VaultService {
 
   Future<void> restoreAttachments(BackupImportPayload payload) {
     return replaceAttachments(payload);
+  }
+
+  AppData validateBackupPayload(BackupImportPayload payload) {
+    if (!payload.preview.checksumsVerified) {
+      throw const FormatException(
+        'Резервная копия не прошла проверку контрольных сумм.',
+      );
+    }
+    final candidate = AppData.decode(payload.databaseJson);
+    if (candidate.projects.length != payload.preview.projectCount ||
+        candidate.tasks.length != payload.preview.taskCount ||
+        candidate.notes.length != payload.preview.noteCount ||
+        candidate.entries.length != payload.preview.entryCount ||
+        payload.attachments.length != payload.preview.attachmentCount) {
+      throw const FormatException(
+        'Сводка резервной копии не соответствует её содержимому.',
+      );
+    }
+    _validateBackupAttachments(payload.attachments);
+    for (final path in payload.attachments.keys) {
+      if (!_validAttachmentPath(path)) {
+        throw FormatException('Некорректный путь вложения: $path');
+      }
+    }
+    final savedIndex = payload.vaultFiles[_attachmentIndexPath];
+    if (savedIndex != null) {
+      _decodeAttachmentRecords(savedIndex);
+    }
+    return candidate;
+  }
+
+  Future<StagedRestoreMarker> stageRestoreAttachments({
+    required BackupImportPayload payload,
+    required String restoreId,
+    required String oldGeneration,
+    required String newGeneration,
+  }) {
+    return _attachmentMutationLock.synchronized(() async {
+      final rootPath = await _requireVaultRoot();
+      if (await readStagedRestoreMarker() != null) {
+        throw StateError('Предыдущее staged-восстановление ещё не завершено.');
+      }
+      _validateBackupAttachments(payload.attachments);
+      final stageBase = _restoreStageBase(restoreId);
+      if (await _backend.managedDirectoryExists(rootPath, stageBase)) {
+        throw StateError('Папка staged-восстановления уже существует.');
+      }
+      final records = _attachmentRecordsForRestore(payload);
+      final indexRaw = _encodeAttachmentRecords(records);
+      final expectedHashes = <String, String>{
+        for (final entry in payload.attachments.entries)
+          entry.key: sha256.convert(entry.value).toString(),
+        _attachmentIndexPath: _sha256Text(indexRaw),
+      };
+      final marker = StagedRestoreMarker(
+        restoreId: restoreId,
+        phase: StagedRestorePhase.staged,
+        oldGeneration: oldGeneration,
+        newGeneration: newGeneration,
+        oldAttachmentsExisted: await _backend.managedDirectoryExists(
+          rootPath,
+          'Attachments',
+        ),
+        oldAttachmentIndexExisted: await _backend.fileExists(
+          rootPath,
+          _attachmentIndexPath,
+        ),
+        expectedSha256ByPath: expectedHashes,
+      );
+      await _writeStagedRestoreMarker(rootPath, marker);
+      try {
+        final stageAttachments = '$stageBase/Attachments';
+        await _backend.createManagedDirectory(rootPath, stageAttachments);
+        for (final entry in payload.attachments.entries) {
+          final fileName = entry.key.substring('Attachments/'.length);
+          await _backend.writeBinaryFile(
+            rootPath: rootPath,
+            relativePath: '$stageAttachments/$fileName',
+            bytes: entry.value,
+          );
+        }
+        await _backend.writeTextFile(
+          rootPath: rootPath,
+          relativePath: '$stageBase/attachments-index.json',
+          content: indexRaw,
+        );
+        if (!await _stagedAttachmentsMatch(rootPath, marker)) {
+          throw StateError('Staged-вложения не прошли контрольную проверку.');
+        }
+        return marker;
+      } on Object {
+        await _rollbackStagedRestore(rootPath, marker);
+        rethrow;
+      }
+    });
+  }
+
+  Future<StagedRestoreMarker?> readStagedRestoreMarker() async {
+    final rootPath = await _backend.resolveRootPath();
+    if (rootPath == null || rootPath.isEmpty) {
+      return null;
+    }
+    final raw = await _backend.readTextFile(rootPath, _restoreMarkerPath);
+    if (raw == null) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        throw const FormatException('Маркер восстановления повреждён.');
+      }
+      return StagedRestoreMarker.fromJson(Map<String, dynamic>.from(decoded));
+    } on FormatException {
+      rethrow;
+    } on Object {
+      throw const FormatException('Маркер восстановления повреждён.');
+    }
+  }
+
+  Future<StagedRestoreMarker> updateStagedRestorePhase(
+    StagedRestoreMarker marker,
+    StagedRestorePhase phase,
+  ) async {
+    final rootPath = await _requireVaultRoot();
+    final updated = marker.copyWith(phase: phase);
+    await _writeStagedRestoreMarker(rootPath, updated);
+    return updated;
+  }
+
+  Future<void> commitStagedRestoreAttachments(StagedRestoreMarker marker) {
+    return _attachmentMutationLock.synchronized(() async {
+      final rootPath = await _requireVaultRoot();
+      await _installStagedAttachments(rootPath, marker);
+    });
+  }
+
+  Future<StagedRestoreMarker?> recoverStagedRestore(String currentGeneration) {
+    return _attachmentMutationLock.synchronized(() async {
+      final rootPath = await _backend.resolveRootPath();
+      if (rootPath == null || rootPath.isEmpty) {
+        return null;
+      }
+      final marker = await readStagedRestoreMarker();
+      if (marker == null) {
+        return null;
+      }
+      if (currentGeneration == marker.newGeneration) {
+        await _installStagedAttachments(rootPath, marker);
+        final committed = marker.copyWith(phase: StagedRestorePhase.committed);
+        await _writeStagedRestoreMarker(rootPath, committed);
+        return committed;
+      }
+      await _rollbackStagedRestore(rootPath, marker);
+      return null;
+    });
+  }
+
+  Future<void> finalizeStagedRestore(StagedRestoreMarker marker) {
+    return _attachmentMutationLock.synchronized(() async {
+      final rootPath = await _requireVaultRoot();
+      if (!await _installedAttachmentsMatch(rootPath, marker)) {
+        throw StateError('Новая generation не прошла проверку вложений.');
+      }
+      await _backend.deleteManagedDirectory(
+        rootPath,
+        _restoreOldBase(marker.oldGeneration),
+      );
+      await _backend.deleteManagedDirectory(
+        rootPath,
+        _restoreStageBase(marker.restoreId),
+      );
+      await _backend.deleteFiles(
+        rootPath: rootPath,
+        relativePaths: const <String>{_restoreMarkerPath},
+      );
+    });
   }
 
   Future<void> replaceAttachments(BackupImportPayload payload) async {
@@ -1236,6 +1535,234 @@ class VaultService {
       await _writeAttachmentRecords(rootPath, restoredRecords);
     }
   }
+
+  List<VaultAttachmentRecord> _attachmentRecordsForRestore(
+    BackupImportPayload payload,
+  ) {
+    final savedIndex = payload.vaultFiles[_attachmentIndexPath];
+    final savedRecords =
+        savedIndex == null
+            ? const <VaultAttachmentRecord>[]
+            : _decodeAttachmentRecords(savedIndex);
+    final savedByPath = {
+      for (final record in savedRecords) record.relativePath: record,
+    };
+    final restored = <VaultAttachmentRecord>[
+      for (final record in savedRecords)
+        if (record.isDeleted &&
+            !payload.attachments.containsKey(record.relativePath))
+          record,
+    ];
+    for (final entry in payload.attachments.entries) {
+      final hash = sha256.convert(entry.value).toString();
+      final saved = savedByPath[entry.key];
+      restored.add(
+        VaultAttachmentRecord(
+          relativePath: entry.key,
+          originalName: saved?.originalName ?? p.posix.basename(entry.key),
+          sha256: hash,
+          mimeType:
+              saved?.mimeType ?? _mimeTypeForExtension(p.extension(entry.key)),
+          byteLength: entry.value.length,
+          createdAt: saved?.createdAt ?? DateTime.now().toUtc(),
+        ),
+      );
+    }
+    restored.sort(
+      (left, right) => left.relativePath.compareTo(right.relativePath),
+    );
+    return restored;
+  }
+
+  Future<void> _writeStagedRestoreMarker(
+    String rootPath,
+    StagedRestoreMarker marker,
+  ) {
+    return _backend.writeTextFile(
+      rootPath: rootPath,
+      relativePath: _restoreMarkerPath,
+      content: const JsonEncoder.withIndent('  ').convert(marker.toJson()),
+    );
+  }
+
+  Future<void> _installStagedAttachments(
+    String rootPath,
+    StagedRestoreMarker marker,
+  ) async {
+    if (await _installedAttachmentsMatch(rootPath, marker)) {
+      return;
+    }
+    final stageBase = _restoreStageBase(marker.restoreId);
+    final oldBase = _restoreOldBase(marker.oldGeneration);
+    await _backend.createManagedDirectory(rootPath, oldBase);
+
+    final stagedAttachments = '$stageBase/Attachments';
+    if (await _backend.managedDirectoryExists(rootPath, stagedAttachments)) {
+      if (await _backend.managedDirectoryExists(rootPath, 'Attachments')) {
+        final oldAttachments = '$oldBase/Attachments';
+        if (!await _backend.managedDirectoryExists(rootPath, oldAttachments)) {
+          await _backend.moveManagedDirectory(
+            rootPath: rootPath,
+            from: 'Attachments',
+            to: oldAttachments,
+          );
+        } else {
+          await _backend.deleteManagedDirectory(rootPath, 'Attachments');
+        }
+      }
+      await _backend.moveManagedDirectory(
+        rootPath: rootPath,
+        from: stagedAttachments,
+        to: 'Attachments',
+      );
+    }
+
+    final stagedIndex = '$stageBase/attachments-index.json';
+    if (await _backend.fileExists(rootPath, stagedIndex)) {
+      final oldIndex = '$oldBase/attachments-index.json';
+      if (await _backend.fileExists(rootPath, _attachmentIndexPath)) {
+        if (!await _backend.fileExists(rootPath, oldIndex)) {
+          await _backend.moveManagedFile(
+            rootPath: rootPath,
+            from: _attachmentIndexPath,
+            to: oldIndex,
+          );
+        } else {
+          await _backend.deleteFiles(
+            rootPath: rootPath,
+            relativePaths: const <String>{_attachmentIndexPath},
+          );
+        }
+      }
+      await _backend.moveManagedFile(
+        rootPath: rootPath,
+        from: stagedIndex,
+        to: _attachmentIndexPath,
+      );
+    }
+    if (!await _installedAttachmentsMatch(rootPath, marker)) {
+      throw StateError('Не удалось атомарно активировать staged-вложения.');
+    }
+  }
+
+  Future<void> _rollbackStagedRestore(
+    String rootPath,
+    StagedRestoreMarker marker,
+  ) async {
+    final oldBase = _restoreOldBase(marker.oldGeneration);
+    final oldAttachments = '$oldBase/Attachments';
+    if (await _backend.managedDirectoryExists(rootPath, oldAttachments)) {
+      await _backend.deleteManagedDirectory(rootPath, 'Attachments');
+      await _backend.moveManagedDirectory(
+        rootPath: rootPath,
+        from: oldAttachments,
+        to: 'Attachments',
+      );
+    } else if (!marker.oldAttachmentsExisted &&
+        marker.phase != StagedRestorePhase.staged) {
+      await _backend.deleteManagedDirectory(rootPath, 'Attachments');
+    }
+
+    final oldIndex = '$oldBase/attachments-index.json';
+    if (await _backend.fileExists(rootPath, oldIndex)) {
+      await _backend.deleteFiles(
+        rootPath: rootPath,
+        relativePaths: const <String>{_attachmentIndexPath},
+      );
+      await _backend.moveManagedFile(
+        rootPath: rootPath,
+        from: oldIndex,
+        to: _attachmentIndexPath,
+      );
+    } else if (!marker.oldAttachmentIndexExisted &&
+        marker.phase != StagedRestorePhase.staged) {
+      await _backend.deleteFiles(
+        rootPath: rootPath,
+        relativePaths: const <String>{_attachmentIndexPath},
+      );
+    }
+
+    await _backend.deleteManagedDirectory(
+      rootPath,
+      _restoreStageBase(marker.restoreId),
+    );
+    await _backend.deleteManagedDirectory(rootPath, oldBase);
+    await _backend.deleteFiles(
+      rootPath: rootPath,
+      relativePaths: const <String>{_restoreMarkerPath},
+    );
+  }
+
+  Future<bool> _stagedAttachmentsMatch(
+    String rootPath,
+    StagedRestoreMarker marker,
+  ) async {
+    final base = _restoreStageBase(marker.restoreId);
+    final files = await _backend.listBinaryFiles(
+      rootPath: rootPath,
+      directory: '$base/Attachments',
+    );
+    final expectedAttachments = {
+      for (final entry in marker.expectedSha256ByPath.entries)
+        if (entry.key.startsWith('Attachments/'))
+          '$base/${entry.key}': entry.value,
+    };
+    if (!_binaryHashesMatch(files, expectedAttachments)) {
+      return false;
+    }
+    final indexBytes = await _backend.readBinaryFile(
+      rootPath,
+      '$base/attachments-index.json',
+    );
+    return indexBytes != null &&
+        sha256.convert(indexBytes).toString() ==
+            marker.expectedSha256ByPath[_attachmentIndexPath];
+  }
+
+  Future<bool> _installedAttachmentsMatch(
+    String rootPath,
+    StagedRestoreMarker marker,
+  ) async {
+    final files = await _backend.listBinaryFiles(
+      rootPath: rootPath,
+      directory: 'Attachments',
+    );
+    final expectedAttachments = {
+      for (final entry in marker.expectedSha256ByPath.entries)
+        if (entry.key.startsWith('Attachments/')) entry.key: entry.value,
+    };
+    if (!_binaryHashesMatch(files, expectedAttachments)) {
+      return false;
+    }
+    final indexBytes = await _backend.readBinaryFile(
+      rootPath,
+      _attachmentIndexPath,
+    );
+    return indexBytes != null &&
+        sha256.convert(indexBytes).toString() ==
+            marker.expectedSha256ByPath[_attachmentIndexPath];
+  }
+
+  bool _binaryHashesMatch(
+    Map<String, Uint8List> files,
+    Map<String, String> expectedHashes,
+  ) {
+    if (files.length != expectedHashes.length) {
+      return false;
+    }
+    for (final entry in files.entries) {
+      if (sha256.convert(entry.value).toString() != expectedHashes[entry.key]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  String _restoreStageBase(String restoreId) =>
+      '.chronicle/restore-staging/$restoreId';
+
+  String _restoreOldBase(String generation) =>
+      '.chronicle/restore-old/$generation';
 
   Future<EmergencyBackupSnapshot> createEmergencyBackupSnapshot({
     required AppData data,
@@ -1306,13 +1833,27 @@ class VaultService {
   }) async {
     final generated = _buildVaultFiles(data);
     final rootPath = await _backend.resolveRootPath();
-    final attachments =
+    final attachmentSizes =
         rootPath == null || rootPath.isEmpty
-            ? <String, Uint8List>{}
-            : await _backend.listBinaryFiles(
+            ? <String, int>{}
+            : await _backend.listBinaryFileSizes(
               rootPath: rootPath,
               directory: 'Attachments',
             );
+    _validateBackupAttachmentSizes(attachmentSizes);
+    final attachments = <String, Uint8List>{};
+    if (rootPath != null && rootPath.isNotEmpty) {
+      for (final path in attachmentSizes.keys) {
+        final bytes = await _backend.readBinaryFile(rootPath, path);
+        if (bytes == null || bytes.length != attachmentSizes[path]) {
+          throw StateError(
+            'Вложение $path изменилось во время создания backup.',
+          );
+        }
+        attachments[path] = bytes;
+      }
+    }
+    _validateBackupAttachments(attachments);
     final vaultFiles = Map<String, String>.from(generated.files);
     if (rootPath != null && rootPath.isNotEmpty) {
       final attachmentIndex = await _backend.readTextFile(
@@ -1345,9 +1886,14 @@ class VaultService {
         for (final entry in attachments.entries)
           entry.key: base64Encode(entry.value),
       },
+      'attachmentMetadata': {
+        for (final entry in attachments.entries)
+          entry.key: <String, Object?>{'byteLength': entry.value.length},
+      },
       'checksums': checksums,
     };
     final raw = const JsonEncoder.withIndent('  ').convert(payload);
+    _validateRawBackupByteLength(utf8.encode(raw).length);
     final preview = BackupPreview(
       formatVersion: backupFormatVersion,
       exportedAt: exportedAt,
@@ -1361,6 +1907,58 @@ class VaultService {
       attachmentCount: attachments.length,
     );
     return _BuiltBackup(raw: raw, preview: preview);
+  }
+
+  void _validateRawBackupByteLength(int byteLength) {
+    if (byteLength > _backupLimits.maxRawBytes) {
+      throw BackupLimitException(
+        'Резервная копия больше ${_backupLimits.maxRawBytes} байт.',
+      );
+    }
+  }
+
+  void _validateBackupAttachments(Map<String, Uint8List> attachments) {
+    _validateBackupAttachmentSizes({
+      for (final entry in attachments.entries) entry.key: entry.value.length,
+    });
+  }
+
+  void _validateBackupAttachmentSizes(Map<String, int> attachmentSizes) {
+    if (attachmentSizes.length > _backupLimits.maxAttachmentCount) {
+      throw BackupLimitException(
+        'Нельзя сохранить больше ${_backupLimits.maxAttachmentCount} '
+        'вложений в одной резервной копии.',
+      );
+    }
+    var totalBytes = 0;
+    for (final entry in attachmentSizes.entries) {
+      if (entry.value < 0 || entry.value > _backupLimits.maxAttachmentBytes) {
+        throw BackupLimitException(
+          'Вложение ${entry.key} больше '
+          '${_backupLimits.maxAttachmentBytes} байт.',
+        );
+      }
+      totalBytes += entry.value;
+      if (totalBytes > _backupLimits.maxDecodedAttachmentBytes) {
+        throw BackupLimitException(
+          'Общий размер вложений больше '
+          '${_backupLimits.maxDecodedAttachmentBytes} байт.',
+        );
+      }
+    }
+  }
+
+  int _estimatedBase64DecodedLength(String encoded) {
+    if (encoded.isEmpty) {
+      return 0;
+    }
+    var padding = 0;
+    if (encoded.endsWith('==')) {
+      padding = 2;
+    } else if (encoded.endsWith('=')) {
+      padding = 1;
+    }
+    return ((encoded.length + 3) ~/ 4) * 3 - padding;
   }
 
   _BuiltVault _buildVaultFiles(AppData data) {
@@ -1791,17 +2389,21 @@ class VaultService {
     String rootPath,
     List<VaultAttachmentRecord> records,
   ) {
+    return _backend.writeTextFile(
+      rootPath: rootPath,
+      relativePath: _attachmentIndexPath,
+      content: _encodeAttachmentRecords(records),
+    );
+  }
+
+  String _encodeAttachmentRecords(List<VaultAttachmentRecord> records) {
     final payload = <String, dynamic>{
       'format': 'chronicle-attachment-index',
       'version': 1,
       'updatedAt': DateTime.now().toUtc().toIso8601String(),
       'attachments': records.map((record) => record.toJson()).toList(),
     };
-    return _backend.writeTextFile(
-      rootPath: rootPath,
-      relativePath: _attachmentIndexPath,
-      content: const JsonEncoder.withIndent('  ').convert(payload),
-    );
+    return const JsonEncoder.withIndent('  ').convert(payload);
   }
 
   Future<void> _upsertAttachmentRecord(
@@ -2086,6 +2688,18 @@ class _BuiltBackup {
 
   final String raw;
   final BackupPreview preview;
+}
+
+class _EncodedBackupAttachment {
+  const _EncodedBackupAttachment({
+    required this.relativePath,
+    required this.encoded,
+    required this.declaredLength,
+  });
+
+  final String relativePath;
+  final String encoded;
+  final int? declaredLength;
 }
 
 sealed class _VaultIndexReadResult {

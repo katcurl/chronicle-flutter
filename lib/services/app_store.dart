@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/migration/legacy_preferences_importer.dart';
+import '../data/backup/staged_restore.dart';
 import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
 import '../data/repositories/mutation_queue.dart';
@@ -43,11 +44,13 @@ class AppStore extends ChangeNotifier {
     CustomNoteTemplateStore? customNoteTemplateStore,
     bool enableAutomaticLanSync = false,
     bool enableReliabilityFeatures = false,
+    RestoreCutPointCallback? restoreCutPoint,
   }) : _repository = repository,
        _legacyImporter = legacyImporter,
        _vaultService = vaultService ?? VaultService(),
        _reliabilityService = reliabilityService ?? ReliabilityService(),
        _customNoteTemplateStore = customNoteTemplateStore,
+       _restoreCutPoint = restoreCutPoint,
        pairingService =
            pairingService ?? PairingService(repository: repository),
        _automaticLanSyncEnabled = enableAutomaticLanSync,
@@ -82,6 +85,7 @@ class AppStore extends ChangeNotifier {
   final VaultService _vaultService;
   final ReliabilityService _reliabilityService;
   final CustomNoteTemplateStore? _customNoteTemplateStore;
+  final RestoreCutPointCallback? _restoreCutPoint;
   final PairingService pairingService;
   late final LanSyncService lanSyncService;
   final bool _automaticLanSyncEnabled;
@@ -171,6 +175,7 @@ class AppStore extends ChangeNotifier {
         notify: false,
       );
       final initialized = await _repository.isInitialized();
+      StagedRestoreMarker? recoveredRestore;
       var protectExistingVault = false;
       if (!initialized) {
         final legacy = await _legacyImporter?.read();
@@ -179,7 +184,12 @@ class AppStore extends ChangeNotifier {
         data = legacy ?? AppData.empty();
         await _repository.replaceAll(data);
         await _repository.markInitialized();
+        await _repository.ensureDataGeneration();
       } else {
+        final currentGeneration = await _repository.ensureDataGeneration();
+        recoveredRestore = await _vaultService.recoverStagedRestore(
+          currentGeneration,
+        );
         data = await _repository.load();
       }
 
@@ -191,6 +201,16 @@ class AppStore extends ChangeNotifier {
         allowAutomaticWrite: !protectExistingVault,
       );
       await refreshBackupCatalog(notify: false);
+      if (recoveredRestore != null) {
+        final attachmentIntegrity =
+            await _vaultService.inspectAttachmentIntegrity();
+        if (!attachmentIntegrity.isHealthy) {
+          throw StateError(
+            'Восстановленная generation содержит расхождения вложений.',
+          );
+        }
+        await _vaultService.finalizeStagedRestore(recoveredRestore);
+      }
 
       final activeTimer = await _repository.loadActiveTimer();
       if (activeTimer != null &&
@@ -2545,6 +2565,7 @@ class AppStore extends ChangeNotifier {
     lastRestoreRolledBack = false;
     notifyListeners();
     EmergencyBackupSnapshot? emergencySnapshot;
+    StagedRestoreMarker? restoreMarker;
     try {
       await _recordReliability(
         stage: ReliabilityStage.restore,
@@ -2557,6 +2578,7 @@ class AppStore extends ChangeNotifier {
         },
         notify: false,
       );
+      final candidate = _vaultService.validateBackupPayload(payload);
       final snapshot = await _vaultService.createEmergencyBackupSnapshot(
         data: data,
         identity: deviceIdentity,
@@ -2564,48 +2586,47 @@ class AppStore extends ChangeNotifier {
       emergencySnapshot = snapshot;
       lastEmergencyBackupPath = snapshot.path;
 
-      try {
-        await _applyBackupPayload(payload);
-      } on Object catch (restoreError, restoreStack) {
-        try {
-          await _applyBackupPayload(snapshot.payload);
-          lastRestoreRolledBack = true;
-          await _recordReliability(
-            stage: ReliabilityStage.restore,
-            level: ReliabilityLevel.warning,
-            message:
-                'Восстановление прервано; исходные данные автоматически возвращены.',
-            details: <String, Object?>{
-              'sourceName': payload.sourceName,
-              'error': restoreError.toString(),
-              'emergencyBackupPath': snapshot.path,
-            },
-            notify: false,
-          );
-        } on Object catch (rollbackError, rollbackStack) {
-          await _recordReliability(
-            stage: ReliabilityStage.restore,
-            level: ReliabilityLevel.error,
-            message:
-                'Восстановление и автоматический откат завершились ошибкой.',
-            details: <String, Object?>{
-              'restoreError': restoreError.toString(),
-              'rollbackError': rollbackError.toString(),
-              'emergencyBackupPath': snapshot.path,
-            },
-            notify: false,
-          );
-          Error.throwWithStackTrace(
-            StateError(
-              'Не удалось восстановить копию и автоматически вернуть '
-              'предыдущее состояние. Аварийная копия сохранена: '
-              '${snapshot.path}',
-            ),
-            rollbackStack,
-          );
-        }
-        Error.throwWithStackTrace(restoreError, restoreStack);
+      final oldGeneration = await _repository.ensureDataGeneration();
+      final newGeneration = _uuid.v4();
+      final restoreId = _uuid.v4();
+      restoreMarker = await _vaultService.stageRestoreAttachments(
+        payload: payload,
+        restoreId: restoreId,
+        oldGeneration: oldGeneration,
+        newGeneration: newGeneration,
+      );
+      await _runRestoreCutPoint(RestoreCutPoint.afterStaged);
+
+      restoreMarker = await _vaultService.updateStagedRestorePhase(
+        restoreMarker,
+        StagedRestorePhase.committing,
+      );
+      await _runRestoreCutPoint(RestoreCutPoint.afterCommittingMarker);
+
+      await _repository.replaceAllForRestore(
+        candidate,
+        generation: newGeneration,
+      );
+      await _runRestoreCutPoint(RestoreCutPoint.afterDatabaseCommit);
+
+      await _vaultService.commitStagedRestoreAttachments(restoreMarker);
+      await _runRestoreCutPoint(RestoreCutPoint.afterAttachmentCommit);
+
+      restoreMarker = await _vaultService.updateStagedRestorePhase(
+        restoreMarker,
+        StagedRestorePhase.committed,
+      );
+      await _runRestoreCutPoint(RestoreCutPoint.afterCommittedMarker);
+
+      await _reloadAfterRestore();
+      final attachmentIntegrity =
+          await _vaultService.inspectAttachmentIntegrity();
+      if (!attachmentIntegrity.isHealthy) {
+        throw StateError(
+          'Восстановленные вложения не прошли проверку целостности.',
+        );
       }
+      await _vaultService.finalizeStagedRestore(restoreMarker);
 
       await refreshBackupCatalog(notify: false);
       await _recordReliability(
@@ -2622,7 +2643,44 @@ class AppStore extends ChangeNotifier {
         },
         notify: false,
       );
+    } on RestoreInterruption {
+      rethrow;
     } on Object catch (error) {
+      var recoveredCommitted = false;
+      if (restoreMarker != null) {
+        try {
+          final generation = await _repository.ensureDataGeneration();
+          final recovered = await _vaultService.recoverStagedRestore(
+            generation,
+          );
+          lastRestoreRolledBack = recovered == null;
+          if (recovered != null) {
+            await _reloadAfterRestore();
+            final integrity = await _vaultService.inspectAttachmentIntegrity();
+            if (integrity.isHealthy) {
+              await _vaultService.finalizeStagedRestore(recovered);
+              recoveredCommitted = true;
+            }
+          }
+        } on Object {
+          // The durable marker is intentionally retained for startup recovery.
+        }
+      }
+      if (recoveredCommitted) {
+        await refreshBackupCatalog(notify: false);
+        await _recordReliability(
+          stage: ReliabilityStage.restore,
+          level: ReliabilityLevel.warning,
+          message:
+              'Восстановление завершено через recovery после промежуточной ошибки.',
+          details: <String, Object?>{
+            'error': error.toString(),
+            'emergencyBackupPath': emergencySnapshot?.path,
+          },
+          notify: false,
+        );
+        return;
+      }
       await _recordReliability(
         stage: ReliabilityStage.restore,
         level: ReliabilityLevel.error,
@@ -2641,9 +2699,18 @@ class AppStore extends ChangeNotifier {
     }
   }
 
-  Future<void> _applyBackupPayload(BackupImportPayload payload) async {
-    await _replaceDataFromBackup(payload.databaseJson);
-    await _vaultService.replaceAttachments(payload);
+  Future<void> _reloadAfterRestore() async {
+    _undoJournal.clear();
+    releaseReadinessReport = null;
+    _ticker?.cancel();
+    activeStartedAt = null;
+    activeDescription = '';
+    activeProjectId = null;
+    activeTaskId = null;
+    activeNoteId = null;
+    data = await _repository.load();
+    await _hydrateNoteMetadata();
+    await rebuildAllNoteLinks();
     vaultStatus = await _vaultService.writeMirror(data, force: true);
     pendingVaultScan = await _vaultService.scan(data);
     _mergeVaultScanIntoStatus();
@@ -2653,22 +2720,8 @@ class AppStore extends ChangeNotifier {
 
   Future<String> exportBackupJson() => _repository.exportJson();
 
-  Future<void> _replaceDataFromBackup(String raw) async {
-    final decoded = AppData.decode(raw);
-    _undoJournal.clear();
-    releaseReadinessReport = null;
-    _ticker?.cancel();
-    activeStartedAt = null;
-    activeDescription = '';
-    activeProjectId = null;
-    activeTaskId = null;
-    activeNoteId = null;
-    await _repository.saveActiveTimer(null);
-    await _repository.replaceAll(decoded);
-    await _repository.markInitialized();
-    data = await _repository.load();
-    await _hydrateNoteMetadata();
-    await rebuildAllNoteLinks();
+  Future<void> _runRestoreCutPoint(RestoreCutPoint point) async {
+    await _restoreCutPoint?.call(point);
   }
 
   Future<String?> undoLastAction() async {

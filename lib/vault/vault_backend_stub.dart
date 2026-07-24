@@ -69,6 +69,11 @@ class VaultBackend {
     required String directory,
   }) async => <String, Uint8List>{};
 
+  Future<Map<String, int>> listBinaryFileSizes({
+    required String rootPath,
+    required String directory,
+  }) async => <String, int>{};
+
   Future<Uint8List?> readBinaryFile(
     String rootPath,
     String relativePath,
@@ -77,6 +82,39 @@ class VaultBackend {
   }
 
   Future<bool> fileExists(String rootPath, String relativePath) async => false;
+
+  Future<bool> managedDirectoryExists(
+    String rootPath,
+    String relativePath,
+  ) async => false;
+
+  Future<void> createManagedDirectory(
+    String rootPath,
+    String relativePath,
+  ) async {
+    throw UnsupportedError('Managed directories are unavailable.');
+  }
+
+  Future<void> moveManagedDirectory({
+    required String rootPath,
+    required String from,
+    required String to,
+  }) async {
+    throw UnsupportedError('Managed directories are unavailable.');
+  }
+
+  Future<void> moveManagedFile({
+    required String rootPath,
+    required String from,
+    required String to,
+  }) async {
+    throw UnsupportedError('Managed files are unavailable.');
+  }
+
+  Future<void> deleteManagedDirectory(
+    String rootPath,
+    String relativePath,
+  ) async {}
 
   Future<void> writeBinaryFile({
     required String rootPath,

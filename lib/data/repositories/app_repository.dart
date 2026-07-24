@@ -12,6 +12,10 @@ abstract class AppRepository implements DomainMutationRepository {
 
   Future<void> replaceAll(AppData data);
 
+  Future<String> ensureDataGeneration();
+
+  Future<void> replaceAllForRestore(AppData data, {required String generation});
+
   Future<void> saveProject(Project project);
 
   Future<void> saveTask(WorkTask task);

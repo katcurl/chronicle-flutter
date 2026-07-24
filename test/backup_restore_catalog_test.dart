@@ -1,13 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:chronicle/data/repositories/in_memory_app_repository.dart';
 import 'package:chronicle/models/app_models.dart';
 import 'package:chronicle/services/app_store.dart';
-import 'package:chronicle/sync/sync_models.dart';
 import 'package:chronicle/vault/vault_backend.dart';
 import 'package:chronicle/vault/vault_models.dart';
-import 'package:chronicle/vault/vault_revision.dart';
 import 'package:chronicle/vault/vault_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -85,9 +84,17 @@ void main() {
         notes: <Note>[],
         entries: <TimeEntry>[],
       );
-      final repository = InMemoryAppRepository(initialData: original);
+      final root = await Directory.systemTemp.createTemp(
+        'chronicle-failed-restore-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final repository = _FailingRestoreRepository(initialData: original);
       await repository.markInitialized();
-      final service = _FailOnceRestoreVaultService();
+      final service = VaultService(backend: _RootVaultBackend(root));
       final store = AppStore(repository: repository, vaultService: service);
       addTearDown(store.dispose);
       await store.load();
@@ -102,7 +109,7 @@ void main() {
       expect(store.lastRestoreRolledBack, isTrue);
       expect(store.data.projects, hasLength(1));
       expect(store.data.projects.single.title, 'Исходный проект');
-      expect(service.replaceCalls, 2);
+      expect(await service.readStagedRestoreMarker(), isNull);
     },
   );
 }
@@ -232,63 +239,23 @@ class _AttachmentBackend extends VaultBackend {
   }
 }
 
-class _FailOnceRestoreVaultService extends VaultService {
-  _FailOnceRestoreVaultService() : super(backend: _UnavailableBackend());
-
-  int replaceCalls = 0;
+final class _FailingRestoreRepository extends InMemoryAppRepository {
+  _FailingRestoreRepository({required super.initialData});
 
   @override
-  Future<VaultStatus> inspect() async => const VaultStatus.unavailable();
-
-  @override
-  Future<List<BackupCatalogEntry>> listAutomaticBackups() async =>
-      const <BackupCatalogEntry>[];
-
-  @override
-  Future<EmergencyBackupSnapshot> createEmergencyBackupSnapshot({
-    required AppData data,
-    DeviceIdentity? identity,
-  }) async {
-    return EmergencyBackupSnapshot(
-      path: '/vault/pre-import-backup.chronicle',
-      payload: _payloadFor(data, 'pre-import-backup.chronicle'),
-    );
+  Future<void> replaceAllForRestore(
+    AppData data, {
+    required String generation,
+  }) {
+    throw StateError('Смоделированная ошибка транзакции восстановления.');
   }
-
-  @override
-  Future<void> replaceAttachments(BackupImportPayload payload) async {
-    replaceCalls++;
-    if (replaceCalls == 1) {
-      throw StateError('Смоделированная ошибка записи вложений.');
-    }
-  }
-
-  @override
-  Future<VaultStatus> writeMirror(AppData data, {bool force = false}) async {
-    return VaultStatus(
-      supported: true,
-      rootPath: '/vault',
-      noteCount: data.notes.length,
-      fileCount: data.notes.length,
-    );
-  }
-
-  @override
-  Future<VaultScanResult> scan(AppData data) async {
-    return VaultScanResult(
-      rootPath: '/vault',
-      scannedAt: DateTime.utc(2026, 7, 17),
-      changes: const <VaultNoteChange>[],
-      missingFiles: const <VaultMissingFile>[],
-      revision: VaultRevision.empty(),
-    );
-  }
-
-  @override
-  Future<void> verifyRevision(VaultRevision expectedRevision) async {}
 }
 
-class _UnavailableBackend extends VaultBackend {
+final class _RootVaultBackend extends VaultBackend {
+  _RootVaultBackend(this.root);
+
+  final Directory root;
+
   @override
-  Future<String?> resolveRootPath() async => null;
+  Future<String?> resolveRootPath() async => root.path;
 }

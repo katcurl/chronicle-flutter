@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show FlutterError;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -44,13 +45,20 @@ class VaultBackend {
   final AtomicFileWriter _atomicFileWriter;
 
   Future<String?> resolveRootPath() async {
-    final preferences = await SharedPreferences.getInstance();
-    final configured = preferences.getString(_vaultPathKey)?.trim();
-    if (configured != null && configured.isNotEmpty) {
-      return configured;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final configured = preferences.getString(_vaultPathKey)?.trim();
+      if (configured != null && configured.isNotEmpty) {
+        return configured;
+      }
+      final documents = await getApplicationDocumentsDirectory();
+      return p.join(documents.path, 'Chronicle Vault');
+    } on FlutterError catch (error) {
+      if (error.message.contains('Binding has not yet been initialized')) {
+        return null;
+      }
+      rethrow;
     }
-    final documents = await getApplicationDocumentsDirectory();
-    return p.join(documents.path, 'Chronicle Vault');
   }
 
   Future<String?> chooseRootPath() async {
@@ -178,6 +186,29 @@ class VaultBackend {
     return result;
   }
 
+  Future<Map<String, int>> listBinaryFileSizes({
+    required String rootPath,
+    required String directory,
+  }) async {
+    final resolved = await _resolveExistingOrNull(rootPath, directory);
+    if (resolved == null) {
+      return <String, int>{};
+    }
+    final base = Directory(resolved);
+    final canonicalRoot = await Directory(rootPath).resolveSymbolicLinks();
+    final result = <String, int>{};
+    await for (final entity in base.list(recursive: true, followLinks: false)) {
+      if (entity is! File) {
+        continue;
+      }
+      final relative = p
+          .relative(entity.path, from: canonicalRoot)
+          .replaceAll(p.separator, '/');
+      result[relative] = await entity.length();
+    }
+    return result;
+  }
+
   Future<Uint8List?> readBinaryFile(
     String rootPath,
     String relativePath,
@@ -191,6 +222,69 @@ class VaultBackend {
 
   Future<bool> fileExists(String rootPath, String relativePath) async {
     return await _resolveExistingOrNull(rootPath, relativePath) != null;
+  }
+
+  Future<bool> managedDirectoryExists(
+    String rootPath,
+    String relativePath,
+  ) async {
+    final resolved = await _resolveExistingOrNull(rootPath, relativePath);
+    return resolved != null && await Directory(resolved).exists();
+  }
+
+  Future<void> createManagedDirectory(
+    String rootPath,
+    String relativePath,
+  ) async {
+    final resolved = await _pathResolver.resolveForWrite(
+      rootPath,
+      relativePath,
+    );
+    await Directory(resolved).create();
+  }
+
+  Future<void> moveManagedDirectory({
+    required String rootPath,
+    required String from,
+    required String to,
+  }) async {
+    final source = await _pathResolver.resolveExisting(rootPath, from);
+    if (!await Directory(source).exists()) {
+      throw FileSystemException('Managed source is not a directory.', source);
+    }
+    final target = await _pathResolver.resolveForWrite(rootPath, to);
+    if (await FileSystemEntity.type(target, followLinks: false) !=
+        FileSystemEntityType.notFound) {
+      throw FileSystemException('Managed target already exists.', target);
+    }
+    await Directory(source).rename(target);
+  }
+
+  Future<void> moveManagedFile({
+    required String rootPath,
+    required String from,
+    required String to,
+  }) async {
+    final source = await _pathResolver.resolveExisting(rootPath, from);
+    if (!await File(source).exists()) {
+      throw FileSystemException('Managed source is not a file.', source);
+    }
+    final target = await _pathResolver.resolveForWrite(rootPath, to);
+    if (await FileSystemEntity.type(target, followLinks: false) !=
+        FileSystemEntityType.notFound) {
+      throw FileSystemException('Managed target already exists.', target);
+    }
+    await File(source).rename(target);
+  }
+
+  Future<void> deleteManagedDirectory(
+    String rootPath,
+    String relativePath,
+  ) async {
+    final resolved = await _resolveExistingOrNull(rootPath, relativePath);
+    if (resolved != null && await Directory(resolved).exists()) {
+      await Directory(resolved).delete(recursive: true);
+    }
   }
 
   Future<void> writeBinaryFile({

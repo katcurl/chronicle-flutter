@@ -17,6 +17,7 @@ void main() {
     final secondStore = AppStore(repository: repository);
     await secondStore.load();
 
+    expect(secondStore.loadError, isNull);
     expect(
       secondStore.data.projects.any(
         (project) => project.id == 'persistent-project',

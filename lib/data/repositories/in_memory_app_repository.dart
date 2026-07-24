@@ -22,6 +22,7 @@ class InMemoryAppRepository implements AppRepository {
   final List<ChangeRecord> _changes = [];
   final List<SyncCursor> _syncCursors = [];
   bool _syncJournalBootstrapped = false;
+  String? _dataGeneration;
 
   @override
   Future<bool> isInitialized() async => _initialized;
@@ -75,6 +76,79 @@ class InMemoryAppRepository implements AppRepository {
       );
     }
     await markSyncJournalBootstrapped();
+  }
+
+  @override
+  Future<String> ensureDataGeneration() async {
+    return _dataGeneration ??= _uuid.v4();
+  }
+
+  @override
+  Future<void> replaceAllForRestore(
+    AppData data, {
+    required String generation,
+  }) async {
+    final previousData = _data;
+    final previousChanges = List<ChangeRecord>.from(_changes);
+    final previousCursors = List<SyncCursor>.from(_syncCursors);
+    final previousGeneration = _dataGeneration;
+    final previousTimer = _activeTimer;
+    final previousInitialized = _initialized;
+    final previousBootstrapped = _syncJournalBootstrapped;
+    try {
+      _data = AppData.decode(data.encode());
+      _changes.clear();
+      _syncCursors.clear();
+      _activeTimer = null;
+      _dataGeneration = generation;
+      _initialized = true;
+      for (final project in _data.projects) {
+        await recordLocalChange(
+          entityType: 'project',
+          entityId: project.id,
+          operation: 'snapshot',
+          payload: project.toJson(),
+        );
+      }
+      for (final task in _data.tasks) {
+        await recordLocalChange(
+          entityType: 'task',
+          entityId: task.id,
+          operation: 'snapshot',
+          payload: task.toJson(),
+        );
+      }
+      for (final note in _data.notes) {
+        await recordLocalChange(
+          entityType: 'note',
+          entityId: note.id,
+          operation: 'snapshot',
+          payload: note.toJson(),
+        );
+      }
+      for (final entry in _data.entries) {
+        await recordLocalChange(
+          entityType: 'time_entry',
+          entityId: entry.id,
+          operation: 'snapshot',
+          payload: entry.toJson(),
+        );
+      }
+      _syncJournalBootstrapped = true;
+    } on Object {
+      _data = previousData;
+      _changes
+        ..clear()
+        ..addAll(previousChanges);
+      _dataGeneration = previousGeneration;
+      _activeTimer = previousTimer;
+      _syncCursors
+        ..clear()
+        ..addAll(previousCursors);
+      _initialized = previousInitialized;
+      _syncJournalBootstrapped = previousBootstrapped;
+      rethrow;
+    }
   }
 
   @override

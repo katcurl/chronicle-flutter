@@ -19,6 +19,7 @@ class DriftAppRepository implements AppRepository {
   static const _syncJournalBootstrappedKey = 'sync_journal_bootstrapped';
   static const _deviceKeyMaterialKey = 'device_key_material_v1';
   static const _citationSourcesKey = 'citation_sources_v1';
+  static const _dataGenerationKey = 'data_generation_v1';
 
   final ChronicleDatabase _database;
   final Uuid _uuid = const Uuid();
@@ -35,32 +36,39 @@ class DriftAppRepository implements AppRepository {
 
   @override
   Future<AppData> load() async {
-    final results = await Future.wait([
-      _readRows('SELECT * FROM projects ORDER BY updated_at DESC'),
-      _readRows(
+    return _database.transaction(() async {
+      final projects = await _readRows(
+        'SELECT * FROM projects ORDER BY updated_at DESC',
+      );
+      final tasks = await _readRows(
         'SELECT * FROM tasks '
         'WHERE deleted_at IS NULL ORDER BY updated_at DESC',
-      ),
-      _readRows(
+      );
+      final notes = await _readRows(
         'SELECT * FROM notes '
         'WHERE deleted_at IS NULL ORDER BY updated_at DESC',
-      ),
-      _readRows('SELECT * FROM time_entries ORDER BY started_at DESC'),
-      _readRows('SELECT * FROM note_links ORDER BY created_at DESC'),
-      _readRows('SELECT * FROM note_versions ORDER BY created_at DESC'),
-    ]);
+      );
+      final entries = await _readRows(
+        'SELECT * FROM time_entries ORDER BY started_at DESC',
+      );
+      final links = await _readRows(
+        'SELECT * FROM note_links ORDER BY created_at DESC',
+      );
+      final versions = await _readRows(
+        'SELECT * FROM note_versions ORDER BY created_at DESC',
+      );
+      final citationSources = await _loadCitationSources();
 
-    final citationSources = await _loadCitationSources();
-
-    return AppData(
-      projects: results[0].map(Project.fromDb).toList(),
-      tasks: results[1].map(WorkTask.fromDb).toList(),
-      notes: results[2].map(Note.fromDb).toList(),
-      entries: results[3].map(TimeEntry.fromDb).toList(),
-      noteLinks: results[4].map(NoteLink.fromDb).toList(),
-      noteVersions: results[5].map(NoteVersion.fromDb).toList(),
-      citationSources: citationSources,
-    );
+      return AppData(
+        projects: projects.map(Project.fromDb).toList(),
+        tasks: tasks.map(WorkTask.fromDb).toList(),
+        notes: notes.map(Note.fromDb).toList(),
+        entries: entries.map(TimeEntry.fromDb).toList(),
+        noteLinks: links.map(NoteLink.fromDb).toList(),
+        noteVersions: versions.map(NoteVersion.fromDb).toList(),
+        citationSources: citationSources,
+      );
+    });
   }
 
   @override
@@ -127,6 +135,99 @@ class DriftAppRepository implements AppRepository {
       );
     }
     await markSyncJournalBootstrapped();
+  }
+
+  @override
+  Future<String> ensureDataGeneration() async {
+    final current = await _readState(_dataGenerationKey);
+    if (current != null && current.isNotEmpty) {
+      return current;
+    }
+    final generation = _uuid.v4();
+    await _putState(_dataGenerationKey, generation);
+    return generation;
+  }
+
+  @override
+  Future<void> replaceAllForRestore(
+    AppData data, {
+    required String generation,
+  }) async {
+    await ensureDeviceIdentity();
+    await _database.transaction(() async {
+      await _database.customStatement('DELETE FROM time_entries');
+      await _database.customStatement('DELETE FROM tasks');
+      await _database.customStatement('DELETE FROM note_links');
+      await _database.customStatement('DELETE FROM note_versions');
+      await _database.customStatement('DELETE FROM notes');
+      await _database.customStatement('DELETE FROM projects');
+      await _database.customStatement('DELETE FROM change_records');
+      await _database.customStatement('DELETE FROM sync_cursors');
+
+      for (final project in data.projects) {
+        await _upsert('projects', project.toDb());
+      }
+      for (final note in data.notes) {
+        await _upsert('notes', note.toDb());
+      }
+      for (final task in data.tasks) {
+        await _upsert('tasks', task.toDb());
+      }
+      for (final link in data.noteLinks) {
+        await _upsert('note_links', link.toDb());
+      }
+      for (final version in data.noteVersions) {
+        await _upsert('note_versions', version.toDb());
+      }
+      for (final entry in data.entries) {
+        await _upsert('time_entries', entry.toDb());
+      }
+      await _putState(
+        _citationSourcesKey,
+        jsonEncode([
+          for (final source in data.citationSources) source.toJson(),
+        ]),
+      );
+      await _database.customStatement('DELETE FROM app_state WHERE key = ?', [
+        _activeTimerKey,
+      ]);
+      await _putState(_initializedKey, '1');
+      await _putState(_dataGenerationKey, generation);
+      await _putState(_syncJournalBootstrappedKey, '1');
+
+      for (final project in data.projects) {
+        await _recordLocalChangeInTransaction(
+          entityType: 'project',
+          entityId: project.id,
+          operation: 'snapshot',
+          payload: project.toJson(),
+        );
+      }
+      for (final task in data.tasks) {
+        await _recordLocalChangeInTransaction(
+          entityType: 'task',
+          entityId: task.id,
+          operation: 'snapshot',
+          payload: task.toJson(),
+        );
+      }
+      for (final note in data.notes) {
+        await _recordLocalChangeInTransaction(
+          entityType: 'note',
+          entityId: note.id,
+          operation: 'snapshot',
+          payload: note.toJson(),
+        );
+      }
+      for (final entry in data.entries) {
+        await _recordLocalChangeInTransaction(
+          entityType: 'time_entry',
+          entityId: entry.id,
+          operation: 'snapshot',
+          payload: entry.toJson(),
+        );
+      }
+    });
   }
 
   @override
