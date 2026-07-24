@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../application/timer/timer_service.dart';
 import '../data/migration/legacy_preferences_importer.dart';
 import '../data/backup/staged_restore.dart';
 import '../data/repositories/app_repository.dart';
@@ -15,7 +16,6 @@ import '../features/notes/note_templates.dart';
 import '../features/notes/note_wiki_link_syntax.dart';
 import '../features/notes/note_wiki_rename.dart';
 import '../features/references/citation_syntax.dart';
-import '../features/timer/timer_duration.dart';
 import '../models/app_models.dart';
 import '../reliability/release_readiness.dart';
 import '../reliability/reliability_models.dart';
@@ -81,6 +81,13 @@ class AppStore extends ChangeNotifier {
       repository: repository,
       lanSyncService: this.lanSyncService,
     );
+    _timerService = TimerService(
+      repository: repository,
+      mutationQueue: _mutationQueue,
+      entries: () => data.entries,
+      onStateChanged: notifyListeners,
+      onEntrySaved: _scheduleSyncOverviewRefresh,
+    );
   }
 
   factory AppStore.production() => AppStore(
@@ -107,6 +114,7 @@ class AppStore extends ChangeNotifier {
   final _uuid = const Uuid();
   final ChronicleUndoJournal _undoJournal = ChronicleUndoJournal();
   final MutationQueue _mutationQueue = MutationQueue();
+  late final TimerService _timerService;
   final ValueNotifier<int> _attachmentRefreshNotifier = ValueNotifier<int>(0);
 
   ValueListenable<int> get attachmentRefreshListenable =>
@@ -158,13 +166,6 @@ class AppStore extends ChangeNotifier {
   int get undoDepth => _undoJournal.length;
   String? get nextUndoLabel => _undoJournal.nextLabel;
 
-  DateTime? activeStartedAt;
-  String activeDescription = '';
-  String? activeProjectId;
-  String? activeTaskId;
-  String? activeNoteId;
-
-  Timer? _ticker;
   Timer? _syncRefreshDebounce;
   Timer? _vaultMirrorDebounce;
   Timer? _lanPresenceTimer;
@@ -172,7 +173,11 @@ class AppStore extends ChangeNotifier {
   StreamSubscription<LanDiscoveredPeer>? _autoSyncPeerSubscription;
   StreamSubscription<LanSyncReport>? _autoSyncHostReportSubscription;
   Future<void>? _shutdownFuture;
-  int nowTick = 0;
+  DateTime? get activeStartedAt => _timerService.activeStartedAt;
+  String get activeDescription => _timerService.activeDescription;
+  String? get activeProjectId => _timerService.activeProjectId;
+  String? get activeTaskId => _timerService.activeTaskId;
+  String? get activeNoteId => _timerService.activeNoteId;
 
   Future<void> load() async {
     ready = false;
@@ -247,14 +252,12 @@ class AppStore extends ChangeNotifier {
       final activeTimer = await _repository.loadActiveTimer();
       if (activeTimer != null &&
           data.projects.any((project) => project.id == activeTimer.projectId)) {
-        activeStartedAt = activeTimer.startedAt;
-        activeDescription = activeTimer.description;
-        activeProjectId = activeTimer.projectId;
-        activeTaskId = activeTimer.taskId;
-        activeNoteId = activeTimer.noteId;
-        _startTicker();
+        _timerService.hydrate(activeTimer);
       } else if (activeTimer != null) {
         await _repository.saveActiveTimer(null);
+        _timerService.hydrate(null);
+      } else {
+        _timerService.hydrate(null);
       }
       await _recordReliability(
         stage: ReliabilityStage.startup,
@@ -886,36 +889,9 @@ class AppStore extends ChangeNotifier {
     return versions;
   }
 
-  int get activeSeconds =>
-      activeStartedAt == null
-          ? 0
-          : elapsedTimerSeconds(
-            startedAt: activeStartedAt!,
-            endedAt: DateTime.now(),
-          );
+  int get activeSeconds => _timerService.activeSeconds;
 
-  int get todaySeconds {
-    final now = DateTime.now();
-    final saved = data.entries.fold<int>(
-      0,
-      (sum, entry) =>
-          sum +
-          secondsWithinDay(
-            startedAt: entry.startedAt,
-            durationSeconds: entry.durationSeconds,
-            day: now,
-          ),
-    );
-    final active = activeStartedAt;
-    return saved +
-        (active == null
-            ? 0
-            : secondsWithinDay(
-              startedAt: active,
-              durationSeconds: activeSeconds,
-              day: now,
-            ));
-  }
+  int get todaySeconds => _timerService.todaySeconds;
 
   Future<void> startTimer({
     required String description,
@@ -923,82 +899,15 @@ class AppStore extends ChangeNotifier {
     String? taskId,
     String? noteId,
   }) {
-    return _mutationQueue.run(
-      () => _startTimer(
-        description: description,
-        projectId: projectId,
-        taskId: taskId,
-        noteId: noteId,
-      ),
-    );
-  }
-
-  Future<void> _startTimer({
-    required String description,
-    required String projectId,
-    String? taskId,
-    String? noteId,
-  }) async {
-    if (activeStartedAt != null) {
-      await _stopTimerMutation();
-    }
-
-    final startedAt = DateTime.now();
-    await _repository.saveActiveTimer(
-      ActiveTimerState(
-        startedAt: startedAt,
-        description: description,
-        projectId: projectId,
-        taskId: taskId,
-        noteId: noteId,
-      ),
-    );
-
-    activeStartedAt = startedAt;
-    activeDescription = description;
-    activeProjectId = projectId;
-    activeTaskId = taskId;
-    activeNoteId = noteId;
-    _startTicker();
-    notifyListeners();
-  }
-
-  Future<void> stopTimer() => _mutationQueue.run(_stopTimerMutation);
-
-  Future<void> _stopTimerMutation() async {
-    final startedAt = activeStartedAt;
-    final projectId = activeProjectId;
-    if (startedAt == null || projectId == null) return;
-
-    final duration = elapsedTimerSeconds(
-      startedAt: startedAt,
-      endedAt: DateTime.now(),
-    );
-    final entry = TimeEntry(
-      id: _uuid.v4(),
-      description:
-          activeDescription.trim().isEmpty
-              ? 'Рабочая сессия'
-              : activeDescription.trim(),
+    return _timerService.start(
+      description: description,
       projectId: projectId,
-      taskId: activeTaskId,
-      noteId: activeNoteId,
-      startedAt: startedAt,
-      durationSeconds: duration,
+      taskId: taskId,
+      noteId: noteId,
     );
-
-    await _repository.appendTimeEntryAndClearTimer(entry);
-
-    data.entries.insert(0, entry);
-    activeStartedAt = null;
-    activeDescription = '';
-    activeProjectId = null;
-    activeTaskId = null;
-    activeNoteId = null;
-    _ticker?.cancel();
-    _scheduleSyncOverviewRefresh();
-    notifyListeners();
   }
+
+  Future<void> stopTimer() => _timerService.stop();
 
   Future<void> addTask(WorkTask task) {
     final persisted = _cloneTask(task);
@@ -1246,7 +1155,7 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> _shutdown() async {
-    _ticker?.cancel();
+    _timerService.dispose();
     _syncRefreshDebounce?.cancel();
     _vaultMirrorDebounce?.cancel();
     _lanPresenceTimer?.cancel();
@@ -2780,12 +2689,7 @@ class AppStore extends ChangeNotifier {
   Future<void> _reloadAfterRestore() async {
     _undoJournal.clear();
     releaseReadinessReport = null;
-    _ticker?.cancel();
-    activeStartedAt = null;
-    activeDescription = '';
-    activeProjectId = null;
-    activeTaskId = null;
-    activeNoteId = null;
+    _timerService.hydrate(null);
     data = await _repository.load();
     await _hydrateNoteMetadata();
     await rebuildAllNoteLinks();
@@ -2930,17 +2834,10 @@ class AppStore extends ChangeNotifier {
     _attachmentRefreshNotifier.value += 1;
   }
 
-  void _startTicker() {
-    _ticker?.cancel();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      nowTick++;
-      notifyListeners();
-    });
-  }
-
   @override
   void dispose() {
     unawaited(shutdown());
+    _timerService.dispose();
     _attachmentRefreshNotifier.dispose();
     super.dispose();
   }
