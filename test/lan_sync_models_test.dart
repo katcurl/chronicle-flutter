@@ -12,7 +12,6 @@ void main() {
       host: '192.168.1.25',
       port: 42424,
       sessionId: 'session-1',
-      token: 'secret-token',
       expiresAt: DateTime.now().add(const Duration(minutes: 5)),
       hostPeer: const PairingPeer(
         deviceId: 'desktop-id',
@@ -21,6 +20,8 @@ void main() {
         publicKey: 'desktop-key',
       ),
       targetDeviceId: 'phone-id',
+      hostEphemeralX25519PublicKey: 'ephemeral-key',
+      signature: 'signature',
     );
 
     final restored = LanSyncOffer.decode(offer.encode());
@@ -29,6 +30,25 @@ void main() {
     expect(restored.port, offer.port);
     expect(restored.hostPeer.deviceId, 'desktop-id');
     expect(restored.targetDeviceId, 'phone-id');
+  });
+
+  test('legacy cleartext LAN offers cannot downgrade secure sync', () {
+    final legacy = base64Url
+        .encode(
+          utf8.encode(
+            jsonEncode(<String, dynamic>{
+              'protocol': 'chronicle-sync-v3',
+              'host': '127.0.0.1',
+              'port': 42424,
+            }),
+          ),
+        )
+        .replaceAll('=', '');
+
+    expect(
+      () => LanSyncOffer.decode('chronicle://sync/$legacy'),
+      throwsA(isA<FormatException>()),
+    );
   });
 
   test('signed exchange payload keeps journal batch and apply counters', () {

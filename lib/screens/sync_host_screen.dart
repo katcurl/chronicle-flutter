@@ -152,7 +152,24 @@ class _SyncHostScreenState extends State<SyncHostScreen> {
       return _SuccessCard(report: currentReport);
     }
 
-    final offer = value.offerFor(address);
+    return FutureBuilder<LanSyncOffer>(
+      future: value.offerFor(address),
+      builder: (context, snapshot) {
+        final offer = snapshot.data;
+        if (offer == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return _buildReadyOffer(context, value, offer);
+      },
+    );
+  }
+
+  Widget _buildReadyOffer(
+    BuildContext context,
+    LanSyncHostSession value,
+    LanSyncOffer offer,
+  ) {
+    final currentReport = report;
     final remaining = offer.expiresAt.difference(DateTime.now());
     final expired = remaining.isNegative;
 
@@ -243,7 +260,7 @@ class _SyncHostScreenState extends State<SyncHostScreen> {
                             await Clipboard.setData(
                               ClipboardData(text: offer.encode()),
                             );
-                            if (!mounted) {
+                            if (!context.mounted) {
                               return;
                             }
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -449,9 +466,8 @@ class _SecurityNotice extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Каждый пакет подписывается ключом устройства. Chronicle '
-              'принимает данные только от уже связанного устройства и '
-              'повторно проверяет его открытый ключ.',
+              'Chronicle взаимно проверяет ключи связанных устройств, а затем '
+              'шифрует заметки и вложения отдельным ключом этого сеанса.',
               style: TextStyle(color: colors.onSecondaryContainer),
             ),
           ),

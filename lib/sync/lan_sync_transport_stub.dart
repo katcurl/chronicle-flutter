@@ -46,7 +46,10 @@ class LanSyncHostSession {
   List<String> get addresses => const [];
   Stream<LanSyncReport> get reports => const Stream.empty();
   Stream<LanSyncProgress> get progress => const Stream.empty();
-  LanSyncOffer offerFor(String address) => throw UnsupportedError('');
+  Future<LanSyncOffer> offerFor(String address) async {
+    throw UnsupportedError('');
+  }
+
   Future<void> close() async {}
 }
 

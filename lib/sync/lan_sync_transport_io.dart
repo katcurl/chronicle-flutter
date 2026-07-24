@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import 'attachment_sync_models.dart';
 import 'lan_address_selector.dart';
+import 'lan_secure_channel.dart';
 import 'lan_sync_models.dart';
 import 'lan_sync_resilience.dart';
 import 'pairing_crypto.dart';
@@ -33,11 +34,11 @@ class LanSyncHostSession {
     required HttpServer server,
     required this.addresses,
     required this.sessionId,
-    required this.token,
     required this.expiresAt,
     required this.local,
     required this.targetPeer,
     required this.crypto,
+    required LanEphemeralKeyPair hostEphemeral,
     required BuildOutgoingBatch buildOutgoing,
     required ApplyIncomingChanges applyIncoming,
     required LoadPeerCursor loadCursor,
@@ -60,6 +61,7 @@ class LanSyncHostSession {
        _storeAttachment = storeAttachment,
        _applyAttachmentRecord = applyAttachmentRecord,
        _applyAttachmentTombstone = applyAttachmentTombstone,
+       _hostEphemeral = hostEphemeral,
        _onRemoteApplied = onRemoteApplied;
 
   static Future<LanSyncHostSession> start({
@@ -86,15 +88,16 @@ class LanSyncHostSession {
         'Не найден локальный IPv4-адрес. Подключи устройство к Wi-Fi или LAN.',
       );
     }
+    final hostEphemeral = await LanEphemeralKeyPair.generate();
     final session = LanSyncHostSession._(
       server: server,
       addresses: addresses,
       sessionId: const Uuid().v4(),
-      token: crypto.randomToken(),
       expiresAt: DateTime.now().add(const Duration(minutes: 5)),
       local: local,
       targetPeer: targetPeer,
       crypto: crypto,
+      hostEphemeral: hostEphemeral,
       buildOutgoing: buildOutgoing,
       applyIncoming: applyIncoming,
       loadCursor: loadCursor,
@@ -118,11 +121,11 @@ class LanSyncHostSession {
   final HttpServer _server;
   final List<String> addresses;
   final String sessionId;
-  final String token;
   final DateTime expiresAt;
   final LocalPairingIdentity local;
   final PairingPeer targetPeer;
   final PairingCrypto crypto;
+  final LanEphemeralKeyPair _hostEphemeral;
   final BuildOutgoingBatch _buildOutgoing;
   final ApplyIncomingChanges _applyIncoming;
   final LoadPeerCursor _loadCursor;
@@ -154,19 +157,38 @@ class LanSyncHostSession {
   StreamSubscription<HttpRequest>? _subscription;
   Timer? _expiryTimer;
   bool _closed = false;
+  LanSecureChannel? _secureChannel;
+  String? _authenticatedClientChallenge;
 
   Stream<LanSyncReport> get reports => _reportController.stream;
   Stream<LanSyncProgress> get progress => _progressController.stream;
 
-  LanSyncOffer offerFor(String address) => LanSyncOffer(
-    host: address,
-    port: _server.port,
-    sessionId: sessionId,
-    token: token,
-    expiresAt: expiresAt,
-    hostPeer: local.peer,
-    targetDeviceId: targetPeer.deviceId,
-  );
+  Future<LanSyncOffer> offerFor(String address) async {
+    final unsigned = LanSyncOffer(
+      host: address,
+      port: _server.port,
+      sessionId: sessionId,
+      expiresAt: expiresAt,
+      hostPeer: local.peer,
+      targetDeviceId: targetPeer.deviceId,
+      hostEphemeralX25519PublicKey: _hostEphemeral.publicKeyBase64,
+      signature: '',
+    );
+    final signature = await crypto.sign(
+      unsigned.signingPayload,
+      local.keyMaterial,
+    );
+    return LanSyncOffer(
+      host: unsigned.host,
+      port: unsigned.port,
+      sessionId: unsigned.sessionId,
+      expiresAt: unsigned.expiresAt,
+      hostPeer: unsigned.hostPeer,
+      targetDeviceId: unsigned.targetDeviceId,
+      hostEphemeralX25519PublicKey: unsigned.hostEphemeralX25519PublicKey,
+      signature: signature,
+    );
+  }
 
   Future<void> _handleRequest(HttpRequest request) async {
     try {
@@ -182,16 +204,21 @@ class LanSyncHostSession {
         });
         return;
       }
-      if (request.method == 'POST' && request.uri.path == '/v1/sync/exchange') {
+      if (request.method == 'POST' &&
+          request.uri.path == '/v2/sync/handshake') {
+        await _handleHandshake(request);
+        return;
+      }
+      if (request.method == 'POST' && request.uri.path == '/v2/sync/exchange') {
         await _handleExchange(request);
         return;
       }
       if (request.method == 'POST' &&
-          request.uri.path == '/v1/sync/attachment') {
+          request.uri.path == '/v2/sync/attachment') {
         await _handleAttachmentCommand(request);
         return;
       }
-      if (request.method == 'POST' && request.uri.path == '/v1/sync/ack') {
+      if (request.method == 'POST' && request.uri.path == '/v2/sync/ack') {
         await _handleAck(request);
         return;
       }
@@ -213,8 +240,104 @@ class LanSyncHostSession {
     }
   }
 
+  Future<void> _handleHandshake(HttpRequest request) async {
+    if (_secureChannel != null) {
+      await _jsonResponse(
+        request.response,
+        HttpStatus.conflict,
+        <String, dynamic>{'error': 'handshake_already_completed'},
+      );
+      return;
+    }
+    final payload = LanSyncHandshakeRequest.fromJson(await _readJson(request));
+    if (payload.sessionId != sessionId ||
+        payload.offerSignature.isEmpty ||
+        payload.clientChallenge.isEmpty ||
+        payload.clientEphemeralX25519PublicKey.isEmpty ||
+        DateTime.now().difference(payload.sentAt).abs() >
+            const Duration(minutes: 2)) {
+      await _jsonResponse(
+        request.response,
+        HttpStatus.forbidden,
+        <String, dynamic>{'error': 'invalid_handshake'},
+      );
+      return;
+    }
+    _validatePeer(payload.peer);
+    final requestedHost = request.requestedUri.host;
+    final expectedOffer = await offerFor(requestedHost);
+    if (payload.offerSignature != expectedOffer.signature) {
+      await _jsonResponse(
+        request.response,
+        HttpStatus.forbidden,
+        <String, dynamic>{'error': 'invalid_offer'},
+      );
+      return;
+    }
+    final requestSigningPayload = payload.signingPayload(
+      expectedOffer.signingPayload,
+    );
+    final valid = await crypto.verify(
+      message: requestSigningPayload,
+      signatureBase64: payload.signature,
+      publicKeyBase64: targetPeer.publicKey,
+    );
+    if (!valid) {
+      await _jsonResponse(
+        request.response,
+        HttpStatus.forbidden,
+        <String, dynamic>{'error': 'invalid_signature'},
+      );
+      return;
+    }
+
+    final unsigned = LanSyncHandshakeResponse(
+      sessionId: sessionId,
+      hostDeviceId: local.peer.deviceId,
+      clientChallenge: payload.clientChallenge,
+      hostChallenge: crypto.randomToken(),
+      sentAt: DateTime.now(),
+      signature: '',
+    );
+    final responseSigningPayload = unsigned.signingPayload(
+      requestSigningPayload,
+      payload.signature,
+    );
+    final signature = await crypto.sign(
+      responseSigningPayload,
+      local.keyMaterial,
+    );
+    final response = LanSyncHandshakeResponse(
+      sessionId: unsigned.sessionId,
+      hostDeviceId: unsigned.hostDeviceId,
+      clientChallenge: unsigned.clientChallenge,
+      hostChallenge: unsigned.hostChallenge,
+      sentAt: unsigned.sentAt,
+      signature: signature,
+    );
+    final transcript = _handshakeTranscript(
+      requestSigningPayload: requestSigningPayload,
+      requestSignature: payload.signature,
+      responseSigningPayload: responseSigningPayload,
+      responseSignature: signature,
+    );
+    _secureChannel = await LanSecureChannel.forHost(
+      sessionId: sessionId,
+      hostKeyPair: _hostEphemeral.keyPair,
+      clientPublicKeyBase64: payload.clientEphemeralX25519PublicKey,
+      transcript: transcript,
+    );
+    _hostEphemeral.keyPair.destroy();
+    _authenticatedClientChallenge = payload.clientChallenge;
+    await _jsonResponse(request.response, HttpStatus.ok, response.toJson());
+  }
+
   Future<void> _handleExchange(HttpRequest request) async {
-    final payload = LanSyncExchangeRequest.fromJson(await _readJson(request));
+    final secureRequest = await _readSecureRequest(request);
+    final payload = LanSyncExchangeRequest.fromJson(secureRequest.json);
+    if (payload.roundId != secureRequest.context) {
+      throw StateError('invalid_envelope_context');
+    }
     _validateSession(payload.sessionId, payload.token);
     _validatePeer(payload.peer);
     final valid = await crypto.verify(
@@ -294,11 +417,21 @@ class LanSyncHostSession {
       previousCursor: cursor,
       startedAt: startedAt,
     );
-    await _jsonResponse(request.response, HttpStatus.ok, response.toJson());
+    await _secureJsonResponse(
+      request.response,
+      HttpStatus.ok,
+      response.toJson(),
+      endpoint: request.uri.path,
+      context: secureRequest.context,
+    );
   }
 
   Future<void> _handleAttachmentCommand(HttpRequest request) async {
-    final command = LanAttachmentCommand.fromJson(await _readJson(request));
+    final secureRequest = await _readSecureRequest(request);
+    final command = LanAttachmentCommand.fromJson(secureRequest.json);
+    if (command.transferId != secureRequest.context) {
+      throw StateError('invalid_envelope_context');
+    }
     _validateSession(command.sessionId, command.token);
     _validatePeer(command.peer);
     final valid = await crypto.verify(
@@ -436,11 +569,21 @@ class LanSyncHostSession {
       dataBase64: unsigned.dataBase64,
       signature: signature,
     );
-    await _jsonResponse(request.response, HttpStatus.ok, response.toJson());
+    await _secureJsonResponse(
+      request.response,
+      HttpStatus.ok,
+      response.toJson(),
+      endpoint: request.uri.path,
+      context: secureRequest.context,
+    );
   }
 
   Future<void> _handleAck(HttpRequest request) async {
-    final ack = LanSyncAck.fromJson(await _readJson(request));
+    final secureRequest = await _readSecureRequest(request);
+    final ack = LanSyncAck.fromJson(secureRequest.json);
+    if (ack.roundId != secureRequest.context) {
+      throw StateError('invalid_envelope_context');
+    }
     if (ack.sessionId != sessionId ||
         ack.clientDeviceId != targetPeer.deviceId) {
       await _jsonResponse(request.response, HttpStatus.forbidden, {
@@ -522,9 +665,13 @@ class LanSyncHostSession {
     _completedAttachmentTransfers.clear();
     _pendingRounds.remove(ack.roundId);
     _reportController.add(report);
-    await _jsonResponse(request.response, HttpStatus.ok, {
-      'status': 'acknowledged',
-    });
+    await _secureJsonResponse(
+      request.response,
+      HttpStatus.ok,
+      <String, dynamic>{'status': 'acknowledged'},
+      endpoint: request.uri.path,
+      context: secureRequest.context,
+    );
   }
 
   void _emitHostProgress({
@@ -549,9 +696,43 @@ class LanSyncHostSession {
   }
 
   void _validateSession(String receivedSessionId, String receivedToken) {
-    if (receivedSessionId != sessionId || receivedToken != token) {
+    if (receivedSessionId != sessionId || receivedToken.isNotEmpty) {
       throw StateError('invalid_session');
     }
+  }
+
+  Future<_DecryptedSecureRequest> _readSecureRequest(
+    HttpRequest request,
+  ) async {
+    final channel = _secureChannel;
+    if (channel == null || _authenticatedClientChallenge == null) {
+      throw StateError('authentication_required');
+    }
+    final envelope = EncryptedEnvelope.fromJson(await _readJson(request));
+    final json = await channel.decryptJson(
+      envelope,
+      endpoint: request.uri.path,
+    );
+    return _DecryptedSecureRequest(json: json, context: envelope.context);
+  }
+
+  Future<void> _secureJsonResponse(
+    HttpResponse response,
+    int statusCode,
+    Map<String, dynamic> payload, {
+    required String endpoint,
+    required String context,
+  }) async {
+    final channel = _secureChannel;
+    if (channel == null) {
+      throw StateError('authentication_required');
+    }
+    final envelope = await channel.encryptJson(
+      payload,
+      endpoint: endpoint,
+      context: context,
+    );
+    await _jsonResponse(response, statusCode, envelope.toJson());
   }
 
   void _validatePeer(PairingPeer peer) {
@@ -567,6 +748,10 @@ class LanSyncHostSession {
     }
     _closed = true;
     _expiryTimer?.cancel();
+    _secureChannel?.destroy();
+    if (!_hostEphemeral.keyPair.hasBeenDestroyed) {
+      _hostEphemeral.keyPair.destroy();
+    }
     await _subscription?.cancel();
     await _server.close(force: true);
     await _reportController.close();
@@ -607,6 +792,14 @@ class LanSyncClient {
         offer.hostPeer.publicKey != trustedHost.publicKey) {
       throw StateError('Устройство из кода не является доверенным.');
     }
+    final validOffer = await crypto.verify(
+      message: offer.signingPayload,
+      signatureBase64: offer.signature,
+      publicKeyBase64: trustedHost.publicKey,
+    );
+    if (!validOffer) {
+      throw StateError('Подпись кода синхронизации неверна.');
+    }
 
     final startedAt = DateTime.now();
     onProgress?.call(
@@ -619,6 +812,87 @@ class LanSyncClient {
           client.close(force: true);
         }),
       );
+    }
+    late final LanSecureChannel channel;
+    try {
+      final clientEphemeral = await LanEphemeralKeyPair.generate();
+      final clientChallenge = crypto.randomToken();
+      final unsignedHandshake = LanSyncHandshakeRequest(
+        sessionId: offer.sessionId,
+        peer: local.peer,
+        clientEphemeralX25519PublicKey: clientEphemeral.publicKeyBase64,
+        clientChallenge: clientChallenge,
+        sentAt: DateTime.now(),
+        offerSignature: offer.signature,
+        signature: '',
+      );
+      final handshakeSigningPayload = unsignedHandshake.signingPayload(
+        offer.signingPayload,
+      );
+      final handshakeSignature = await crypto.sign(
+        handshakeSigningPayload,
+        local.keyMaterial,
+      );
+      final handshakeRequest = LanSyncHandshakeRequest(
+        sessionId: unsignedHandshake.sessionId,
+        peer: unsignedHandshake.peer,
+        clientEphemeralX25519PublicKey:
+            unsignedHandshake.clientEphemeralX25519PublicKey,
+        clientChallenge: unsignedHandshake.clientChallenge,
+        sentAt: unsignedHandshake.sentAt,
+        offerSignature: unsignedHandshake.offerSignature,
+        signature: handshakeSignature,
+      );
+      final rawHandshake = await _postPlainJson(
+        client,
+        offer,
+        '/v2/sync/handshake',
+        handshakeRequest.toJson(),
+      );
+      if (rawHandshake.statusCode != HttpStatus.ok) {
+        client.close(force: true);
+        throw StateError(_friendlySyncError(rawHandshake.json));
+      }
+      final handshakeResponse = LanSyncHandshakeResponse.fromJson(
+        rawHandshake.json,
+      );
+      if (handshakeResponse.sessionId != offer.sessionId ||
+          handshakeResponse.hostDeviceId != trustedHost.deviceId ||
+          handshakeResponse.clientChallenge != clientChallenge ||
+          handshakeResponse.hostChallenge.isEmpty ||
+          DateTime.now().difference(handshakeResponse.sentAt).abs() >
+              const Duration(minutes: 2)) {
+        client.close(force: true);
+        throw StateError('Ответ защищённого соединения не прошёл проверку.');
+      }
+      final responseSigningPayload = handshakeResponse.signingPayload(
+        handshakeSigningPayload,
+        handshakeSignature,
+      );
+      final validHandshakeResponse = await crypto.verify(
+        message: responseSigningPayload,
+        signatureBase64: handshakeResponse.signature,
+        publicKeyBase64: trustedHost.publicKey,
+      );
+      if (!validHandshakeResponse) {
+        client.close(force: true);
+        throw StateError('Сервер не доказал владение доверенным ключом.');
+      }
+      channel = await LanSecureChannel.forClient(
+        sessionId: offer.sessionId,
+        clientKeyPair: clientEphemeral.keyPair,
+        hostPublicKeyBase64: offer.hostEphemeralX25519PublicKey,
+        transcript: _handshakeTranscript(
+          requestSigningPayload: handshakeSigningPayload,
+          requestSignature: handshakeSignature,
+          responseSigningPayload: responseSigningPayload,
+          responseSignature: handshakeResponse.signature,
+        ),
+      );
+      clientEphemeral.keyPair.destroy();
+    } on Object {
+      client.close(force: true);
+      rethrow;
     }
     var roundCount = 0;
     var sentCount = 0;
@@ -662,7 +936,7 @@ class LanSyncClient {
         final roundId = const Uuid().v4();
         final unsigned = LanSyncExchangeRequest(
           sessionId: offer.sessionId,
-          token: offer.token,
+          token: '',
           roundId: roundId,
           peer: local.peer,
           batch: outgoing,
@@ -675,7 +949,7 @@ class LanSyncClient {
         );
         final request = LanSyncExchangeRequest(
           sessionId: offer.sessionId,
-          token: offer.token,
+          token: '',
           roundId: roundId,
           peer: local.peer,
           batch: outgoing,
@@ -683,11 +957,13 @@ class LanSyncClient {
           signature: requestSignature,
         );
         cancellationToken?.throwIfCancelled();
-        final rawResponse = await _postJson(
+        final rawResponse = await _postEncryptedJson(
           client,
           offer,
-          '/v1/sync/exchange',
+          channel,
+          '/v2/sync/exchange',
           request.toJson(),
+          context: roundId,
         );
         cancellationToken?.throwIfCancelled();
         if (rawResponse.statusCode != HttpStatus.ok) {
@@ -752,6 +1028,7 @@ class LanSyncClient {
                 (_) => _sendAttachmentCommand(
                   client: client,
                   offer: offer,
+                  channel: channel,
                   local: local,
                   trustedHost: trustedHost,
                   crypto: crypto,
@@ -862,6 +1139,7 @@ class LanSyncClient {
                 (_) => _sendAttachmentCommand(
                   client: client,
                   offer: offer,
+                  channel: channel,
                   local: local,
                   trustedHost: trustedHost,
                   crypto: crypto,
@@ -922,6 +1200,7 @@ class LanSyncClient {
                 (_) => _sendAttachmentCommand(
                   client: client,
                   offer: offer,
+                  channel: channel,
                   local: local,
                   trustedHost: trustedHost,
                   crypto: crypto,
@@ -967,6 +1246,7 @@ class LanSyncClient {
                 (_) => _sendAttachmentCommand(
                   client: client,
                   offer: offer,
+                  channel: channel,
                   local: local,
                   trustedHost: trustedHost,
                   crypto: crypto,
@@ -1028,11 +1308,13 @@ class LanSyncClient {
           receivedThroughSequence: response.batch.throughSequence,
           signature: ackSignature,
         );
-        final ackResponse = await _postJson(
+        final ackResponse = await _postEncryptedJson(
           client,
           offer,
-          '/v1/sync/ack',
+          channel,
+          '/v2/sync/ack',
           ack.toJson(),
+          context: roundId,
         );
         if (ackResponse.statusCode != HttpStatus.ok) {
           throw StateError(_friendlySyncError(ackResponse.json));
@@ -1050,6 +1332,7 @@ class LanSyncClient {
       cancellationToken?.throwIfCancelled();
       rethrow;
     } finally {
+      channel.destroy();
       client.close(force: true);
     }
 
@@ -1087,6 +1370,7 @@ class LanSyncClient {
   static Future<LanAttachmentCommandResponse> _sendAttachmentCommand({
     required HttpClient client,
     required LanSyncOffer offer,
+    required LanSecureChannel channel,
     required LocalPairingIdentity local,
     required PairingPeer trustedHost,
     required PairingCrypto crypto,
@@ -1100,7 +1384,7 @@ class LanSyncClient {
     final effectiveTransferId = transferId ?? const Uuid().v4();
     final unsigned = LanAttachmentCommand(
       sessionId: offer.sessionId,
-      token: offer.token,
+      token: '',
       transferId: effectiveTransferId,
       peer: local.peer,
       kind: kind,
@@ -1114,7 +1398,7 @@ class LanSyncClient {
     );
     final command = LanAttachmentCommand(
       sessionId: offer.sessionId,
-      token: offer.token,
+      token: '',
       transferId: effectiveTransferId,
       peer: local.peer,
       kind: kind,
@@ -1123,11 +1407,13 @@ class LanSyncClient {
       signature: signature,
     );
     cancellationToken?.throwIfCancelled();
-    final rawResponse = await _postJson(
+    final rawResponse = await _postEncryptedJson(
       client,
       offer,
-      '/v1/sync/attachment',
+      channel,
+      '/v2/sync/attachment',
       command.toJson(),
+      context: effectiveTransferId,
     );
     cancellationToken?.throwIfCancelled();
     if (rawResponse.statusCode != HttpStatus.ok) {
@@ -1210,7 +1496,14 @@ class _JsonHttpResponse {
   final Map<String, dynamic> json;
 }
 
-Future<_JsonHttpResponse> _postJson(
+class _DecryptedSecureRequest {
+  const _DecryptedSecureRequest({required this.json, required this.context});
+
+  final Map<String, dynamic> json;
+  final String context;
+}
+
+Future<_JsonHttpResponse> _postPlainJson(
   HttpClient client,
   LanSyncOffer offer,
   String path,
@@ -1222,6 +1515,52 @@ Future<_JsonHttpResponse> _postJson(
   request.headers.contentType = ContentType.json;
   request.write(jsonEncode(body));
   return _readHttpResponse(await request.close());
+}
+
+Future<_JsonHttpResponse> _postEncryptedJson(
+  HttpClient client,
+  LanSyncOffer offer,
+  LanSecureChannel channel,
+  String path,
+  Map<String, dynamic> body, {
+  required String context,
+}) async {
+  final envelope = await channel.encryptJson(
+    body,
+    endpoint: path,
+    context: context,
+  );
+  final rawResponse = await _postPlainJson(
+    client,
+    offer,
+    path,
+    envelope.toJson(),
+  );
+  if (rawResponse.statusCode != HttpStatus.ok) {
+    return rawResponse;
+  }
+  final responseEnvelope = EncryptedEnvelope.fromJson(rawResponse.json);
+  if (responseEnvelope.context != context) {
+    throw StateError('Ответ защищённого соединения имеет неверный контекст.');
+  }
+  final clearText = await channel.decryptJson(responseEnvelope, endpoint: path);
+  return _JsonHttpResponse(rawResponse.statusCode, clearText);
+}
+
+String _handshakeTranscript({
+  required String requestSigningPayload,
+  required String requestSignature,
+  required String responseSigningPayload,
+  required String responseSignature,
+}) {
+  return jsonEncode(<String, dynamic>{
+    'protocol': lanSyncProtocol,
+    'securityVersion': lanSyncSecurityVersion,
+    'requestSigningPayload': requestSigningPayload,
+    'requestSignature': requestSignature,
+    'responseSigningPayload': responseSigningPayload,
+    'responseSignature': responseSignature,
+  });
 }
 
 Future<_JsonHttpResponse> _readHttpResponse(HttpClientResponse response) async {

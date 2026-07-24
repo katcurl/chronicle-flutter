@@ -253,7 +253,7 @@ class LanAutoSyncNode {
                   requestedHost != 'localhost'
               ? requestedHost
               : session.addresses.first;
-      final encodedOffer = session.offerFor(address).encode();
+      final encodedOffer = (await session.offerFor(address)).encode();
       _acceptedRequests[payload.requestId] = DateTime.now();
 
       final unsigned = LanAutoSyncOfferResponse(

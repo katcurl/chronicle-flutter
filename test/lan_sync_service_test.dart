@@ -36,7 +36,7 @@ void main() {
       );
       addTearDown(host.close);
 
-      final offer = host.offerFor('127.0.0.1');
+      final offer = await host.offerFor('127.0.0.1');
       final report = await phoneSync.syncFromOffer(
         offer.encode(),
         expectedPeerDeviceId: desktopIdentity.peer.deviceId,
@@ -88,7 +88,7 @@ void main() {
       peerDeviceId: phoneIdentity.peer.deviceId,
     );
     await phoneSync.syncFromOffer(
-      firstHost.offerFor('127.0.0.1').encode(),
+      (await firstHost.offerFor('127.0.0.1')).encode(),
       expectedPeerDeviceId: desktopIdentity.peer.deviceId,
     );
     await firstHost.close();
@@ -98,7 +98,7 @@ void main() {
     );
     addTearDown(secondHost.close);
     final second = await phoneSync.syncFromOffer(
-      secondHost.offerFor('127.0.0.1').encode(),
+      (await secondHost.offerFor('127.0.0.1')).encode(),
       expectedPeerDeviceId: desktopIdentity.peer.deviceId,
     );
 
@@ -165,7 +165,7 @@ void main() {
       addTearDown(host.close);
 
       final report = await phoneSync.syncFromOffer(
-        host.offerFor('127.0.0.1').encode(),
+        (await host.offerFor('127.0.0.1')).encode(),
         expectedPeerDeviceId: desktopIdentity.peer.deviceId,
       );
 

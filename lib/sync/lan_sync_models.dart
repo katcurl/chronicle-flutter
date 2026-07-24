@@ -1,95 +1,18 @@
 import 'dart:convert';
 
 import 'attachment_sync_models.dart';
+import 'lan_sync_protocol_v2.dart' show lanSyncProtocol;
 import 'pairing_models.dart';
 import 'sync_models.dart';
 
-const lanSyncProtocol = 'chronicle-sync-v3';
-
-class LanSyncOffer {
-  const LanSyncOffer({
-    required this.host,
-    required this.port,
-    required this.sessionId,
-    required this.token,
-    required this.expiresAt,
-    required this.hostPeer,
-    required this.targetDeviceId,
-  });
-
-  final String host;
-  final int port;
-  final String sessionId;
-  final String token;
-  final DateTime expiresAt;
-  final PairingPeer hostPeer;
-  final String targetDeviceId;
-
-  bool get isExpired => DateTime.now().isAfter(expiresAt);
-
-  LanSyncOffer copyWithHost(String value) => LanSyncOffer(
-    host: value,
-    port: port,
-    sessionId: sessionId,
-    token: token,
-    expiresAt: expiresAt,
-    hostPeer: hostPeer,
-    targetDeviceId: targetDeviceId,
-  );
-
-  Map<String, dynamic> toJson() => {
-    'protocol': lanSyncProtocol,
-    'host': host,
-    'port': port,
-    'sessionId': sessionId,
-    'token': token,
-    'expiresAt': expiresAt.toUtc().toIso8601String(),
-    'hostPeer': hostPeer.toJson(),
-    'targetDeviceId': targetDeviceId,
-  };
-
-  String encode() {
-    final bytes = utf8.encode(jsonEncode(toJson()));
-    final payload = base64Url.encode(bytes).replaceAll('=', '');
-    return 'chronicle://sync/$payload';
-  }
-
-  factory LanSyncOffer.decode(String raw) {
-    final uri = Uri.tryParse(raw.trim());
-    if (uri == null || uri.scheme != 'chronicle' || uri.host != 'sync') {
-      throw const FormatException('Это не код синхронизации Chronicle.');
-    }
-    final payload = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
-    if (payload.isEmpty) {
-      throw const FormatException('Код не содержит данных синхронизации.');
-    }
-    final decoded = jsonDecode(
-      utf8.decode(base64Url.decode(base64Url.normalize(payload))),
-    );
-    if (decoded is! Map) {
-      throw const FormatException('Неверный формат кода Chronicle.');
-    }
-    final json = Map<String, dynamic>.from(decoded);
-    if (json['protocol'] != lanSyncProtocol) {
-      throw const FormatException('Эта версия протокола не поддерживается.');
-    }
-    final offer = LanSyncOffer(
-      host: json['host']! as String,
-      port: (json['port']! as num).toInt(),
-      sessionId: json['sessionId']! as String,
-      token: json['token']! as String,
-      expiresAt: DateTime.parse(json['expiresAt']! as String).toLocal(),
-      hostPeer: PairingPeer.fromJson(
-        Map<String, dynamic>.from(json['hostPeer']! as Map),
-      ),
-      targetDeviceId: json['targetDeviceId']! as String,
-    );
-    if (offer.isExpired) {
-      throw const FormatException('Срок действия кода синхронизации истёк.');
-    }
-    return offer;
-  }
-}
+export 'lan_sync_protocol_v2.dart'
+    show
+        EncryptedEnvelope,
+        LanSyncHandshakeRequest,
+        LanSyncHandshakeResponse,
+        LanSyncOffer,
+        lanSyncProtocol,
+        lanSyncSecurityVersion;
 
 class LanSyncExchangeRequest {
   const LanSyncExchangeRequest({
