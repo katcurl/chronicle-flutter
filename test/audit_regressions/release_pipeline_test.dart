@@ -2,6 +2,13 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+String _readNormalized(String path) {
+  return File(path)
+      .readAsStringSync()
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n');
+}
+
 void main() {
   const buildAndroidPath = '.github/workflows/build-apk.yml';
   const buildWindowsPath = '.github/workflows/build-windows.yml';
@@ -9,18 +16,21 @@ void main() {
 
   test('all third-party actions are pinned to immutable commits', () {
     for (final path in [buildAndroidPath, buildWindowsPath, releasePath]) {
-      final workflow = File(path).readAsStringSync();
+      final workflow = _readNormalized(path);
       final actionReferences = RegExp(
         r'uses:\s*([^\s@]+)@([^\s#]+)',
       ).allMatches(workflow);
 
       expect(actionReferences, isNotEmpty, reason: '$path has no actions');
+
       for (final match in actionReferences) {
         final action = match.group(1)!;
         final reference = match.group(2)!;
+
         if (action.startsWith('./')) {
           continue;
         }
+
         expect(
           reference,
           matches(RegExp(r'^[0-9a-f]{40}$')),
@@ -31,7 +41,7 @@ void main() {
   });
 
   test('ordinary Android builds cannot read signing secrets', () {
-    final workflow = File(buildAndroidPath).readAsStringSync();
+    final workflow = _readNormalized(buildAndroidPath);
 
     expect(workflow, isNot(contains('secrets.')));
     expect(workflow, isNot(contains('feature/data-core')));
@@ -42,7 +52,7 @@ void main() {
   });
 
   test('Windows artifact is portable, JNI-free, and smoke-tested', () {
-    final workflow = File(buildWindowsPath).readAsStringSync();
+    final workflow = _readNormalized(buildWindowsPath);
 
     expect(workflow, isNot(contains('secrets.')));
     expect(workflow, contains('msvcp140.dll'));
@@ -54,7 +64,7 @@ void main() {
   });
 
   test('tag-only release signs in a protected environment and attests', () {
-    final workflow = File(releasePath).readAsStringSync();
+    final workflow = _readNormalized(releasePath);
 
     expect(workflow, contains("tags:\n      - 'v*'"));
     expect(workflow, contains('environment: release-signing'));
@@ -70,9 +80,10 @@ void main() {
     expect(File('tool/generate_spdx_sbom.dart').existsSync(), isTrue);
     expect(File('SECURITY.md').existsSync(), isTrue);
 
-    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final pubspec = _readNormalized('pubspec.yaml');
     expect(pubspec, contains('path_provider_android: 2.2.23'));
-    final lockfile = File('pubspec.lock').readAsStringSync();
+
+    final lockfile = _readNormalized('pubspec.lock');
     expect(lockfile, isNot(contains('\n  jni:')));
     expect(lockfile, isNot(contains('\n  jni_flutter:')));
   });
