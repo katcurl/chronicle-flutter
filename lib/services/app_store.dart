@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:uuid/uuid.dart';
 
 import '../application/backup/restore_coordinator.dart';
+import '../application/notes/note_commands.dart';
+import '../application/notes/note_template_commands.dart';
+import '../application/notes/wiki_link_commands.dart';
 import '../application/sync/lan_discovery_coordinator.dart';
 import '../application/sync/sync_coordinator.dart';
+import '../application/tasks/task_commands.dart';
 import '../application/timer/timer_service.dart';
 import '../application/vault/vault_coordinator.dart';
 import '../data/migration/legacy_preferences_importer.dart';
@@ -13,13 +16,9 @@ import '../data/backup/staged_restore.dart';
 import '../data/repositories/app_repository.dart';
 import '../data/repositories/drift_app_repository.dart';
 import '../data/repositories/mutation_queue.dart';
-import '../features/notes/custom_note_template_library.dart';
 import '../features/notes/custom_note_template_store.dart';
-import '../features/notes/note_document.dart';
 import '../features/notes/note_templates.dart';
-import '../features/notes/note_wiki_link_syntax.dart';
 import '../features/notes/note_wiki_rename.dart';
-import '../features/references/citation_syntax.dart';
 import '../models/app_models.dart';
 import '../reliability/release_readiness.dart';
 import '../reliability/reliability_models.dart';
@@ -55,7 +54,6 @@ class AppStore extends ChangeNotifier {
        _legacyImporter = legacyImporter,
        _vaultService = vaultService ?? VaultService(),
        _reliabilityService = reliabilityService ?? ReliabilityService(),
-       _customNoteTemplateStore = customNoteTemplateStore,
        _migrateDeviceKeyOnStartup = migrateDeviceKeyOnStartup,
        _automaticLanSyncEnabled = enableAutomaticLanSync,
        _reliabilityFeaturesEnabled = enableReliabilityFeatures {
@@ -88,6 +86,44 @@ class AppStore extends ChangeNotifier {
       entries: () => data.entries,
       onStateChanged: notifyListeners,
       onEntrySaved: _scheduleSyncOverviewRefresh,
+    );
+    _noteCommands = NoteCommands(
+      repository: repository,
+      mutationQueue: _mutationQueue,
+      currentData: () => data,
+      resolveWikiTarget: resolveWikiTarget,
+      registerUndo: _registerUndo,
+      recordLinkIndexWarning:
+          (error) => _recordReliability(
+            stage: ReliabilityStage.system,
+            level: ReliabilityLevel.warning,
+            message: 'Индекс связей заметок требует перестроения.',
+            details: <String, Object?>{'error': error.toString()},
+            notify: false,
+          ),
+      scheduleSync: _scheduleSyncOverviewRefresh,
+      scheduleVaultMirror: _scheduleVaultMirror,
+      notifyListeners: notifyListeners,
+    );
+    _wikiLinkCommands = WikiLinkCommands(
+      repository: repository,
+      currentData: () => data,
+      syncNoteLinks: _noteCommands.syncLinks,
+      scheduleSync: _scheduleSyncOverviewRefresh,
+      scheduleVaultMirror: _scheduleVaultMirror,
+      notifyListeners: notifyListeners,
+    );
+    _taskCommands = TaskCommands(
+      repository: repository,
+      mutationQueue: _mutationQueue,
+      currentData: () => data,
+      registerUndo: _registerUndo,
+      scheduleSync: _scheduleSyncOverviewRefresh,
+      notifyListeners: notifyListeners,
+    );
+    _noteTemplateCommands = NoteTemplateCommands(
+      store: customNoteTemplateStore,
+      notifyListeners: notifyListeners,
     );
     _restoreCoordinator = RestoreCoordinator(
       repository: repository,
@@ -190,17 +226,19 @@ class AppStore extends ChangeNotifier {
   final LegacyPreferencesImporter? _legacyImporter;
   final VaultService _vaultService;
   final ReliabilityService _reliabilityService;
-  final CustomNoteTemplateStore? _customNoteTemplateStore;
   final bool _migrateDeviceKeyOnStartup;
   late final PairingService pairingService;
   late final LanSyncService lanSyncService;
   final bool _automaticLanSyncEnabled;
   final bool _reliabilityFeaturesEnabled;
   late final LanAutoSyncService autoSyncService;
-  final _uuid = const Uuid();
   final ChronicleUndoJournal _undoJournal = ChronicleUndoJournal();
   final MutationQueue _mutationQueue = MutationQueue();
   late final TimerService _timerService;
+  late final NoteCommands _noteCommands;
+  late final WikiLinkCommands _wikiLinkCommands;
+  late final TaskCommands _taskCommands;
+  late final NoteTemplateCommands _noteTemplateCommands;
   late final RestoreCoordinator _restoreCoordinator;
   late final VaultCoordinator _vaultCoordinator;
   late final SyncCoordinator _syncCoordinator;
@@ -211,7 +249,8 @@ class AppStore extends ChangeNotifier {
       _attachmentRefreshNotifier;
 
   AppData data = AppData.empty();
-  List<NoteTemplate> customNoteTemplates = const <NoteTemplate>[];
+  List<NoteTemplate> get customNoteTemplates =>
+      _noteTemplateCommands.customTemplates;
   bool ready = false;
   Object? loadError;
 
@@ -395,26 +434,15 @@ class AppStore extends ChangeNotifier {
     }
   }
 
-  NoteTemplate get blankNoteTemplate =>
-      noteTemplates.firstWhere((template) => template.id == 'blank');
+  NoteTemplate get blankNoteTemplate => _noteTemplateCommands.blankTemplate;
 
   List<NoteTemplate> get availableNoteTemplates =>
-      List<NoteTemplate>.unmodifiable(<NoteTemplate>[
-        blankNoteTemplate,
-        ...customNoteTemplates,
-      ]);
+      _noteTemplateCommands.availableTemplates;
 
   List<NoteTemplate> get applicableNoteTemplates =>
-      List<NoteTemplate>.unmodifiable(customNoteTemplates);
+      _noteTemplateCommands.applicableTemplates;
 
-  Future<void> _loadCustomNoteTemplates() async {
-    final store = _customNoteTemplateStore;
-    if (store == null) {
-      customNoteTemplates = const <NoteTemplate>[];
-      return;
-    }
-    customNoteTemplates = await store.load();
-  }
+  Future<void> _loadCustomNoteTemplates() => _noteTemplateCommands.load();
 
   Future<NoteTemplate> createCustomNoteTemplate({
     required String title,
@@ -424,27 +452,15 @@ class AppStore extends ChangeNotifier {
     String category = '',
     List<String> defaultTags = const <String>[],
     Map<String, String> defaultProperties = const <String, String>{},
-  }) async {
-    if (customNoteTemplates.length >=
-        CustomNoteTemplateStore.maxTemplateCount) {
-      throw StateError('Достигнут лимит пользовательских шаблонов.');
-    }
-    final template = _normalizeCustomNoteTemplate(
-      id: 'custom_${_uuid.v4()}',
-      title: title,
-      icon: icon,
-      noteType: noteType,
-      content: content,
-      category: category,
-      defaultTags: defaultTags,
-      defaultProperties: defaultProperties,
-    );
-    await _replaceCustomTemplates(<NoteTemplate>[
-      ...customNoteTemplates,
-      template,
-    ]);
-    return template;
-  }
+  }) => _noteTemplateCommands.create(
+    title: title,
+    icon: icon,
+    noteType: noteType,
+    content: content,
+    category: category,
+    defaultTags: defaultTags,
+    defaultProperties: defaultProperties,
+  );
 
   Future<NoteTemplate> updateCustomNoteTemplate({
     required String id,
@@ -455,539 +471,77 @@ class AppStore extends ChangeNotifier {
     String category = '',
     List<String> defaultTags = const <String>[],
     Map<String, String> defaultProperties = const <String, String>{},
-  }) async {
-    final index = customNoteTemplates.indexWhere(
-      (template) => template.id == id,
-    );
-    if (index < 0) {
-      throw StateError('Пользовательский шаблон не найден.');
-    }
-    final template = _normalizeCustomNoteTemplate(
-      id: id,
-      title: title,
-      icon: icon,
-      noteType: noteType,
-      content: content,
-      category: category,
-      defaultTags: defaultTags,
-      defaultProperties: defaultProperties,
-    );
-    final next = List<NoteTemplate>.from(customNoteTemplates);
-    next[index] = template;
-    await _replaceCustomTemplates(next);
-    return template;
-  }
+  }) => _noteTemplateCommands.update(
+    id: id,
+    title: title,
+    icon: icon,
+    noteType: noteType,
+    content: content,
+    category: category,
+    defaultTags: defaultTags,
+    defaultProperties: defaultProperties,
+  );
 
-  Future<NoteTemplate> duplicateCustomNoteTemplate(String id) async {
-    final index = customNoteTemplates.indexWhere(
-      (template) => template.id == id,
-    );
-    if (index < 0) {
-      throw StateError('Пользовательский шаблон не найден.');
-    }
-    final source = customNoteTemplates[index];
-    return createCustomNoteTemplate(
-      title: _copyTemplateTitle(source.title),
-      icon: source.icon,
-      noteType: source.noteType,
-      content: source.content,
-      category: source.category,
-      defaultTags: source.defaultTags,
-      defaultProperties: source.defaultProperties,
-    );
-  }
+  Future<NoteTemplate> duplicateCustomNoteTemplate(String id) =>
+      _noteTemplateCommands.duplicate(id);
 
   Future<List<NoteTemplate>> importCustomNoteTemplates(
     List<NoteTemplate> imported,
-  ) async {
-    if (imported.isEmpty) return const <NoteTemplate>[];
-    final remaining =
-        CustomNoteTemplateStore.maxTemplateCount - customNoteTemplates.length;
-    if (remaining <= 0) {
-      throw StateError('Достигнут лимит пользовательских шаблонов.');
-    }
+  ) => _noteTemplateCommands.importTemplates(imported);
 
-    final next = List<NoteTemplate>.from(customNoteTemplates);
-    final added = <NoteTemplate>[];
-    for (final source in imported) {
-      if (added.length >= remaining) break;
-      if (next.any(
-        (template) => CustomNoteTemplateLibrary.equivalent(template, source),
-      )) {
-        continue;
-      }
-      final importedTemplate = _normalizeCustomNoteTemplate(
-        id: 'custom_${_uuid.v4()}',
-        title: source.title,
-        icon: source.icon,
-        noteType: source.noteType,
-        content: source.content,
-        category: source.category,
-        defaultTags: source.defaultTags,
-        defaultProperties: source.defaultProperties,
-      );
-      next.add(importedTemplate);
-      added.add(importedTemplate);
-    }
-    if (added.isNotEmpty) {
-      await _replaceCustomTemplates(next);
-    }
-    return List<NoteTemplate>.unmodifiable(added);
-  }
+  Future<void> deleteCustomNoteTemplate(String id) =>
+      _noteTemplateCommands.delete(id);
 
-  Future<void> deleteCustomNoteTemplate(String id) async {
-    final next = customNoteTemplates
-        .where((template) => template.id != id)
-        .toList(growable: false);
-    if (next.length == customNoteTemplates.length) {
-      return;
-    }
-    await _replaceCustomTemplates(next);
-  }
+  List<Project> get activeProjects => _taskCommands.activeProjects;
 
-  String _copyTemplateTitle(String title) {
-    final normalized = title.trim();
-    var index = 1;
-    while (true) {
-      final prefix = index == 1 ? 'Копия — ' : 'Копия $index — ';
-      final maxSourceLength = 120 - prefix.length;
-      final source =
-          normalized.length <= maxSourceLength
-              ? normalized
-              : normalized.substring(0, maxSourceLength).trimRight();
-      final candidate = '$prefix$source';
-      final exists = customNoteTemplates.any(
-        (template) =>
-            template.title.trim().toLowerCase() == candidate.toLowerCase(),
-      );
-      if (!exists) return candidate;
-      index += 1;
-    }
-  }
+  List<Project> get archivedProjects => _taskCommands.archivedProjects;
 
-  NoteTemplate _normalizeCustomNoteTemplate({
-    required String id,
-    required String title,
-    required String icon,
-    required String noteType,
-    required String content,
-    required String category,
-    required List<String> defaultTags,
-    required Map<String, String> defaultProperties,
-  }) {
-    final normalizedTags = <String>[];
-    final seenTags = <String>{};
-    for (final rawTag in defaultTags) {
-      final tag = rawTag.trim();
-      if (tag.isNotEmpty && seenTags.add(tag.toLowerCase())) {
-        normalizedTags.add(tag);
-      }
-    }
-    final normalizedProperties = <String, String>{};
-    for (final entry in defaultProperties.entries) {
-      final key = entry.key.trim();
-      if (key.isNotEmpty) {
-        normalizedProperties[key] = entry.value.trim();
-      }
-    }
-    final template = NoteTemplate(
-      id: id,
-      title: title.trim(),
-      icon: icon.trim().isEmpty ? '📝' : icon.trim(),
-      noteType: noteType.trim().isEmpty ? 'note' : noteType.trim(),
-      content: '${content.trimRight()}\n',
-      category: category.trim(),
-      defaultTags: List<String>.unmodifiable(normalizedTags),
-      defaultProperties: Map<String, String>.unmodifiable(normalizedProperties),
-      isCustom: true,
-    );
-    if (!CustomNoteTemplateStore.isValid(template)) {
-      throw ArgumentError(
-        'Шаблон должен иметь название и непустое содержимое допустимого размера.',
-      );
-    }
-    return template;
-  }
+  Project? projectById(String id) => _wikiLinkCommands.projectById(id);
 
-  Future<void> _replaceCustomTemplates(List<NoteTemplate> next) async {
-    final normalized = List<NoteTemplate>.unmodifiable(next);
-    final store = _customNoteTemplateStore;
-    if (store != null) {
-      await store.save(normalized);
-    }
-    customNoteTemplates = normalized;
-    notifyListeners();
-  }
+  Note? noteById(String id) => _wikiLinkCommands.noteById(id);
 
-  List<Project> get activeProjects =>
-      data.projects.where((project) => !project.archived).toList();
+  Note? noteByTitle(String title) => _wikiLinkCommands.noteByTitle(title);
 
-  List<Project> get archivedProjects =>
-      data.projects.where((project) => project.archived).toList();
+  List<Note> notesByTitle(String title) =>
+      _wikiLinkCommands.notesByTitle(title);
 
-  Project? projectById(String id) {
-    for (final project in data.projects) {
-      if (project.id == id) return project;
-    }
-    return null;
-  }
+  List<Note> notesForWikiTarget(String rawTarget, {Note? source}) =>
+      _wikiLinkCommands.notesForTarget(rawTarget, source: source);
 
-  Note? noteById(String id) {
-    for (final note in data.notes) {
-      if (note.id == id) return note;
-    }
-    return null;
-  }
+  Note? resolveWikiTarget(String rawTarget, {Note? source}) =>
+      _wikiLinkCommands.resolveTarget(rawTarget, source: source);
 
-  Note? noteByTitle(String title) {
-    final matches = notesByTitle(title);
-    return matches.isEmpty ? null : matches.first;
-  }
+  String wikiTargetFor(Note note) => _wikiLinkCommands.targetFor(note);
 
-  List<Note> notesByTitle(String title) {
-    final normalized = title.trim().toLowerCase();
-    return data.notes
-        .where((note) => note.title.trim().toLowerCase() == normalized)
-        .toList(growable: false);
-  }
+  List<NoteLink> outgoingLinksFor(String noteId) =>
+      _wikiLinkCommands.outgoingLinksFor(noteId);
 
-  List<Note> notesForWikiTarget(String rawTarget, {Note? source}) {
-    final reference = NoteWikiTarget.parse(rawTarget);
-    if (reference.noteId != null) {
-      final exact = noteById(reference.noteId!);
-      return exact == null ? const <Note>[] : <Note>[exact];
-    }
-    var candidates = notesByTitle(reference.noteTitle);
-    if (reference.projectTitle != null) {
-      final projectName = reference.projectTitle!.trim().toLowerCase();
-      candidates = candidates
-          .where((note) {
-            final project = projectById(note.projectId);
-            return project?.title.trim().toLowerCase() == projectName;
-          })
-          .toList(growable: false);
-    }
+  List<NoteLink> backlinksFor(Note note) =>
+      _wikiLinkCommands.backlinksFor(note);
 
-    final sorted = List<Note>.from(candidates);
-    sorted.sort((left, right) {
-      int rank(Note note) {
-        if (source == null) return 2;
-        if (note.projectId == source.projectId &&
-            note.folderPath.trim() == source.folderPath.trim()) {
-          return 0;
-        }
-        if (note.projectId == source.projectId) return 1;
-        return 2;
-      }
+  NoteWikiRenamePlan buildWikiRenamePlan(Note note, String newTitle) =>
+      _wikiLinkCommands.buildRenamePlan(note, newTitle);
 
-      final rankCompare = rank(left).compareTo(rank(right));
-      if (rankCompare != 0) return rankCompare;
-      final leftProject = projectById(left.projectId)?.title ?? '';
-      final rightProject = projectById(right.projectId)?.title ?? '';
-      final projectCompare = leftProject.toLowerCase().compareTo(
-        rightProject.toLowerCase(),
-      );
-      if (projectCompare != 0) return projectCompare;
-      final folderCompare = left.folderPath.toLowerCase().compareTo(
-        right.folderPath.toLowerCase(),
-      );
-      if (folderCompare != 0) return folderCompare;
-      return left.id.compareTo(right.id);
-    });
-    return List<Note>.unmodifiable(sorted);
-  }
+  List<NoteWikiLinkIssue> wikiLinkIssues() => _wikiLinkCommands.linkIssues();
 
-  Note? resolveWikiTarget(String rawTarget, {Note? source}) {
-    final reference = NoteWikiTarget.parse(rawTarget);
-    final candidates = notesForWikiTarget(rawTarget, source: source);
-    if (candidates.length == 1) return candidates.single;
-    if (reference.isQualified || source == null || candidates.isEmpty) {
-      return null;
-    }
+  Future<NoteWikiRenameUndo> applyWikiRenamePlan(NoteWikiRenamePlan plan) =>
+      _wikiLinkCommands.applyRenamePlan(plan);
 
-    final sameFolder = candidates
-        .where(
-          (note) =>
-              note.projectId == source.projectId &&
-              note.folderPath.trim() == source.folderPath.trim(),
-        )
-        .toList(growable: false);
-    if (sameFolder.length == 1) return sameFolder.single;
-
-    final sameProject = candidates
-        .where((note) => note.projectId == source.projectId)
-        .toList(growable: false);
-    return sameProject.length == 1 ? sameProject.single : null;
-  }
-
-  String wikiTargetFor(Note note) {
-    final duplicates = notesByTitle(note.title);
-    if (duplicates.length <= 1) return note.title;
-    return NoteWikiTarget.exactId(note.id);
-  }
-
-  List<NoteLink> outgoingLinksFor(String noteId) => data.noteLinks
-      .where((link) => link.sourceNoteId == noteId)
-      .toList(growable: false);
-
-  List<NoteLink> backlinksFor(Note note) {
-    return data.noteLinks
-        .where((link) {
-          if (link.targetNoteId != null) {
-            return link.targetNoteId == note.id;
-          }
-          final source = noteById(link.sourceNoteId);
-          return resolveWikiTarget(link.targetTitle, source: source)?.id ==
-              note.id;
-        })
-        .toList(growable: false);
-  }
-
-  NoteWikiRenamePlan buildWikiRenamePlan(Note note, String newTitle) {
-    return NoteWikiRenamePlanner.build(
-      target: note,
-      newTitle: newTitle,
-      notes: data.notes,
-      resolveTarget:
-          (source, rawTarget) => resolveWikiTarget(rawTarget, source: source),
-      targetCandidates:
-          (source, rawTarget) => notesForWikiTarget(rawTarget, source: source),
-    );
-  }
-
-  List<NoteWikiLinkIssue> wikiLinkIssues() {
-    return NoteWikiRenamePlanner.findIssues(
-      notes: data.notes,
-      resolveTarget:
-          (source, rawTarget) => resolveWikiTarget(rawTarget, source: source),
-      targetCandidates:
-          (source, rawTarget) => notesForWikiTarget(rawTarget, source: source),
-    );
-  }
-
-  Future<NoteWikiRenameUndo> applyWikiRenamePlan(
-    NoteWikiRenamePlan plan,
-  ) async {
-    final target = noteById(plan.targetNoteId);
-    if (target == null) {
-      throw StateError('Переименовываемая заметка больше не существует.');
-    }
-    if (target.title != plan.oldTitle) {
-      throw StateError(
-        'Название заметки уже изменилось; открой предварительный просмотр снова.',
-      );
-    }
-
-    if (plan.skippedAmbiguousOccurrences > 0) {
-      throw StateError(
-        'Сначала исправь неоднозначные ссылки через проверку связей.',
-      );
-    }
-
-    final changedIds = <String>{
-      target.id,
-      ...plan.sourceChanges.map((change) => change.sourceNoteId),
-    };
-    final snapshots = <NoteWikiSnapshot>[];
-    final now = DateTime.now();
-    for (final noteId in changedIds) {
-      final note = noteById(noteId);
-      if (note == null) continue;
-      snapshots.add(
-        NoteWikiSnapshot(noteId: note.id, title: note.title, body: note.body),
-      );
-      final version = NoteVersion(
-        id: _uuid.v4(),
-        noteId: note.id,
-        title: note.title,
-        body: note.body,
-        tags: List<String>.from(note.tags),
-        status: note.status,
-        folderPath: note.folderPath,
-        noteType: note.noteType,
-        properties: Map<String, String>.from(note.properties),
-        reason: 'Перед безопасным переименованием «${plan.oldTitle}»',
-        createdAt: now,
-      );
-      data.noteVersions.insert(0, version);
-      await _repository.saveNoteVersion(version);
-    }
-
-    try {
-      for (final change in plan.sourceChanges) {
-        final source = noteById(change.sourceNoteId);
-        if (source == null) continue;
-        source.body = change.updatedBody;
-      }
-      target.title = plan.newTitle;
-
-      for (final noteId in changedIds) {
-        final note = noteById(noteId);
-        if (note == null) continue;
-        note.updatedAt = DateTime.now();
-        note.revision += 1;
-        await _repository.saveNote(note);
-      }
-      for (final noteId in changedIds) {
-        final note = noteById(noteId);
-        if (note != null) {
-          await _syncNoteLinks(note, notify: false);
-        }
-      }
-    } on Object {
-      await _restoreWikiSnapshots(snapshots);
-      rethrow;
-    }
-    _scheduleSyncOverviewRefresh();
-    _scheduleVaultMirror();
-    notifyListeners();
-    final appliedSnapshots = changedIds
-        .map(noteById)
-        .whereType<Note>()
-        .map(
-          (note) => NoteWikiSnapshot(
-            noteId: note.id,
-            title: note.title,
-            body: note.body,
-          ),
-        )
-        .toList(growable: false);
-    return NoteWikiRenameUndo(
-      snapshots: List<NoteWikiSnapshot>.unmodifiable(snapshots),
-      appliedSnapshots: List<NoteWikiSnapshot>.unmodifiable(appliedSnapshots),
-    );
-  }
-
-  Future<void> undoWikiRename(NoteWikiRenameUndo undo) async {
-    for (final expected in undo.appliedSnapshots) {
-      final note = noteById(expected.noteId);
-      if (note == null ||
-          note.title != expected.title ||
-          note.body != expected.body) {
-        throw StateError(
-          'После переименования одна из заметок уже изменилась; '
-          'автоматическая отмена остановлена.',
-        );
-      }
-    }
-    final restoredIds = <String>{};
-    for (final snapshot in undo.snapshots) {
-      final note = noteById(snapshot.noteId);
-      if (note == null) continue;
-      final version = NoteVersion(
-        id: _uuid.v4(),
-        noteId: note.id,
-        title: note.title,
-        body: note.body,
-        tags: List<String>.from(note.tags),
-        status: note.status,
-        folderPath: note.folderPath,
-        noteType: note.noteType,
-        properties: Map<String, String>.from(note.properties),
-        reason: 'Перед отменой безопасного переименования',
-      );
-      data.noteVersions.insert(0, version);
-      await _repository.saveNoteVersion(version);
-      note.title = snapshot.title;
-      note.body = snapshot.body;
-      note.updatedAt = DateTime.now();
-      note.revision += 1;
-      restoredIds.add(note.id);
-      await _repository.saveNote(note);
-    }
-    for (final noteId in restoredIds) {
-      final note = noteById(noteId);
-      if (note != null) {
-        await _syncNoteLinks(note, notify: false);
-      }
-    }
-    _scheduleSyncOverviewRefresh();
-    _scheduleVaultMirror();
-    notifyListeners();
-  }
-
-  Future<void> _restoreWikiSnapshots(
-    Iterable<NoteWikiSnapshot> snapshots,
-  ) async {
-    final restoredIds = <String>{};
-    for (final snapshot in snapshots) {
-      final note = noteById(snapshot.noteId);
-      if (note == null) continue;
-      note.title = snapshot.title;
-      note.body = snapshot.body;
-      note.updatedAt = DateTime.now();
-      note.revision += 1;
-      restoredIds.add(note.id);
-      await _repository.saveNote(note);
-    }
-    for (final noteId in restoredIds) {
-      final note = noteById(noteId);
-      if (note != null) {
-        await _syncNoteLinks(note, notify: false);
-      }
-    }
-    notifyListeners();
-  }
+  Future<void> undoWikiRename(NoteWikiRenameUndo undo) =>
+      _wikiLinkCommands.undoRename(undo);
 
   Future<void> repairWikiLink({
     required Note source,
     required String rawTarget,
     required Note target,
-  }) async {
-    final parsed = NoteDocument.parse(source.body);
-    var content = parsed.content;
-    var changed = false;
-    final normalized = rawTarget.trim().toLowerCase();
-    for (final reference
-        in NoteWikiLinkSyntax.all(parsed.content).toList().reversed) {
-      if (reference.target.trim().toLowerCase() != normalized) {
-        continue;
-      }
-      final explicitLabel = reference.label?.trim();
-      final label =
-          explicitLabel != null && explicitLabel.isNotEmpty
-              ? explicitLabel
-              : target.title;
-      content = NoteWikiLinkSyntax.replaceTarget(
-        content,
-        reference,
-        target: NoteWikiTarget.exactId(target.id),
-        label: label,
-      );
-      changed = true;
-    }
-    if (!changed) return;
+  }) => _wikiLinkCommands.repairLink(
+    source: source,
+    rawTarget: rawTarget,
+    target: target,
+  );
 
-    final version = NoteVersion(
-      id: _uuid.v4(),
-      noteId: source.id,
-      title: source.title,
-      body: source.body,
-      tags: List<String>.from(source.tags),
-      status: source.status,
-      folderPath: source.folderPath,
-      noteType: source.noteType,
-      properties: Map<String, String>.from(source.properties),
-      reason: 'Перед исправлением вики-ссылки',
-    );
-    data.noteVersions.insert(0, version);
-    await _repository.saveNoteVersion(version);
-    source.body = NoteDocument.replaceContent(source.body, content);
-    source.updatedAt = DateTime.now();
-    source.revision += 1;
-    await _repository.saveNote(source);
-    await _syncNoteLinks(source, notify: false);
-    _scheduleSyncOverviewRefresh();
-    _scheduleVaultMirror();
-    notifyListeners();
-  }
-
-  List<NoteVersion> versionsFor(String noteId) {
-    final versions =
-        data.noteVersions.where((version) => version.noteId == noteId).toList();
-    versions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return versions;
-  }
+  List<NoteVersion> versionsFor(String noteId) =>
+      _noteCommands.versionsFor(noteId);
 
   int get activeSeconds => _timerService.activeSeconds;
 
@@ -998,254 +552,53 @@ class AppStore extends ChangeNotifier {
     required String projectId,
     String? taskId,
     String? noteId,
-  }) {
-    return _timerService.start(
-      description: description,
-      projectId: projectId,
-      taskId: taskId,
-      noteId: noteId,
-    );
-  }
+  }) => _timerService.start(
+    description: description,
+    projectId: projectId,
+    taskId: taskId,
+    noteId: noteId,
+  );
 
   Future<void> stopTimer() => _timerService.stop();
 
-  Future<void> addTask(WorkTask task) {
-    final persisted = _cloneTask(task);
-    return _mutationQueue.run(() async {
-      await _repository.saveTask(persisted);
-      data.tasks.insert(0, persisted);
-      _scheduleSyncOverviewRefresh();
-      notifyListeners();
-    });
-  }
+  Future<void> addTask(WorkTask task) => _taskCommands.addTask(task);
 
-  Future<void> updateTask(WorkTask task) {
-    final persisted = _cloneTask(task)..updatedAt = DateTime.now();
-    return _mutationQueue.run(() async {
-      await _repository.saveTask(persisted);
-      final index = data.tasks.indexWhere((item) => item.id == persisted.id);
-      if (index >= 0) {
-        data.tasks[index] = persisted;
-      }
-      _scheduleSyncOverviewRefresh();
-      notifyListeners();
-    });
-  }
+  Future<void> updateTask(WorkTask task) => _taskCommands.updateTask(task);
 
-  Future<void> updateTaskStatus(WorkTask task, String status) {
-    final updated = _cloneTask(task);
-    updated.status = status;
-    updated.updatedAt = DateTime.now();
-    updated.completedAt = status == 'done' ? DateTime.now() : null;
-    return updateTask(updated);
-  }
+  Future<void> updateTaskStatus(WorkTask task, String status) =>
+      _taskCommands.updateTaskStatus(task, status);
 
-  Future<void> deleteTask(String id) async {
-    final index = data.tasks.indexWhere((task) => task.id == id);
-    if (index < 0) {
-      return;
-    }
-    final removed = _cloneTask(data.tasks[index]);
-    final childSnapshots = data.tasks
-        .where((task) => task.parentTaskId == id)
-        .map(_cloneTask)
-        .toList(growable: false);
-    final deletedAt = DateTime.now();
+  Future<void> deleteTask(String id) => _taskCommands.deleteTask(id);
 
-    await _repository.deleteTaskGraph(id, deletedAt);
-    data.tasks.removeAt(index);
-    for (final child in data.tasks.where((task) => task.parentTaskId == id)) {
-      child.parentTaskId = null;
-      child.updatedAt = deletedAt;
-    }
-    _registerUndo(
-      label: 'Удаление задачи «${removed.title}»',
-      restore: () async {
-        final restored = _cloneTask(removed)..deletedAt = null;
-        await _repository.restoreTask(restored.id);
-        await _repository.saveTask(restored);
-        data.tasks.removeWhere((task) => task.id == restored.id);
-        data.tasks.insert(index.clamp(0, data.tasks.length).toInt(), restored);
-        for (final snapshot in childSnapshots) {
-          final restoredChild = _cloneTask(snapshot);
-          final childIndex = data.tasks.indexWhere(
-            (task) => task.id == restoredChild.id,
-          );
-          if (childIndex >= 0) {
-            data.tasks[childIndex] = restoredChild;
-          } else {
-            data.tasks.add(restoredChild);
-          }
-          await _repository.saveTask(restoredChild);
-        }
-        _scheduleSyncOverviewRefresh();
-      },
-    );
-    _scheduleSyncOverviewRefresh();
-    notifyListeners();
-  }
+  Future<void> addProject(Project project) => _taskCommands.addProject(project);
 
-  Future<void> addProject(Project project) {
-    final persisted = _cloneProject(project);
-    return _mutationQueue.run(() async {
-      await _repository.saveProject(persisted);
-      data.projects.add(persisted);
-      _scheduleSyncOverviewRefresh();
-      notifyListeners();
-    });
-  }
+  Future<void> updateProject(Project project) =>
+      _taskCommands.updateProject(project);
 
-  Future<void> updateProject(Project project) {
-    final persisted = _cloneProject(project)..updatedAt = DateTime.now();
-    return _mutationQueue.run(() async {
-      await _repository.saveProject(persisted);
-      final index = data.projects.indexWhere((item) => item.id == persisted.id);
-      if (index >= 0) {
-        data.projects[index] = persisted;
-      }
-      _scheduleSyncOverviewRefresh();
-      notifyListeners();
-    });
-  }
+  Future<void> setProjectArchived(Project project, bool archived) =>
+      _taskCommands.setProjectArchived(project, archived);
 
-  Future<void> setProjectArchived(Project project, bool archived) async {
-    if (project.archived == archived) {
-      return;
-    }
-    final previous = project.archived;
-    final projectId = project.id;
-    final projectTitle = project.title;
-    project.archived = archived;
-    project.updatedAt = DateTime.now();
-    await _repository.saveProject(project);
-    _registerUndo(
-      label:
-          archived
-              ? 'Архивирование проекта «$projectTitle»'
-              : 'Возврат проекта «$projectTitle» из архива',
-      restore: () async {
-        final current = projectById(projectId);
-        if (current == null) {
-          return;
-        }
-        current.archived = previous;
-        current.updatedAt = DateTime.now();
-        await _repository.saveProject(current);
-        _scheduleSyncOverviewRefresh();
-      },
-    );
-    _scheduleSyncOverviewRefresh();
-    notifyListeners();
-  }
+  int citationUsageCount(String citationKey) =>
+      _taskCommands.citationUsageCount(citationKey);
 
-  int citationUsageCount(String citationKey) {
-    return data.notes.fold<int>(
-      0,
-      (sum, note) => sum + CitationSyntax.countKey(note.body, citationKey),
-    );
-  }
+  Future<void> addCitationSource(CitationSource source) =>
+      _taskCommands.addCitationSource(source);
 
-  void addCitationSource(CitationSource source) {
-    data.citationSources.insert(0, source);
-    unawaited(_repository.saveCitationSources(data.citationSources));
-    notifyListeners();
-  }
+  Future<void> updateCitationSource(CitationSource source) =>
+      _taskCommands.updateCitationSource(source);
 
-  void updateCitationSource(CitationSource source) {
-    source.updatedAt = DateTime.now();
-    final index = data.citationSources.indexWhere(
-      (item) => item.id == source.id,
-    );
-    if (index < 0) {
-      data.citationSources.insert(0, source);
-    } else {
-      data.citationSources[index] = source;
-    }
-    unawaited(_repository.saveCitationSources(data.citationSources));
-    notifyListeners();
-  }
+  Future<void> deleteCitationSource(String id) =>
+      _taskCommands.deleteCitationSource(id);
 
-  Future<void> deleteCitationSource(String id) async {
-    final index = data.citationSources.indexWhere((source) => source.id == id);
-    if (index < 0) {
-      return;
-    }
-    final removed = _cloneCitationSource(data.citationSources[index]);
-    data.citationSources.removeAt(index);
-    await _repository.saveCitationSources(data.citationSources);
-    _registerUndo(
-      label: 'Удаление источника «${removed.title}»',
-      restore: () async {
-        data.citationSources.removeWhere((source) => source.id == removed.id);
-        data.citationSources.insert(
-          index.clamp(0, data.citationSources.length).toInt(),
-          removed,
-        );
-        await _repository.saveCitationSources(data.citationSources);
-      },
-    );
-    notifyListeners();
-  }
-
-  int importCitationSources(Iterable<CitationSource> sources) {
-    final keys =
-        data.citationSources
-            .map((source) => source.normalizedCitationKey)
-            .toSet();
-    final dois =
-        data.citationSources
-            .map((source) => source.normalizedDoi)
-            .where((doi) => doi.isNotEmpty)
-            .toSet();
-    var imported = 0;
-    for (final source in sources) {
-      final key = source.normalizedCitationKey;
-      final doi = source.normalizedDoi;
-      if (key.isEmpty || keys.contains(key)) continue;
-      if (doi.isNotEmpty && dois.contains(doi)) continue;
-      data.citationSources.add(source);
-      keys.add(key);
-      if (doi.isNotEmpty) dois.add(doi);
-      imported += 1;
-    }
-    if (imported > 0) {
-      data.citationSources.sort(
-        (left, right) => right.updatedAt.compareTo(left.updatedAt),
-      );
-      unawaited(_repository.saveCitationSources(data.citationSources));
-      notifyListeners();
-    }
-    return imported;
-  }
+  Future<int> importCitationSources(Iterable<CitationSource> sources) =>
+      _taskCommands.importCitationSources(sources);
 
   Future<void> addNote(Note note) {
-    final persisted = _cloneNote(note);
-    return _mutationQueue.run(() async {
-      await _repository.saveNote(persisted);
-      data.notes.insert(0, persisted);
-      await _syncNoteLinks(persisted);
-      _scheduleSyncOverviewRefresh();
-      _scheduleVaultMirror();
-      notifyListeners();
-    });
+    return _noteCommands.add(note);
   }
 
   Future<void> updateNote(Note note) {
-    final persisted =
-        _cloneNote(note)
-          ..updatedAt = DateTime.now()
-          ..revision += 1;
-    return _mutationQueue.run(() async {
-      await _repository.saveNote(persisted);
-      final index = data.notes.indexWhere((item) => item.id == persisted.id);
-      if (index >= 0) {
-        data.notes[index] = persisted;
-      }
-      await _syncNoteLinks(persisted);
-      _scheduleSyncOverviewRefresh();
-      _scheduleVaultMirror();
-      notifyListeners();
-    });
+    return _noteCommands.update(note);
   }
 
   Future<void> flushPendingWrites() => _mutationQueue.drain();
@@ -1264,178 +617,23 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> addNoteVersion(NoteVersion version) {
-    final persisted = NoteVersion.fromJson(
-      Map<String, dynamic>.from(version.toJson()),
-    );
-    return _mutationQueue.run(() async {
-      await _repository.saveNoteVersion(persisted);
-      data.noteVersions.insert(0, persisted);
-      _scheduleSyncOverviewRefresh();
-      notifyListeners();
-    });
+    return _noteCommands.addVersion(version);
   }
 
   void restoreNoteVersion(Note note, NoteVersion version) {
-    note.title = version.title;
-    note.body = version.body;
-    note.tags = List<String>.from(version.tags);
-    note.status = version.status;
-    note.folderPath = version.folderPath;
-    note.noteType = version.noteType;
-    note.properties = Map<String, String>.from(version.properties);
-    updateNote(note);
+    _noteCommands.restoreVersion(note, version);
   }
 
   Future<void> deleteNote(String id) async {
-    final deletedAt = DateTime.now();
-    final noteIndex = data.notes.indexWhere((note) => note.id == id);
-    if (noteIndex < 0) {
-      return;
-    }
-
-    final removed = _cloneNote(data.notes[noteIndex]);
-    final taskSnapshots = data.tasks
-        .where((task) => task.noteId == id)
-        .map(_cloneTask)
-        .toList(growable: false);
-    final linkSnapshots = data.noteLinks
-        .where((link) => link.sourceNoteId == id || link.targetNoteId == id)
-        .map(_cloneNoteLink)
-        .toList(growable: false);
-
-    await _repository.deleteNoteGraph(id, deletedAt);
-    data.notes.removeAt(noteIndex);
-    data.noteLinks.removeWhere(
-      (link) => link.sourceNoteId == id || link.targetNoteId == id,
-    );
-    for (final task in data.tasks.where((task) => task.noteId == id)) {
-      task.noteId = null;
-      task.updatedAt = deletedAt;
-    }
-    _registerUndo(
-      label: 'Удаление заметки «${removed.title}»',
-      restore: () async {
-        final restored = _cloneNote(removed)..deletedAt = null;
-        await _repository.restoreNote(restored.id);
-        await _repository.saveNote(restored);
-        data.notes.removeWhere((note) => note.id == restored.id);
-        data.notes.insert(
-          noteIndex.clamp(0, data.notes.length).toInt(),
-          restored,
-        );
-        for (final snapshot in taskSnapshots) {
-          final restoredTask = _cloneTask(snapshot);
-          final taskIndex = data.tasks.indexWhere(
-            (task) => task.id == restoredTask.id,
-          );
-          if (taskIndex >= 0) {
-            data.tasks[taskIndex] = restoredTask;
-          } else {
-            data.tasks.add(restoredTask);
-          }
-          await _repository.saveTask(restoredTask);
-        }
-        data.noteLinks.removeWhere(
-          (link) =>
-              link.sourceNoteId == restored.id ||
-              link.targetNoteId == restored.id,
-        );
-        data.noteLinks.addAll(linkSnapshots.map(_cloneNoteLink));
-        try {
-          await rebuildAllNoteLinks(notify: false);
-        } on Object catch (error) {
-          await _recordReliability(
-            stage: ReliabilityStage.system,
-            level: ReliabilityLevel.warning,
-            message:
-                'Заметка восстановлена, но индекс связей требует перестроения.',
-            details: <String, Object?>{'error': error.toString()},
-            notify: false,
-          );
-        }
-        _scheduleSyncOverviewRefresh();
-        _scheduleVaultMirror();
-      },
-    );
-    try {
-      await rebuildAllNoteLinks(notify: false);
-    } on Object catch (error) {
-      await _recordReliability(
-        stage: ReliabilityStage.system,
-        level: ReliabilityLevel.warning,
-        message: 'Заметка удалена, но индекс связей требует перестроения.',
-        details: <String, Object?>{'error': error.toString()},
-        notify: false,
-      );
-    }
-    _scheduleSyncOverviewRefresh();
-    _scheduleVaultMirror();
-    notifyListeners();
+    await _noteCommands.delete(id);
   }
 
   Future<void> rebuildAllNoteLinks({bool notify = true}) async {
-    for (final note in data.notes) {
-      await _syncNoteLinks(note, notify: false);
-    }
-    if (notify) {
-      notifyListeners();
-    }
-  }
-
-  Future<void> _syncNoteLinks(Note note, {bool notify = true}) async {
-    final targets = NoteDocument.extractWikiTargets(note.body);
-    final now = DateTime.now();
-    final links =
-        targets.map((title) {
-          final target = resolveWikiTarget(title, source: note);
-          return NoteLink(
-            id: _uuid.v4(),
-            sourceNoteId: note.id,
-            targetTitle: title,
-            targetNoteId: target?.id,
-            createdAt: now,
-          );
-        }).toList();
-
-    data.noteLinks.removeWhere((link) => link.sourceNoteId == note.id);
-    data.noteLinks.addAll(links);
-    await _repository.replaceNoteLinks(note.id, links);
-    if (notify) notifyListeners();
+    await _noteCommands.rebuildAllLinks(notify: notify);
   }
 
   Future<void> _hydrateNoteMetadata() async {
-    for (final note in data.notes) {
-      final document = NoteDocument.parse(note.body);
-      if (document.frontMatter.isEmpty) continue;
-      var changed = false;
-      final frontMatter = Map<String, String>.from(document.frontMatter);
-
-      final type = frontMatter.remove('type');
-      if (type != null && type.isNotEmpty && note.noteType == 'note') {
-        note.noteType = type;
-        changed = true;
-      }
-      final status = frontMatter.remove('status');
-      if (status != null && status.isNotEmpty && note.status == 'draft') {
-        note.status = status;
-        changed = true;
-      }
-      final folder = frontMatter.remove('folder');
-      if (folder != null && folder.isNotEmpty && note.folderPath.isEmpty) {
-        note.folderPath = folder;
-        changed = true;
-      }
-      final tags = NoteDocument.parseTags(frontMatter.remove('tags'));
-      if (tags.isNotEmpty && note.tags.isEmpty) {
-        note.tags = tags;
-        changed = true;
-      }
-      if (frontMatter.isNotEmpty && note.properties.isEmpty) {
-        note.properties = frontMatter;
-        changed = true;
-      }
-      if (changed) await _repository.saveNote(note);
-    }
+    await _noteCommands.hydrateMetadata();
   }
 
   Future<void> refreshSyncFoundation({bool notify = true}) async {
@@ -1988,21 +1186,6 @@ class AppStore extends ChangeNotifier {
   }) {
     _undoJournal.push(ChronicleUndoEntry(label: label, restore: restore));
   }
-
-  Note _cloneNote(Note note) =>
-      Note.fromJson(Map<String, dynamic>.from(note.toJson()));
-
-  Project _cloneProject(Project project) =>
-      Project.fromJson(Map<String, dynamic>.from(project.toJson()));
-
-  WorkTask _cloneTask(WorkTask task) =>
-      WorkTask.fromJson(Map<String, dynamic>.from(task.toJson()));
-
-  NoteLink _cloneNoteLink(NoteLink link) =>
-      NoteLink.fromJson(Map<String, dynamic>.from(link.toJson()));
-
-  CitationSource _cloneCitationSource(CitationSource source) =>
-      CitationSource.fromJson(Map<String, dynamic>.from(source.toJson()));
 
   void _notifyAttachmentRefresh() {
     _attachmentRefreshNotifier.value += 1;

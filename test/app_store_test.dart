@@ -31,15 +31,13 @@ void main() {
     final firstStore = AppStore(repository: repository);
     await firstStore.load();
 
-    firstStore.addCitationSource(
+    await firstStore.addCitationSource(
       CitationSource(
         id: 'source-1',
         citationKey: 'Jaffe2005',
         title: 'Multistate proteins',
       ),
     );
-    await Future<void>.delayed(Duration.zero);
-
     final secondStore = AppStore(repository: repository);
     await secondStore.load();
 

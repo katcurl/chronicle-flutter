@@ -273,9 +273,9 @@ class _SourcesScreenState extends State<SourcesScreen> {
     }
 
     if (existing == null) {
-      widget.store.addCitationSource(result);
+      await widget.store.addCitationSource(result);
     } else {
-      widget.store.updateCitationSource(result);
+      await widget.store.updateCitationSource(result);
     }
     setState(() {});
   }
@@ -363,7 +363,8 @@ class _SourcesScreenState extends State<SourcesScreen> {
           ),
     );
     if (confirmed != true || !mounted) return;
-    final count = widget.store.importCitationSources(accepted);
+    final count = await widget.store.importCitationSources(accepted);
+    if (!mounted) return;
     setState(() {});
     ScaffoldMessenger.of(
       context,
