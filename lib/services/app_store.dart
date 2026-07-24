@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../application/backup/restore_coordinator.dart';
 import '../application/timer/timer_service.dart';
 import '../data/migration/legacy_preferences_importer.dart';
 import '../data/backup/staged_restore.dart';
@@ -54,7 +55,6 @@ class AppStore extends ChangeNotifier {
        _vaultService = vaultService ?? VaultService(),
        _reliabilityService = reliabilityService ?? ReliabilityService(),
        _customNoteTemplateStore = customNoteTemplateStore,
-       _restoreCutPoint = restoreCutPoint,
        _migrateDeviceKeyOnStartup = migrateDeviceKeyOnStartup,
        _automaticLanSyncEnabled = enableAutomaticLanSync,
        _reliabilityFeaturesEnabled = enableReliabilityFeatures {
@@ -88,6 +88,31 @@ class AppStore extends ChangeNotifier {
       onStateChanged: notifyListeners,
       onEntrySaved: _scheduleSyncOverviewRefresh,
     );
+    _restoreCoordinator = RestoreCoordinator(
+      repository: repository,
+      vaultService: _vaultService,
+      currentData: () => data,
+      currentIdentity: () => deviceIdentity,
+      isBusy: () => vaultBusy,
+      setBusy: (value) => vaultBusy = value,
+      reloadAfterRestore: _reloadAfterRestore,
+      refreshBackupCatalog: () => refreshBackupCatalog(notify: false),
+      recordReliability:
+          ({
+            required stage,
+            required level,
+            required message,
+            details = const <String, Object?>{},
+          }) => _recordReliability(
+            stage: stage,
+            level: level,
+            message: message,
+            details: details,
+            notify: false,
+          ),
+      notifyListeners: notifyListeners,
+      restoreCutPoint: restoreCutPoint,
+    );
   }
 
   factory AppStore.production() => AppStore(
@@ -104,7 +129,6 @@ class AppStore extends ChangeNotifier {
   final VaultService _vaultService;
   final ReliabilityService _reliabilityService;
   final CustomNoteTemplateStore? _customNoteTemplateStore;
-  final RestoreCutPointCallback? _restoreCutPoint;
   final bool _migrateDeviceKeyOnStartup;
   late final PairingService pairingService;
   late final LanSyncService lanSyncService;
@@ -115,6 +139,7 @@ class AppStore extends ChangeNotifier {
   final ChronicleUndoJournal _undoJournal = ChronicleUndoJournal();
   final MutationQueue _mutationQueue = MutationQueue();
   late final TimerService _timerService;
+  late final RestoreCoordinator _restoreCoordinator;
   final ValueNotifier<int> _attachmentRefreshNotifier = ValueNotifier<int>(0);
 
   ValueListenable<int> get attachmentRefreshListenable =>
@@ -146,8 +171,11 @@ class AppStore extends ChangeNotifier {
   VaultStatus vaultStatus = const VaultStatus.unavailable();
   VaultScanResult? pendingVaultScan;
   bool vaultBusy = false;
-  String? lastEmergencyBackupPath;
-  bool lastRestoreRolledBack = false;
+  String? get lastEmergencyBackupPath =>
+      _restoreCoordinator.lastEmergencyBackupPath;
+  set lastEmergencyBackupPath(String? value) =>
+      _restoreCoordinator.lastEmergencyBackupPath = value;
+  bool get lastRestoreRolledBack => _restoreCoordinator.lastRestoreRolledBack;
   List<BackupCatalogEntry> automaticBackups = const <BackupCatalogEntry>[];
   bool backupCatalogBusy = false;
   String? backupCatalogError;
@@ -2544,147 +2572,8 @@ class AppStore extends ChangeNotifier {
     return _vaultService.pickBackup();
   }
 
-  Future<void> restoreBackupFile(BackupImportPayload payload) async {
-    if (vaultBusy) {
-      return;
-    }
-    vaultBusy = true;
-    lastRestoreRolledBack = false;
-    notifyListeners();
-    EmergencyBackupSnapshot? emergencySnapshot;
-    StagedRestoreMarker? restoreMarker;
-    try {
-      await _recordReliability(
-        stage: ReliabilityStage.restore,
-        level: ReliabilityLevel.info,
-        message: 'Начато восстановление проверенной резервной копии.',
-        details: <String, Object?>{
-          'sourceName': payload.sourceName,
-          'formatVersion': payload.preview.formatVersion,
-          'checksumsVerified': payload.preview.checksumsVerified,
-        },
-        notify: false,
-      );
-      final candidate = _vaultService.validateBackupPayload(payload);
-      final snapshot = await _vaultService.createEmergencyBackupSnapshot(
-        data: data,
-        identity: deviceIdentity,
-      );
-      emergencySnapshot = snapshot;
-      lastEmergencyBackupPath = snapshot.path;
-
-      final oldGeneration = await _repository.ensureDataGeneration();
-      final newGeneration = _uuid.v4();
-      final restoreId = _uuid.v4();
-      restoreMarker = await _vaultService.stageRestoreAttachments(
-        payload: payload,
-        restoreId: restoreId,
-        oldGeneration: oldGeneration,
-        newGeneration: newGeneration,
-      );
-      await _runRestoreCutPoint(RestoreCutPoint.afterStaged);
-
-      restoreMarker = await _vaultService.updateStagedRestorePhase(
-        restoreMarker,
-        StagedRestorePhase.committing,
-      );
-      await _runRestoreCutPoint(RestoreCutPoint.afterCommittingMarker);
-
-      await _repository.replaceAllForRestore(
-        candidate,
-        generation: newGeneration,
-      );
-      await _runRestoreCutPoint(RestoreCutPoint.afterDatabaseCommit);
-
-      await _vaultService.commitStagedRestoreAttachments(restoreMarker);
-      await _runRestoreCutPoint(RestoreCutPoint.afterAttachmentCommit);
-
-      restoreMarker = await _vaultService.updateStagedRestorePhase(
-        restoreMarker,
-        StagedRestorePhase.committed,
-      );
-      await _runRestoreCutPoint(RestoreCutPoint.afterCommittedMarker);
-
-      await _reloadAfterRestore();
-      final attachmentIntegrity =
-          await _vaultService.inspectAttachmentIntegrity();
-      if (!attachmentIntegrity.isHealthy) {
-        throw StateError(
-          'Восстановленные вложения не прошли проверку целостности.',
-        );
-      }
-      await _vaultService.finalizeStagedRestore(restoreMarker);
-
-      await refreshBackupCatalog(notify: false);
-      await _recordReliability(
-        stage: ReliabilityStage.restore,
-        level: ReliabilityLevel.success,
-        message: 'Резервная копия успешно восстановлена.',
-        details: <String, Object?>{
-          'projects': payload.preview.projectCount,
-          'tasks': payload.preview.taskCount,
-          'notes': payload.preview.noteCount,
-          'timeEntries': payload.preview.entryCount,
-          'attachments': payload.preview.attachmentCount,
-          'emergencyBackupCreated': lastEmergencyBackupPath != null,
-        },
-        notify: false,
-      );
-    } on RestoreInterruption {
-      rethrow;
-    } on Object catch (error) {
-      var recoveredCommitted = false;
-      if (restoreMarker != null) {
-        try {
-          final generation = await _repository.ensureDataGeneration();
-          final recovered = await _vaultService.recoverStagedRestore(
-            generation,
-          );
-          lastRestoreRolledBack = recovered == null;
-          if (recovered != null) {
-            await _reloadAfterRestore();
-            final integrity = await _vaultService.inspectAttachmentIntegrity();
-            if (integrity.isHealthy) {
-              await _vaultService.finalizeStagedRestore(recovered);
-              recoveredCommitted = true;
-            }
-          }
-        } on Object {
-          // The durable marker is intentionally retained for startup recovery.
-        }
-      }
-      if (recoveredCommitted) {
-        await refreshBackupCatalog(notify: false);
-        await _recordReliability(
-          stage: ReliabilityStage.restore,
-          level: ReliabilityLevel.warning,
-          message:
-              'Восстановление завершено через recovery после промежуточной ошибки.',
-          details: <String, Object?>{
-            'error': error.toString(),
-            'emergencyBackupPath': emergencySnapshot?.path,
-          },
-          notify: false,
-        );
-        return;
-      }
-      await _recordReliability(
-        stage: ReliabilityStage.restore,
-        level: ReliabilityLevel.error,
-        message: 'Восстановление резервной копии не выполнено.',
-        details: <String, Object?>{
-          'error': error.toString(),
-          'rolledBack': lastRestoreRolledBack,
-          'emergencyBackupPath': emergencySnapshot?.path,
-        },
-        notify: false,
-      );
-      rethrow;
-    } finally {
-      vaultBusy = false;
-      notifyListeners();
-    }
-  }
+  Future<void> restoreBackupFile(BackupImportPayload payload) =>
+      _restoreCoordinator.restore(payload);
 
   Future<void> _reloadAfterRestore() async {
     _undoJournal.clear();
@@ -2701,10 +2590,6 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<String> exportBackupJson() => _repository.exportJson();
-
-  Future<void> _runRestoreCutPoint(RestoreCutPoint point) async {
-    await _restoreCutPoint?.call(point);
-  }
 
   Future<String?> undoLastAction() async {
     final label = await _undoJournal.undoLast();
