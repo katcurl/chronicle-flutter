@@ -6,6 +6,7 @@ import '../application/backup/restore_coordinator.dart';
 import '../application/notes/note_commands.dart';
 import '../application/notes/note_template_commands.dart';
 import '../application/notes/wiki_link_commands.dart';
+import '../application/reliability/reliability_coordinator.dart';
 import '../application/sync/lan_discovery_coordinator.dart';
 import '../application/sync/sync_coordinator.dart';
 import '../application/tasks/task_commands.dart';
@@ -36,6 +37,8 @@ import '../sync/sync_models.dart';
 import '../vault/vault_models.dart';
 import '../vault/vault_service.dart';
 
+part 'app_store_sync_vault_api.dart';
+
 class AppStore extends ChangeNotifier {
   AppStore({
     required AppRepository repository,
@@ -53,11 +56,12 @@ class AppStore extends ChangeNotifier {
   }) : _repository = repository,
        _legacyImporter = legacyImporter,
        _vaultService = vaultService ?? VaultService(),
-       _reliabilityService = reliabilityService ?? ReliabilityService(),
        _migrateDeviceKeyOnStartup = migrateDeviceKeyOnStartup,
        _automaticLanSyncEnabled = enableAutomaticLanSync,
        _reliabilityFeaturesEnabled = enableReliabilityFeatures {
     final effectiveDeviceKeyStore = deviceKeyStore ?? SecureDeviceKeyStore();
+    final effectiveReliabilityService =
+        reliabilityService ?? ReliabilityService();
     this.pairingService =
         pairingService ??
         PairingService(
@@ -211,6 +215,21 @@ class AppStore extends ChangeNotifier {
           ),
       notifyListeners: notifyListeners,
     );
+    _reliabilityCoordinator = ReliabilityCoordinator(
+      repository: repository,
+      vaultService: _vaultService,
+      reliabilityService: effectiveReliabilityService,
+      enabled: _reliabilityFeaturesEnabled,
+      currentData: () => data,
+      currentIdentity: () => deviceIdentity,
+      diagnosticSnapshot: _buildDiagnosticSnapshot,
+      isVaultBusy: () => vaultBusy,
+      setVaultBusy: (value) => vaultBusy = value,
+      setVaultStatus: (value) => vaultStatus = value,
+      setPendingVaultScan: (value) => pendingVaultScan = value,
+      undoDepth: () => undoDepth,
+      notifyListeners: notifyListeners,
+    );
   }
 
   factory AppStore.production() => AppStore(
@@ -225,7 +244,6 @@ class AppStore extends ChangeNotifier {
   final AppRepository _repository;
   final LegacyPreferencesImporter? _legacyImporter;
   final VaultService _vaultService;
-  final ReliabilityService _reliabilityService;
   final bool _migrateDeviceKeyOnStartup;
   late final PairingService pairingService;
   late final LanSyncService lanSyncService;
@@ -243,6 +261,7 @@ class AppStore extends ChangeNotifier {
   late final VaultCoordinator _vaultCoordinator;
   late final SyncCoordinator _syncCoordinator;
   late final LanDiscoveryCoordinator _lanDiscoveryCoordinator;
+  late final ReliabilityCoordinator _reliabilityCoordinator;
   final ValueNotifier<int> _attachmentRefreshNotifier = ValueNotifier<int>(0);
 
   ValueListenable<int> get attachmentRefreshListenable =>
@@ -292,19 +311,25 @@ class AppStore extends ChangeNotifier {
   set lastEmergencyBackupPath(String? value) =>
       _restoreCoordinator.lastEmergencyBackupPath = value;
   bool get lastRestoreRolledBack => _restoreCoordinator.lastRestoreRolledBack;
-  List<BackupCatalogEntry> automaticBackups = const <BackupCatalogEntry>[];
-  bool backupCatalogBusy = false;
-  String? backupCatalogError;
+  List<BackupCatalogEntry> get automaticBackups =>
+      _reliabilityCoordinator.automaticBackups;
+  bool get backupCatalogBusy => _reliabilityCoordinator.backupCatalogBusy;
+  String? get backupCatalogError => _reliabilityCoordinator.backupCatalogError;
 
-  List<ReliabilityEvent> reliabilityEvents = const <ReliabilityEvent>[];
-  DateTime? lastAutomaticBackupAt;
-  String? lastAutomaticBackupPath;
-  bool reliabilityBusy = false;
-  String? reliabilityError;
+  List<ReliabilityEvent> get reliabilityEvents =>
+      _reliabilityCoordinator.events;
+  DateTime? get lastAutomaticBackupAt =>
+      _reliabilityCoordinator.lastAutomaticBackupAt;
+  String? get lastAutomaticBackupPath =>
+      _reliabilityCoordinator.lastAutomaticBackupPath;
+  bool get reliabilityBusy => _reliabilityCoordinator.busy;
+  String? get reliabilityError => _reliabilityCoordinator.error;
 
-  ReleaseReadinessReport? releaseReadinessReport;
-  bool releaseReadinessBusy = false;
-  String? releaseReadinessError;
+  ReleaseReadinessReport? get releaseReadinessReport =>
+      _reliabilityCoordinator.releaseReadinessReport;
+  bool get releaseReadinessBusy => _reliabilityCoordinator.releaseReadinessBusy;
+  String? get releaseReadinessError =>
+      _reliabilityCoordinator.releaseReadinessError;
 
   bool get canUndo => _undoJournal.canUndo;
   int get undoDepth => _undoJournal.length;
@@ -322,8 +347,7 @@ class AppStore extends ChangeNotifier {
     ready = false;
     loadError = null;
     _undoJournal.clear();
-    releaseReadinessReport = null;
-    releaseReadinessError = null;
+    _reliabilityCoordinator.resetReleaseReadiness();
     notifyListeners();
 
     try {
@@ -636,206 +660,10 @@ class AppStore extends ChangeNotifier {
     await _noteCommands.hydrateMetadata();
   }
 
-  Future<void> refreshSyncFoundation({bool notify = true}) async {
-    await _syncCoordinator.refreshFoundation(notify: false);
-    if (_automaticLanSyncEnabled &&
-        ready &&
-        !_lanDiscoveryCoordinator.running &&
-        syncPreferences.discoverOnLocalNetwork &&
-        trustedDevices.isNotEmpty) {
-      unawaited(_restartAutomaticLanSync());
-    }
-    if (notify) {
-      notifyListeners();
-    }
-  }
+  Future<void> _initializeReliability() => _reliabilityCoordinator.initialize();
 
-  Future<SyncJournalBatch> buildOutgoingSyncBatch({
-    required String peerDeviceId,
-    required int afterSequence,
-    int limit = 200,
-  }) {
-    return _syncCoordinator.buildOutgoingBatch(
-      peerDeviceId: peerDeviceId,
-      afterSequence: afterSequence,
-      limit: limit,
-    );
-  }
-
-  Future<JournalCompactionResult> compactSyncJournal({
-    int maxEntries = defaultMaxJournalEntries,
-    int maxPayloadBytes = defaultMaxJournalPayloadBytes,
-  }) => _syncCoordinator.compactJournal(
-    maxEntries: maxEntries,
-    maxPayloadBytes: maxPayloadBytes,
-  );
-
-  Future<SyncApplyResult> applyIncomingSyncChanges(
-    List<ChangeRecord> changes,
-  ) => _syncCoordinator.applyIncomingChanges(changes);
-
-  Future<LanSyncHostSession> startLanSyncHost(String peerDeviceId) {
-    return _syncCoordinator.startLanHost(peerDeviceId);
-  }
-
-  Future<LanSyncReport> syncFromLanOffer(
-    String rawOffer, {
-    required String expectedPeerDeviceId,
-    LanSyncProgressCallback? onProgress,
-    LanSyncCancellationToken? cancellationToken,
-  }) => _syncCoordinator.syncFromLanOffer(
-    rawOffer,
-    expectedPeerDeviceId: expectedPeerDeviceId,
-    onProgress: onProgress,
-    cancellationToken: cancellationToken,
-  );
-
-  Future<void> refreshAfterLanSync({LanSyncReport? report}) =>
-      _syncCoordinator.refreshAfterLanSync(report: report);
-
-  bool isLanPeerOnline(String deviceId) =>
-      _lanDiscoveryCoordinator.isPeerOnline(deviceId);
-
-  String? lanPeerEndpoint(String deviceId) =>
-      _lanDiscoveryCoordinator.peerEndpoint(deviceId);
-
-  String? lanPeerError(String deviceId) =>
-      _lanDiscoveryCoordinator.peerError(deviceId);
-
-  Future<void> handleAppResumed() =>
-      _lanDiscoveryCoordinator.handleAppResumed();
-
-  Future<void> refreshLanDiscovery() =>
-      _lanDiscoveryCoordinator.refreshDiscovery();
-
-  Future<LanSyncReport> syncWithTrustedDevice(String peerDeviceId) =>
-      _lanDiscoveryCoordinator.syncWithTrustedDevice(peerDeviceId);
-
-  Future<void> _restartAutomaticLanSync() => _lanDiscoveryCoordinator.restart();
-
-  Future<void> renameLocalDevice(String displayName) =>
-      _syncCoordinator.renameLocalDevice(displayName);
-
-  Future<void> updateSyncPreferences(SyncPreferences preferences) async {
-    final discoveryChanged =
-        syncPreferences.discoverOnLocalNetwork !=
-            preferences.discoverOnLocalNetwork ||
-        syncPreferences.localNetworkOnly != preferences.localNetworkOnly;
-    await _syncCoordinator.savePreferences(preferences);
-    if (discoveryChanged && _automaticLanSyncEnabled) {
-      unawaited(_restartAutomaticLanSync());
-    } else if (preferences.autoSyncEnabled) {
-      unawaited(_lanDiscoveryCoordinator.announceIfEnabled());
-    }
-  }
-
-  Future<void> revokeTrustedDevice(String deviceId) async {
-    _lanDiscoveryCoordinator.removePeer(deviceId);
-    await _syncCoordinator.revokeTrustedDevice(deviceId);
-    if (_automaticLanSyncEnabled) {
-      unawaited(_restartAutomaticLanSync());
-    }
-  }
-
-  void _scheduleSyncOverviewRefresh() {
-    _syncRefreshDebounce?.cancel();
-    _syncRefreshDebounce = Timer(const Duration(milliseconds: 350), () {
-      unawaited(refreshSyncFoundation());
-    });
-  }
-
-  Future<void> _initializeVaultFoundation({
-    required bool allowAutomaticWrite,
-  }) => _vaultCoordinator.initialize(allowAutomaticWrite: allowAutomaticWrite);
-
-  Future<void> refreshVaultStatus({bool notify = true}) =>
-      _vaultCoordinator.refreshStatus(notify: notify);
-
-  Future<VaultScanResult> scanVaultChanges({bool notify = true}) =>
-      _vaultCoordinator.scanChanges(notify: notify);
-
-  void _mergeVaultScanIntoStatus({String? messageOverride}) =>
-      _vaultCoordinator.mergePendingScan(messageOverride: messageOverride);
-
-  Future<void> writeVaultMirror() => _vaultCoordinator.writeMirror();
-
-  Future<bool> chooseVaultFolder() => _vaultCoordinator.chooseFolder();
-
-  Future<Uint8List?> readManagedAttachment(String relativePath) {
-    return _vaultCoordinator.readManagedAttachment(relativePath);
-  }
-
-  Future<AttachmentImportResult?> pickAttachmentForNote(Note note) =>
-      _vaultCoordinator.pickAttachmentForNote(note);
-
-  Future<AttachmentImportResult> storeAttachmentBytesForNote(
-    Note note, {
-    required String fileName,
-    required Uint8List bytes,
-  }) => _vaultCoordinator.storeAttachmentBytesForNote(
-    note,
-    fileName: fileName,
-    bytes: bytes,
-  );
-
-  Future<List<AttachmentImportResult>> storeAttachmentBatchForNote(
-    Note note, {
-    required List<String> fileNames,
-    required List<Uint8List> fileBytes,
-  }) => _vaultCoordinator.storeAttachmentBatchForNote(
-    note,
-    fileNames: fileNames,
-    fileBytes: fileBytes,
-  );
-
-  Future<VaultApplyResult> applyVaultChanges(
-    VaultScanResult scan, {
-    required VaultConflictResolution conflictResolution,
-    Map<String, VaultConflictResolution> conflictResolutions = const {},
-    VaultMissingFileResolution missingFileResolution =
-        VaultMissingFileResolution.restoreFiles,
-  }) => _vaultCoordinator.applyChanges(
-    scan,
-    conflictResolution: conflictResolution,
-    conflictResolutions: conflictResolutions,
-    missingFileResolution: missingFileResolution,
-  );
-
-  void _scheduleVaultMirror() => _vaultCoordinator.scheduleMirror();
-
-  Future<void> _initializeReliability() async {
-    if (!_reliabilityFeaturesEnabled) {
-      return;
-    }
-    try {
-      await _reliabilityService.load();
-      _refreshReliabilityState();
-    } on Object catch (error) {
-      reliabilityError = error.toString();
-    }
-  }
-
-  Future<void> refreshReliabilityStatus({bool notify = true}) async {
-    if (!_reliabilityFeaturesEnabled) {
-      return;
-    }
-    try {
-      await _reliabilityService.load();
-      reliabilityError = null;
-      _refreshReliabilityState();
-    } on Object catch (error) {
-      reliabilityError = error.toString();
-    }
-    if (notify) {
-      notifyListeners();
-    }
-  }
-
-  void _refreshReliabilityState() {
-    reliabilityEvents = _reliabilityService.events;
-    lastAutomaticBackupAt = _reliabilityService.lastAutomaticBackupAt;
-    lastAutomaticBackupPath = _reliabilityService.lastAutomaticBackupPath;
-  }
+  Future<void> refreshReliabilityStatus({bool notify = true}) =>
+      _reliabilityCoordinator.refresh(notify: notify);
 
   Future<void> _recordReliability({
     required ReliabilityStage stage,
@@ -844,227 +672,69 @@ class AppStore extends ChangeNotifier {
     String? peerDeviceId,
     Map<String, Object?> details = const <String, Object?>{},
     bool notify = true,
-  }) async {
-    if (!_reliabilityFeaturesEnabled) {
-      return;
-    }
-    try {
-      await _reliabilityService.record(
-        stage: stage,
-        level: level,
-        message: message,
-        peerDeviceId: peerDeviceId,
-        details: details,
-      );
-      reliabilityError = null;
-      _refreshReliabilityState();
-    } on Object catch (error) {
-      reliabilityError = error.toString();
-    }
-    if (notify) {
-      notifyListeners();
-    }
-  }
+  }) => _reliabilityCoordinator.record(
+    stage: stage,
+    level: level,
+    message: message,
+    peerDeviceId: peerDeviceId,
+    details: details,
+    notify: notify,
+  );
 
-  Future<BackupExportResult?> createInternalSafetyBackup() async {
-    if (reliabilityBusy || vaultBusy) {
-      return null;
-    }
-    reliabilityBusy = true;
-    reliabilityError = null;
-    notifyListeners();
-    try {
-      final result = await _vaultService.createAutomaticBackup(
-        data: data,
-        identity: deviceIdentity,
-        maxFiles: 5,
-      );
-      await _reliabilityService.markAutomaticBackup(
-        createdAt: result.preview.exportedAt,
-        path: result.path,
-      );
-      _refreshReliabilityState();
-      await _recordReliability(
-        stage: ReliabilityStage.backup,
-        level: ReliabilityLevel.success,
-        message: 'Создана локальная страховочная копия Chronicle.',
-        details: <String, Object?>{
-          'fileName': result.fileName,
-          'projects': result.preview.projectCount,
-          'tasks': result.preview.taskCount,
-          'notes': result.preview.noteCount,
-          'timeEntries': result.preview.entryCount,
-          'attachments': result.preview.attachmentCount,
-          'retention': 5,
-        },
-        notify: false,
-      );
-      await refreshBackupCatalog(notify: false);
-      return result;
-    } on Object catch (error) {
-      await _recordReliability(
-        stage: ReliabilityStage.backup,
-        level: ReliabilityLevel.error,
-        message: 'Не удалось создать локальную страховочную копию.',
-        details: <String, Object?>{'error': error.toString()},
-        notify: false,
-      );
-      reliabilityError = error.toString();
-      rethrow;
-    } finally {
-      reliabilityBusy = false;
-      notifyListeners();
-    }
-  }
+  Future<BackupExportResult?> createInternalSafetyBackup() =>
+      _reliabilityCoordinator.createSafetyBackup();
 
-  Future<void> _createAutomaticBackupIfDue() async {
-    if (!_reliabilityFeaturesEnabled ||
-        !_reliabilityService.automaticBackupDue()) {
-      return;
-    }
-    try {
-      await createInternalSafetyBackup();
-    } on Object {
-      // Ошибка уже записана в диагностический журнал. Запуск приложения
-      // не должен блокироваться из-за недоступной папки резервных копий.
-    }
-  }
+  Future<void> _createAutomaticBackupIfDue() =>
+      _reliabilityCoordinator.createAutomaticBackupIfDue();
 
-  Future<String?> exportDiagnosticReport() async {
-    if (!_reliabilityFeaturesEnabled || reliabilityBusy) {
-      return null;
-    }
-    reliabilityBusy = true;
-    reliabilityError = null;
-    notifyListeners();
-    try {
-      return await _reliabilityService.exportDiagnosticReport(
-        snapshot: <String, Object?>{
-          'appVersion': chronicleStableVersion,
-          'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
-          'deviceId': deviceIdentity?.deviceId,
-          'deviceName': deviceIdentity?.displayName,
-          'trustedDeviceCount': trustedDevices.length,
-          'journalEntryCount': journalEntryCount,
-          'journalPayloadBytes': journalPayloadBytes,
-          'journalCompactionGeneration': lastJournalCompaction?.generation ?? 0,
-          'journalLastCompactedSequence':
-              lastJournalCompaction?.lastCompactedSequence ?? 0,
-          'journalMinimumPeerCursor': lastJournalCompaction?.minimumPeerCursor,
-          'syncCursorCount': syncCursors.length,
-          'discoveryActive': lanDiscoveryActive,
-          'discoveryStatus': lanDiscoveryStatus,
-          'autoSyncEnabled': syncPreferences.autoSyncEnabled,
-          'discoverOnLocalNetwork': syncPreferences.discoverOnLocalNetwork,
-          'lastAutomaticBackupAt': lastAutomaticBackupAt,
-          'projectCount': data.projects.length,
-          'taskCount': data.tasks.length,
-          'noteCount': data.notes.length,
-          'timeEntryCount': data.entries.length,
-        },
-      );
-    } on Object catch (error) {
-      reliabilityError = error.toString();
-      rethrow;
-    } finally {
-      reliabilityBusy = false;
-      notifyListeners();
-    }
-  }
+  Future<String?> exportDiagnosticReport() =>
+      _reliabilityCoordinator.exportDiagnosticReport();
 
-  Future<void> clearDiagnosticLog() async {
-    if (!_reliabilityFeaturesEnabled || reliabilityBusy) {
-      return;
-    }
-    reliabilityBusy = true;
-    notifyListeners();
-    try {
-      await _reliabilityService.clearEvents();
-      _refreshReliabilityState();
-      reliabilityError = null;
-    } finally {
-      reliabilityBusy = false;
-      notifyListeners();
-    }
-  }
+  Future<void> clearDiagnosticLog() =>
+      _reliabilityCoordinator.clearDiagnosticLog();
 
-  Future<void> refreshBackupCatalog({bool notify = true}) async {
-    if (backupCatalogBusy) {
-      return;
-    }
-    backupCatalogBusy = true;
-    backupCatalogError = null;
-    if (notify) {
-      notifyListeners();
-    }
-    try {
-      automaticBackups = await _vaultService.listAutomaticBackups();
-    } on Object catch (error) {
-      automaticBackups = const <BackupCatalogEntry>[];
-      backupCatalogError = error.toString();
-    } finally {
-      backupCatalogBusy = false;
-      if (notify) {
-        notifyListeners();
-      }
-    }
-  }
+  Future<void> refreshBackupCatalog({bool notify = true}) =>
+      _reliabilityCoordinator.refreshBackupCatalog(notify: notify);
 
-  Future<BackupImportPayload> loadAutomaticBackup(BackupCatalogEntry entry) {
-    return _vaultService.loadAutomaticBackup(entry);
-  }
+  Future<BackupImportPayload> loadAutomaticBackup(BackupCatalogEntry entry) =>
+      _reliabilityCoordinator.loadAutomaticBackup(entry);
 
-  Future<BackupExportResult?> exportBackupFile() async {
-    if (vaultBusy) {
-      return null;
-    }
-    vaultBusy = true;
-    notifyListeners();
-    try {
-      vaultStatus = await _vaultService.writeMirror(data);
-      final result = await _vaultService.exportBackup(
-        data: data,
-        identity: deviceIdentity,
-      );
-      if (result != null) {
-        await _recordReliability(
-          stage: ReliabilityStage.backup,
-          level: ReliabilityLevel.success,
-          message: 'Пользователь экспортировал переносимую копию Chronicle.',
-          details: <String, Object?>{
-            'fileName': result.fileName,
-            'notes': result.preview.noteCount,
-            'attachments': result.preview.attachmentCount,
-          },
-          notify: false,
-        );
-      }
-      return result;
-    } on Object catch (error) {
-      await _recordReliability(
-        stage: ReliabilityStage.backup,
-        level: ReliabilityLevel.error,
-        message: 'Экспорт переносимой копии не выполнен.',
-        details: <String, Object?>{'error': error.toString()},
-        notify: false,
-      );
-      rethrow;
-    } finally {
-      vaultBusy = false;
-      notifyListeners();
-    }
-  }
+  Future<BackupExportResult?> exportBackupFile() =>
+      _reliabilityCoordinator.exportBackupFile();
 
-  Future<BackupImportPayload?> pickBackupFile() {
-    return _vaultService.pickBackup();
-  }
+  Future<BackupImportPayload?> pickBackupFile() =>
+      _reliabilityCoordinator.pickBackupFile();
+
+  Map<String, Object?> _buildDiagnosticSnapshot() => <String, Object?>{
+    'appVersion': chronicleStableVersion,
+    'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
+    'deviceId': deviceIdentity?.deviceId,
+    'deviceName': deviceIdentity?.displayName,
+    'trustedDeviceCount': trustedDevices.length,
+    'journalEntryCount': journalEntryCount,
+    'journalPayloadBytes': journalPayloadBytes,
+    'journalCompactionGeneration': lastJournalCompaction?.generation ?? 0,
+    'journalLastCompactedSequence':
+        lastJournalCompaction?.lastCompactedSequence ?? 0,
+    'journalMinimumPeerCursor': lastJournalCompaction?.minimumPeerCursor,
+    'syncCursorCount': syncCursors.length,
+    'discoveryActive': lanDiscoveryActive,
+    'discoveryStatus': lanDiscoveryStatus,
+    'autoSyncEnabled': syncPreferences.autoSyncEnabled,
+    'discoverOnLocalNetwork': syncPreferences.discoverOnLocalNetwork,
+    'lastAutomaticBackupAt': lastAutomaticBackupAt,
+    'projectCount': data.projects.length,
+    'taskCount': data.tasks.length,
+    'noteCount': data.notes.length,
+    'timeEntryCount': data.entries.length,
+  };
 
   Future<void> restoreBackupFile(BackupImportPayload payload) =>
       _restoreCoordinator.restore(payload);
 
   Future<void> _reloadAfterRestore() async {
     _undoJournal.clear();
-    releaseReadinessReport = null;
+    _reliabilityCoordinator.resetReleaseReadiness();
     _timerService.hydrate(null);
     data = await _repository.load();
     await _hydrateNoteMetadata();
@@ -1098,87 +768,8 @@ class AppStore extends ChangeNotifier {
     return label;
   }
 
-  Future<ReleaseReadinessReport> runReleaseReadinessAudit() async {
-    if (releaseReadinessBusy) {
-      final existing = releaseReadinessReport;
-      if (existing != null) {
-        return existing;
-      }
-      throw StateError('Проверка готовности уже выполняется.');
-    }
-    releaseReadinessBusy = true;
-    releaseReadinessError = null;
-    notifyListeners();
-    try {
-      final integrity = ChronicleIntegrityAuditor.audit(data);
-      final rawBackup = await _repository.exportJson();
-      final roundTrip = ChronicleIntegrityAuditor.verifyBackupRoundTrip(
-        rawBackup,
-      );
-      final inspectedVault = await _vaultService.inspect();
-      VaultScanResult? readinessScan;
-      AttachmentIntegrityReport? attachmentIntegrity;
-      if (inspectedVault.supported &&
-          inspectedVault.rootPath.isNotEmpty &&
-          !inspectedVault.readOnly) {
-        readinessScan = await _vaultService.scan(data);
-        attachmentIntegrity = await _vaultService.inspectAttachmentIntegrity();
-      }
-      pendingVaultScan = readinessScan;
-      automaticBackups = await _vaultService.listAutomaticBackups();
-      vaultStatus = inspectedVault.copyWith(
-        pendingChangeCount: readinessScan?.pendingCount ?? 0,
-        conflictCount: readinessScan?.conflicts.length ?? 0,
-        missingFileCount: readinessScan?.missingFiles.length ?? 0,
-      );
-      final report = ReleaseReadinessReport(
-        checkedAt: DateTime.now(),
-        integrity: integrity,
-        backupRoundTrip: roundTrip,
-        vaultStatus: vaultStatus,
-        undoDepth: undoDepth,
-        automaticBackupCount:
-            automaticBackups.where((entry) => entry.isValid).length,
-        pendingConflictCount:
-            readinessScan?.conflicts.length ?? vaultStatus.conflictCount,
-        attachmentIntegrity: attachmentIntegrity,
-      );
-      releaseReadinessReport = report;
-      var reliabilityLevel = ReliabilityLevel.warning;
-      if (report.ready) {
-        reliabilityLevel = ReliabilityLevel.success;
-      } else if (integrity.errorCount > 0 || !roundTrip.valid) {
-        reliabilityLevel = ReliabilityLevel.error;
-      }
-      await _recordReliability(
-        stage: ReliabilityStage.system,
-        level: reliabilityLevel,
-        message:
-            report.ready
-                ? 'Проверка готовности Chronicle 1.0 завершена успешно.'
-                : 'Проверка готовности Chronicle 1.0 требует внимания.',
-        details: <String, Object?>{
-          'integrityErrors': integrity.errorCount,
-          'integrityWarnings': integrity.warningCount,
-          'backupRoundTrip': roundTrip.valid,
-          'vaultFormatVersion': vaultStatus.formatVersion,
-          'vaultReadOnly': vaultStatus.readOnly,
-          'pendingVaultChanges': vaultStatus.pendingChangeCount,
-          'pendingConflicts': report.pendingConflictCount,
-          'attachmentIntegrityIssues': attachmentIntegrity?.issues.length ?? 0,
-          'validAutomaticBackups': report.automaticBackupCount,
-        },
-        notify: false,
-      );
-      return report;
-    } on Object catch (error) {
-      releaseReadinessError = error.toString();
-      rethrow;
-    } finally {
-      releaseReadinessBusy = false;
-      notifyListeners();
-    }
-  }
+  Future<ReleaseReadinessReport> runReleaseReadinessAudit() =>
+      _reliabilityCoordinator.runReleaseReadinessAudit();
 
   void _registerUndo({
     required String label,
@@ -1190,6 +781,8 @@ class AppStore extends ChangeNotifier {
   void _notifyAttachmentRefresh() {
     _attachmentRefreshNotifier.value += 1;
   }
+
+  void _notifyStoreListeners() => notifyListeners();
 
   @override
   void dispose() {
