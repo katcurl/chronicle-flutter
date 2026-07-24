@@ -14,6 +14,7 @@ import '../features/notes/note_templates.dart';
 import '../features/notes/note_wiki_link_syntax.dart';
 import '../features/notes/note_wiki_rename.dart';
 import '../features/references/citation_syntax.dart';
+import '../features/timer/timer_duration.dart';
 import '../models/app_models.dart';
 import '../reliability/release_readiness.dart';
 import '../reliability/reliability_models.dart';
@@ -836,29 +837,42 @@ class AppStore extends ChangeNotifier {
   int get activeSeconds =>
       activeStartedAt == null
           ? 0
-          : DateTime.now().difference(activeStartedAt!).inSeconds;
+          : elapsedTimerSeconds(
+            startedAt: activeStartedAt!,
+            endedAt: DateTime.now(),
+          );
 
   int get todaySeconds {
     final now = DateTime.now();
-    final saved = data.entries
-        .where(
-          (entry) =>
-              entry.startedAt.year == now.year &&
-              entry.startedAt.month == now.month &&
-              entry.startedAt.day == now.day,
-        )
-        .fold<int>(0, (sum, entry) => sum + entry.durationSeconds);
-    return saved + activeSeconds;
+    final saved = data.entries.fold<int>(
+      0,
+      (sum, entry) =>
+          sum +
+          secondsWithinDay(
+            startedAt: entry.startedAt,
+            durationSeconds: entry.durationSeconds,
+            day: now,
+          ),
+    );
+    final active = activeStartedAt;
+    return saved +
+        (active == null
+            ? 0
+            : secondsWithinDay(
+              startedAt: active,
+              durationSeconds: activeSeconds,
+              day: now,
+            ));
   }
 
-  void startTimer({
+  Future<void> startTimer({
     required String description,
     required String projectId,
     String? taskId,
     String? noteId,
   }) {
-    unawaited(
-      _startTimer(
+    return _mutationQueue.run(
+      () => _startTimer(
         description: description,
         projectId: projectId,
         taskId: taskId,
@@ -874,18 +888,13 @@ class AppStore extends ChangeNotifier {
     String? noteId,
   }) async {
     if (activeStartedAt != null) {
-      await _stopTimer();
+      await _stopTimerMutation();
     }
 
-    activeStartedAt = DateTime.now();
-    activeDescription = description;
-    activeProjectId = projectId;
-    activeTaskId = taskId;
-    activeNoteId = noteId;
-
+    final startedAt = DateTime.now();
     await _repository.saveActiveTimer(
       ActiveTimerState(
-        startedAt: activeStartedAt!,
+        startedAt: startedAt,
         description: description,
         projectId: projectId,
         taskId: taskId,
@@ -893,20 +902,26 @@ class AppStore extends ChangeNotifier {
       ),
     );
 
+    activeStartedAt = startedAt;
+    activeDescription = description;
+    activeProjectId = projectId;
+    activeTaskId = taskId;
+    activeNoteId = noteId;
     _startTicker();
     notifyListeners();
   }
 
-  void stopTimer() {
-    unawaited(_stopTimer());
-  }
+  Future<void> stopTimer() => _mutationQueue.run(_stopTimerMutation);
 
-  Future<void> _stopTimer() async {
+  Future<void> _stopTimerMutation() async {
     final startedAt = activeStartedAt;
     final projectId = activeProjectId;
     if (startedAt == null || projectId == null) return;
 
-    final duration = DateTime.now().difference(startedAt).inSeconds;
+    final duration = elapsedTimerSeconds(
+      startedAt: startedAt,
+      endedAt: DateTime.now(),
+    );
     final entry = TimeEntry(
       id: _uuid.v4(),
       description:
@@ -920,17 +935,16 @@ class AppStore extends ChangeNotifier {
       durationSeconds: duration,
     );
 
-    data.entries.insert(0, entry);
-    await _repository.saveTimeEntry(entry);
-    await _repository.saveActiveTimer(null);
-    _scheduleSyncOverviewRefresh();
+    await _repository.appendTimeEntryAndClearTimer(entry);
 
+    data.entries.insert(0, entry);
     activeStartedAt = null;
     activeDescription = '';
     activeProjectId = null;
     activeTaskId = null;
     activeNoteId = null;
     _ticker?.cancel();
+    _scheduleSyncOverviewRefresh();
     notifyListeners();
   }
 
@@ -977,13 +991,12 @@ class AppStore extends ChangeNotifier {
         .toList(growable: false);
     final deletedAt = DateTime.now();
 
+    await _repository.deleteTaskGraph(id, deletedAt);
     data.tasks.removeAt(index);
     for (final child in data.tasks.where((task) => task.parentTaskId == id)) {
       child.parentTaskId = null;
       child.updatedAt = deletedAt;
-      await _repository.saveTask(child);
     }
-    await _repository.softDeleteTask(id, deletedAt);
     _registerUndo(
       label: 'Удаление задачи «${removed.title}»',
       restore: () async {
@@ -1216,6 +1229,7 @@ class AppStore extends ChangeNotifier {
         .map(_cloneNoteLink)
         .toList(growable: false);
 
+    await _repository.deleteNoteGraph(id, deletedAt);
     data.notes.removeAt(noteIndex);
     data.noteLinks.removeWhere(
       (link) => link.sourceNoteId == id || link.targetNoteId == id,
@@ -1223,10 +1237,7 @@ class AppStore extends ChangeNotifier {
     for (final task in data.tasks.where((task) => task.noteId == id)) {
       task.noteId = null;
       task.updatedAt = deletedAt;
-      await _repository.saveTask(task);
     }
-    await _repository.replaceNoteLinks(id, const []);
-    await _repository.softDeleteNote(id, deletedAt);
     _registerUndo(
       label: 'Удаление заметки «${removed.title}»',
       restore: () async {

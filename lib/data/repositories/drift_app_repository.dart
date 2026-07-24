@@ -252,6 +252,101 @@ class DriftAppRepository implements AppRepository {
   );
 
   @override
+  Future<void> appendTimeEntryAndClearTimer(TimeEntry entry) async {
+    await _database.transaction(() async {
+      await _upsert('time_entries', entry.toDb());
+      await _recordLocalChangeInTransaction(
+        entityType: 'time_entry',
+        entityId: entry.id,
+        operation: 'append',
+        payload: entry.toJson(),
+      );
+      await _database.customStatement('DELETE FROM app_state WHERE key = ?', [
+        _activeTimerKey,
+      ]);
+    });
+  }
+
+  @override
+  Future<void> deleteTaskGraph(String taskId, DateTime deletedAt) async {
+    final encoded = deletedAt.toIso8601String();
+    await _database.transaction(() async {
+      final childRows =
+          await _database
+              .customSelect(
+                'SELECT * FROM tasks WHERE parent_task_id = ?',
+                variables: [Variable<String>(taskId)],
+              )
+              .get();
+      for (final row in childRows) {
+        final child =
+            WorkTask.fromDb(row.data)
+              ..parentTaskId = null
+              ..updatedAt = deletedAt;
+        await _upsert('tasks', child.toDb());
+        await _recordLocalChangeInTransaction(
+          entityType: 'task',
+          entityId: child.id,
+          operation: 'upsert',
+          payload: child.toJson(),
+        );
+      }
+      await _database.customStatement(
+        'UPDATE tasks SET deleted_at = ?, updated_at = ? WHERE id = ?',
+        [encoded, encoded, taskId],
+      );
+      await _recordLocalChangeInTransaction(
+        entityType: 'task',
+        entityId: taskId,
+        operation: 'delete',
+        payload: {'deletedAt': encoded},
+      );
+    });
+  }
+
+  @override
+  Future<void> deleteNoteGraph(String noteId, DateTime deletedAt) async {
+    final encoded = deletedAt.toIso8601String();
+    await _database.transaction(() async {
+      final taskRows =
+          await _database
+              .customSelect(
+                'SELECT * FROM tasks WHERE note_id = ?',
+                variables: [Variable<String>(noteId)],
+              )
+              .get();
+      for (final row in taskRows) {
+        final task =
+            WorkTask.fromDb(row.data)
+              ..noteId = null
+              ..updatedAt = deletedAt;
+        await _upsert('tasks', task.toDb());
+        await _recordLocalChangeInTransaction(
+          entityType: 'task',
+          entityId: task.id,
+          operation: 'upsert',
+          payload: task.toJson(),
+        );
+      }
+      await _database.customStatement(
+        'DELETE FROM note_links '
+        'WHERE source_note_id = ? OR target_note_id = ?',
+        [noteId, noteId],
+      );
+      await _database.customStatement(
+        'UPDATE notes SET deleted_at = ?, updated_at = ? WHERE id = ?',
+        [encoded, encoded, noteId],
+      );
+      await _recordLocalChangeInTransaction(
+        entityType: 'note',
+        entityId: noteId,
+        operation: 'delete',
+        payload: {'deletedAt': encoded},
+      );
+    });
+  }
+
+  @override
   Future<void> softDeleteNote(String noteId, DateTime deletedAt) async {
     final encoded = deletedAt.toIso8601String();
     await _database.transaction(() async {

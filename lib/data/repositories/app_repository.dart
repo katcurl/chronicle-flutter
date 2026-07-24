@@ -1,8 +1,9 @@
 import '../../models/app_models.dart';
 import '../../sync/pairing_models.dart';
 import '../../sync/sync_models.dart';
+import 'domain_mutation_repository.dart';
 
-abstract class AppRepository {
+abstract class AppRepository implements DomainMutationRepository {
   Future<bool> isInitialized();
 
   Future<void> markInitialized();

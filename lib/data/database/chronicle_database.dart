@@ -182,7 +182,10 @@ class TimeEntryRecords extends Table {
           .references(NoteRecords, #id, onDelete: KeyAction.setNull)();
   TextColumn get description => text().withDefault(const Constant(''))();
   TextColumn get startedAt => text().named('started_at')();
-  IntColumn get durationSeconds => integer().named('duration_seconds')();
+  IntColumn get durationSeconds =>
+      integer()
+          .named('duration_seconds')
+          .customConstraint('NOT NULL CHECK (duration_seconds >= 0)')();
   TextColumn get createdAt => text().named('created_at')();
 
   @override
@@ -290,7 +293,7 @@ final class ChronicleDatabase extends _$ChronicleDatabase {
   factory ChronicleDatabase.defaults() => ChronicleDatabase(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -322,6 +325,13 @@ final class ChronicleDatabase extends _$ChronicleDatabase {
         await migrator.createTable(trustedDeviceRecords);
         await migrator.createTable(changeRecordRecords);
         await migrator.createTable(syncCursorRecords);
+      }
+      if (from < 5) {
+        await customStatement(
+          'UPDATE time_entries SET duration_seconds = 0 '
+          'WHERE duration_seconds < 0',
+        );
+        await migrator.alterTable(TableMigration(timeEntryRecords));
       }
     },
     beforeOpen: (details) async {

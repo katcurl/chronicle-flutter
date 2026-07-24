@@ -3639,6 +3639,7 @@ class $TimeEntryRecordsTable extends TimeEntryRecords
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
+    $customConstraints: 'NOT NULL CHECK (duration_seconds >= 0)',
   );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',

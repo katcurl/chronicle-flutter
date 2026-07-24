@@ -175,6 +175,57 @@ class InMemoryAppRepository implements AppRepository {
   }
 
   @override
+  Future<void> appendTimeEntryAndClearTimer(TimeEntry entry) async {
+    await saveTimeEntry(entry);
+    _activeTimer = null;
+  }
+
+  @override
+  Future<void> deleteTaskGraph(String taskId, DateTime deletedAt) async {
+    final snapshot = AppData.decode(_data.encode());
+    final changesSnapshot = List<ChangeRecord>.from(_changes);
+    try {
+      for (final child in _data.tasks.where(
+        (task) => task.parentTaskId == taskId,
+      )) {
+        child.parentTaskId = null;
+        child.updatedAt = deletedAt;
+        await saveTask(child);
+      }
+      await softDeleteTask(taskId, deletedAt);
+    } on Object {
+      _data = snapshot;
+      _changes
+        ..clear()
+        ..addAll(changesSnapshot);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> deleteNoteGraph(String noteId, DateTime deletedAt) async {
+    final snapshot = AppData.decode(_data.encode());
+    final changesSnapshot = List<ChangeRecord>.from(_changes);
+    try {
+      for (final task in _data.tasks.where((task) => task.noteId == noteId)) {
+        task.noteId = null;
+        task.updatedAt = deletedAt;
+        await saveTask(task);
+      }
+      _data.noteLinks.removeWhere(
+        (link) => link.sourceNoteId == noteId || link.targetNoteId == noteId,
+      );
+      await softDeleteNote(noteId, deletedAt);
+    } on Object {
+      _data = snapshot;
+      _changes
+        ..clear()
+        ..addAll(changesSnapshot);
+      rethrow;
+    }
+  }
+
+  @override
   Future<void> softDeleteNote(String noteId, DateTime deletedAt) async {
     final index = _data.notes.indexWhere((item) => item.id == noteId);
     if (index >= 0) {
