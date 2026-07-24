@@ -2821,10 +2821,12 @@ class AppStore extends ChangeNotifier {
       );
       final inspectedVault = await _vaultService.inspect();
       VaultScanResult? readinessScan;
+      AttachmentIntegrityReport? attachmentIntegrity;
       if (inspectedVault.supported &&
           inspectedVault.rootPath.isNotEmpty &&
           !inspectedVault.readOnly) {
         readinessScan = await _vaultService.scan(data);
+        attachmentIntegrity = await _vaultService.inspectAttachmentIntegrity();
       }
       pendingVaultScan = readinessScan;
       automaticBackups = await _vaultService.listAutomaticBackups();
@@ -2843,6 +2845,7 @@ class AppStore extends ChangeNotifier {
             automaticBackups.where((entry) => entry.isValid).length,
         pendingConflictCount:
             readinessScan?.conflicts.length ?? vaultStatus.conflictCount,
+        attachmentIntegrity: attachmentIntegrity,
       );
       releaseReadinessReport = report;
       var reliabilityLevel = ReliabilityLevel.warning;
@@ -2866,6 +2869,7 @@ class AppStore extends ChangeNotifier {
           'vaultReadOnly': vaultStatus.readOnly,
           'pendingVaultChanges': vaultStatus.pendingChangeCount,
           'pendingConflicts': report.pendingConflictCount,
+          'attachmentIntegrityIssues': attachmentIntegrity?.issues.length ?? 0,
           'validAutomaticBackups': report.automaticBackupCount,
         },
         notify: false,

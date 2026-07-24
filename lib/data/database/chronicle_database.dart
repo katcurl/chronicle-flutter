@@ -5,8 +5,11 @@ import 'package:drift_flutter/drift_flutter.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' show getDatabasesPath;
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 part 'chronicle_database.g.dart';
+
+const int chronicleDatabaseSchemaVersion = 5;
 
 class AppStateRecords extends Table {
   TextColumn get key => text()();
@@ -293,7 +296,7 @@ final class ChronicleDatabase extends _$ChronicleDatabase {
   factory ChronicleDatabase.defaults() => ChronicleDatabase(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => chronicleDatabaseSchemaVersion;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -367,18 +370,96 @@ Future<void> _copyLegacyMobileDatabase(File target) async {
   final legacy = File(path.join(legacyDirectory, 'chronicle.db'));
   if (!await legacy.exists()) return;
 
-  final temporary = File('${target.path}.migrating');
-  if (await temporary.exists()) {
-    await temporary.delete();
+  await copyValidatedSqliteSnapshot(source: legacy, target: target);
+}
+
+/// Copies one consistent, committed SQLite snapshot and publishes it only
+/// after validation. SQLite's backup API includes committed WAL pages, so the
+/// published database never depends on source sidecar files.
+Future<void> copyValidatedSqliteSnapshot({
+  required File source,
+  required File target,
+  Future<void> Function()? beforePublish,
+}) async {
+  if (!await source.exists()) {
+    throw StateError('The legacy Chronicle database does not exist.');
+  }
+  if (await target.exists()) {
+    throw StateError('Refusing to overwrite an existing Chronicle database.');
   }
 
-  await legacy.copy(temporary.path);
-  await temporary.rename(target.path);
+  await target.parent.create(recursive: true);
+  final temporary = File('${target.path}.migrating');
+  await _deleteSqliteFiles(temporary);
 
-  for (final suffix in const ['-wal', '-shm', '-journal']) {
-    final legacySidecar = File('${legacy.path}$suffix');
-    if (await legacySidecar.exists()) {
-      await legacySidecar.copy('${target.path}$suffix');
+  sqlite.Database? sourceDatabase;
+  sqlite.Database? temporaryDatabase;
+  var published = false;
+  try {
+    sourceDatabase = sqlite.sqlite3.open(
+      source.path,
+      mode: sqlite.OpenMode.readOnly,
+    );
+    temporaryDatabase = sqlite.sqlite3.open(temporary.path);
+    await sourceDatabase.backup(temporaryDatabase, nPage: 256).drain<void>();
+    _validateSqliteSnapshot(temporaryDatabase);
+
+    temporaryDatabase.close();
+    temporaryDatabase = null;
+    sourceDatabase.close();
+    sourceDatabase = null;
+
+    await beforePublish?.call();
+
+    final finalValidation = sqlite.sqlite3.open(
+      temporary.path,
+      mode: sqlite.OpenMode.readOnly,
+    );
+    try {
+      _validateSqliteSnapshot(finalValidation);
+    } finally {
+      finalValidation.close();
+    }
+
+    await temporary.rename(target.path);
+    published = true;
+  } finally {
+    temporaryDatabase?.close();
+    sourceDatabase?.close();
+    if (!published) {
+      await _deleteSqliteFiles(temporary);
+    }
+  }
+}
+
+void _validateSqliteSnapshot(sqlite.Database database) {
+  final quickCheck = database.select('PRAGMA quick_check');
+  final quickCheckResult =
+      quickCheck.isEmpty ? null : quickCheck.first.columnAt(0)?.toString();
+  if (quickCheck.length != 1 || quickCheckResult != 'ok') {
+    throw StateError(
+      'The legacy Chronicle database failed SQLite quick_check: '
+      '${quickCheck.map((row) => row.columnAt(0)).join(', ')}',
+    );
+  }
+
+  final versionRows = database.select('PRAGMA user_version');
+  final version =
+      versionRows.isEmpty ? null : versionRows.first.columnAt(0) as int?;
+  if (version == null ||
+      version < 1 ||
+      version > chronicleDatabaseSchemaVersion) {
+    throw StateError(
+      'Unsupported legacy Chronicle database version: $version.',
+    );
+  }
+}
+
+Future<void> _deleteSqliteFiles(File database) async {
+  for (final suffix in const ['', '-wal', '-shm', '-journal']) {
+    final candidate = File('${database.path}$suffix');
+    if (await candidate.exists()) {
+      await candidate.delete();
     }
   }
 }

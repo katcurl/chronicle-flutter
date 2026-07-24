@@ -98,6 +98,34 @@ void main() {
     expect(build(backups: 0).ready, isFalse);
     expect(build(backups: 1).ready, isTrue);
     expect(build(backups: 1, pendingChanges: 1).ready, isFalse);
+    expect(
+      ReleaseReadinessReport(
+        checkedAt: DateTime.utc(2026, 7, 23),
+        integrity: integrity,
+        backupRoundTrip: roundTrip,
+        vaultStatus: const VaultStatus(
+          supported: true,
+          rootPath: '/vault',
+          noteCount: 0,
+          fileCount: 0,
+          formatVersion: 2,
+        ),
+        undoDepth: 0,
+        automaticBackupCount: 1,
+        pendingConflictCount: 0,
+        attachmentIntegrity: AttachmentIntegrityReport(
+          rootPath: '/vault',
+          checkedAt: DateTime.utc(2026, 7, 23),
+          issues: const <AttachmentIntegrityIssue>[
+            AttachmentIntegrityIssue(
+              kind: AttachmentIntegrityIssueKind.hashMismatch,
+              relativePath: 'attachments/damaged.bin',
+            ),
+          ],
+        ),
+      ).ready,
+      isFalse,
+    );
   });
 }
 

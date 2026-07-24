@@ -88,6 +88,7 @@ class ReleaseReadinessReport {
     required this.undoDepth,
     required this.automaticBackupCount,
     required this.pendingConflictCount,
+    this.attachmentIntegrity,
   });
 
   final DateTime checkedAt;
@@ -97,10 +98,12 @@ class ReleaseReadinessReport {
   final int undoDepth;
   final int automaticBackupCount;
   final int pendingConflictCount;
+  final AttachmentIntegrityReport? attachmentIntegrity;
 
   bool get ready =>
       integrity.clean &&
       backupRoundTrip.valid &&
+      (attachmentIntegrity?.isHealthy ?? true) &&
       !vaultStatus.readOnly &&
       vaultStatus.pendingChangeCount == 0 &&
       pendingConflictCount == 0 &&
@@ -246,6 +249,15 @@ class ChronicleIntegrityAuditor {
       severity: IntegritySeverity.warning,
     );
 
+    _addOrphanIssue(
+      issues,
+      code: 'task-parent-cycle',
+      title: 'Цикл в иерархии задач',
+      details:
+          'Циклическая цепочка родителей не может быть корректно отображена.',
+      ids: _taskParentCycles(data.tasks),
+    );
+
     final brokenEntries = data.entries
         .where((entry) => !projectIds.contains(entry.projectId))
         .map((entry) => entry.id)
@@ -257,6 +269,48 @@ class ChronicleIntegrityAuditor {
       details: 'История времени потеряла обязательную связь с проектом.',
       ids: brokenEntries,
       severity: IntegritySeverity.warning,
+    );
+
+    final brokenEntryTasks = data.entries
+        .where(
+          (entry) => entry.taskId != null && !taskIds.contains(entry.taskId),
+        )
+        .map((entry) => entry.id)
+        .toList(growable: false);
+    _addOrphanIssue(
+      issues,
+      code: 'time-entry-missing-task',
+      title: 'Записи времени без существующей задачи',
+      details: 'Необязательная связь записи времени с задачей повреждена.',
+      ids: brokenEntryTasks,
+      severity: IntegritySeverity.warning,
+    );
+
+    final brokenEntryNotes = data.entries
+        .where(
+          (entry) => entry.noteId != null && !noteIds.contains(entry.noteId),
+        )
+        .map((entry) => entry.id)
+        .toList(growable: false);
+    _addOrphanIssue(
+      issues,
+      code: 'time-entry-missing-note',
+      title: 'Записи времени без существующей заметки',
+      details: 'Необязательная связь записи времени с заметкой повреждена.',
+      ids: brokenEntryNotes,
+      severity: IntegritySeverity.warning,
+    );
+
+    final negativeEntries = data.entries
+        .where((entry) => entry.durationSeconds < 0)
+        .map((entry) => entry.id)
+        .toList(growable: false);
+    _addOrphanIssue(
+      issues,
+      code: 'time-entry-negative-duration',
+      title: 'Записи времени с отрицательной длительностью',
+      details: 'Отрицательная длительность нарушает инвариант таймера.',
+      ids: negativeEntries,
     );
 
     final brokenLinks = data.noteLinks
@@ -437,6 +491,41 @@ class ChronicleIntegrityAuditor {
     }
     final result = duplicates.toList()..sort();
     return result;
+  }
+
+  static List<String> _taskParentCycles(List<WorkTask> tasks) {
+    final parentByTask = <String, String?>{
+      for (final task in tasks) task.id: task.parentTaskId,
+    };
+    final cycleIds = <String>{};
+    final resolved = <String>{};
+
+    for (final start in parentByTask.keys) {
+      if (resolved.contains(start)) {
+        continue;
+      }
+      final path = <String>[];
+      final positions = <String, int>{};
+      String? current = start;
+      while (current != null &&
+          parentByTask.containsKey(current) &&
+          !resolved.contains(current)) {
+        final cycleStart = positions[current];
+        if (cycleStart != null) {
+          final cycle = path.sublist(cycleStart);
+          if (cycle.length > 1) {
+            cycleIds.addAll(cycle);
+          }
+          break;
+        }
+        positions[current] = path.length;
+        path.add(current);
+        current = parentByTask[current];
+      }
+      resolved.addAll(path);
+    }
+
+    return cycleIds.toList()..sort();
   }
 }
 
